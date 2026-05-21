@@ -98,6 +98,40 @@ export class ProjectManagementStore extends Events {
     return structuredClone(this.config);
   }
 
+  getWriteHistory(): WriteHistoryRecord[] {
+    return this.writeHistory.map((record) => ({ ...record, taskIds: [...record.taskIds] }));
+  }
+
+  getRecentDialogFilePaths(limit = 10): string[] {
+    const unique = new Set<string>();
+    for (const record of this.writeHistory) {
+      if (record.type !== "dialog") {
+        continue;
+      }
+      const path =
+        typeof record.after === "object" && record.after && "path" in record.after && typeof record.after.path === "string"
+          ? record.after.path
+          : undefined;
+      if (!path || unique.has(path)) {
+        continue;
+      }
+      unique.add(path);
+      if (unique.size >= limit) {
+        break;
+      }
+    }
+    return [...unique];
+  }
+
+  async recordDialogWrite(path: string, summary: string): Promise<void> {
+    await this.recordWriteHistory({
+      type: "dialog",
+      summary,
+      taskIds: [],
+      after: { path }
+    });
+  }
+
   async setConfig(next: PluginConfig): Promise<void> {
     this.assertWritable();
     const previousFolder = sanitizeFolder(this.config.dataFolder);
@@ -167,6 +201,18 @@ export class ProjectManagementStore extends Events {
     return this.getAllTasks()
       .filter((task) => task.projectId === projectId)
       .sort(compareSeriesTasks);
+  }
+
+  getCompositeTasks(projectId?: string): Task[] {
+    return this.getAllTasks()
+      .filter((task) => task.kind === "composite" && (projectId === undefined || task.projectId === projectId))
+      .sort(compareSeriesTasks);
+  }
+
+  getChildTasks(parentTaskId: string): Task[] {
+    return this.getAllTasks()
+      .filter((task) => (task.viewState.mindmap.parentTaskId ?? null) === parentTaskId)
+      .sort((left, right) => left.viewState.mindmap.childOrder - right.viewState.mindmap.childOrder || compareSeriesTasks(left, right));
   }
 
   getOccurrencesForProject(projectId: string): TaskOccurrence[] {
@@ -664,6 +710,24 @@ export class ProjectManagementStore extends Events {
     return sections.join("\n").trim();
   }
 
+  exportProjectAsFormattedText(projectId: string): string {
+    const project = this.getProject(projectId);
+    if (!project) {
+      throw new Error("项目不存在");
+    }
+    const tasks = this.getTasksForProject(projectId);
+    const lines = [`#项目：${project.name}`];
+    tasks.forEach((task) => {
+      lines.push(renderTaskSeriesForExport(task));
+      if (task.kind === "composite") {
+        task.subtasks.forEach((subtask) => {
+          lines.push(`  - ${subtask.title}`);
+        });
+      }
+    });
+    return lines.join("\n").trim();
+  }
+
   async autoArrangeDate(date: string, options: Partial<AutoArrangeOptions> = {}): Promise<AutoArrangeResult> {
     this.assertWritable();
     const config: AutoArrangeOptions = {
@@ -863,8 +927,24 @@ export class ProjectManagementStore extends Events {
       await this.deleteTaskOccurrence(taskId, task.date);
       return;
     }
-    const removed = this.replaceTasks([taskId], []);
-    await this.persistMonths(monthsForTasks(removed));
+    const timestamp = toIsoLocal(now());
+    const replacements = this.getAllTasks()
+      .filter((candidate) => (candidate.viewState.mindmap.parentTaskId ?? null) === taskId)
+      .map((child) => {
+        const next = cloneTask(child);
+        next.viewState = mergeViewState(next.viewState, {
+          mindmap: {
+            ...next.viewState.mindmap,
+            parentTaskId: task.viewState.mindmap.parentTaskId ?? null,
+            childOrder: Date.now()
+          }
+        }, next.status);
+        next.updatedAt = timestamp;
+        next.revision = (next.revision ?? 0) + 1;
+        return next;
+      });
+    const removed = this.replaceTasks([taskId, ...replacements.map((child) => child.id)], replacements);
+    await this.persistMonths(monthsForTasks([...removed, ...replacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -1264,18 +1344,20 @@ export class ProjectManagementStore extends Events {
   private assertNoConflicts(candidates: Task[], excludedOccurrenceKeys: Set<string>): void {
     const existing = this.getAllTaskOccurrences().filter((task) => !excludedOccurrenceKeys.has(task.id));
     const candidateOccurrences = candidates.flatMap((task) => expandTask(task));
+    const taskById = new Map([...this.getAllTasks(), ...candidates].map((task) => [task.id, task]));
     for (const task of candidateOccurrences) {
-      this.assertTaskWindowValid(task, existing);
+      this.assertTaskWindowValid(task, existing, taskById);
     }
     for (let index = 0; index < candidateOccurrences.length; index += 1) {
       this.assertTaskWindowValid(
         candidateOccurrences[index],
-        candidateOccurrences.filter((_, innerIndex) => innerIndex !== index)
+        candidateOccurrences.filter((_, innerIndex) => innerIndex !== index),
+        taskById
       );
     }
   }
 
-  private assertTaskWindowValid(task: TaskOccurrence, against: TaskOccurrence[]): void {
+  private assertTaskWindowValid(task: TaskOccurrence, against: TaskOccurrence[], taskById: Map<string, Task>): void {
     const start = parseTimeToMinutes(task.startTime);
     const end = parseTimeToMinutes(task.endTime);
     if (start === null || end === null) {
@@ -1283,6 +1365,9 @@ export class ProjectManagementStore extends Events {
     }
     const overlapped = against.some((item) => {
       if (item.date !== task.date) {
+        return false;
+      }
+      if (isCompositeContainerOverlap(task.taskId, item.taskId, taskById)) {
         return false;
       }
       const otherStart = parseTimeToMinutes(item.startTime);
@@ -1296,7 +1381,8 @@ export class ProjectManagementStore extends Events {
 
   private autoResolveTaskConflicts(candidates: Task[], excludedOccurrenceKeys: Set<string>): Task[] {
     const adjusted = candidates.map(cloneTask);
-    const occupied = buildOccupiedMinutesMap(this.getAllTaskOccurrences().filter((task) => !excludedOccurrenceKeys.has(task.id)));
+    const taskById = new Map([...this.getAllTasks(), ...adjusted].map((task) => [task.id, task]));
+    const occupied = buildOccupiedOccurrenceMap(this.getAllTaskOccurrences().filter((task) => !excludedOccurrenceKeys.has(task.id)));
 
     adjusted.forEach((task) => {
       expandTask(task)
@@ -1308,14 +1394,15 @@ export class ProjectManagementStore extends Events {
             return;
           }
           const dateOccupied = occupied.get(occurrence.date) ?? [];
-          if (!hasTimeOverlap(dateOccupied, start, end)) {
-            dateOccupied.push({ start, end });
+          const blockingIntervals = dateOccupied.filter((interval) => !isCompositeContainerOverlap(occurrence.taskId, interval.taskId, taskById));
+          if (!hasTimeOverlap(blockingIntervals, start, end)) {
+            dateOccupied.push({ taskId: occurrence.taskId, start, end });
             occupied.set(occurrence.date, sortOccupiedMinutes(dateOccupied));
             return;
           }
-          const resolved = findAvailableOneMinuteWindow(dateOccupied, start);
+          const resolved = findAvailableOneMinuteWindow(blockingIntervals, start);
           applyOccurrenceWindow(task, occurrence.date, resolved.startTime, resolved.endTime);
-          dateOccupied.push({ start: resolved.start, end: resolved.end });
+          dateOccupied.push({ taskId: occurrence.taskId, start: resolved.start, end: resolved.end });
           occupied.set(occurrence.date, sortOccupiedMinutes(dateOccupied));
         });
     });
@@ -1493,7 +1580,7 @@ export class ProjectManagementStore extends Events {
 
     const buildTask = this.buildSeriesTask({
       title: "完成一个组合任务",
-      description: "组合任务可逐项勾选子任务，进度会同步到总览。",
+      description: "组合任务可以挂载单次、每日和每周子任务，进度会同步到总览。",
       projectId,
       status: "todo",
       priority: "medium",
@@ -1503,14 +1590,59 @@ export class ProjectManagementStore extends Events {
       endTime: "11:30",
       recurrence: "once",
       kind: "composite",
-      subtasks: [
-        { title: "创建项目", order: 0 },
-        { title: "新增任务", order: 1 },
-        { title: "写入日记", order: 2 }
-      ],
       viewState: {
         board: { columnId: "todo", order: 20 },
         mindmap: { parentTaskId: planTask.id, childOrder: 20, expanded: true, x: 540, y: 270 }
+      }
+    });
+
+    const createProjectTask = this.buildSeriesTask({
+      title: "创建项目",
+      projectId,
+      status: "todo",
+      priority: "medium",
+      tags: ["示例"],
+      date: today,
+      startTime: "10:35",
+      endTime: "10:50",
+      recurrence: "once",
+      viewState: {
+        board: { columnId: "todo", order: 21 },
+        mindmap: { parentTaskId: buildTask.id, childOrder: 10, expanded: true, x: 800, y: 210 }
+      }
+    });
+
+    const dailyDialogTask = this.buildSeriesTask({
+      title: "写入日记",
+      projectId,
+      status: "todo",
+      priority: "medium",
+      tags: ["示例"],
+      date: today,
+      startTime: "10:50",
+      endTime: "11:05",
+      recurrence: "daily",
+      recurrenceCount: 5,
+      viewState: {
+        board: { columnId: "todo", order: 22 },
+        mindmap: { parentTaskId: buildTask.id, childOrder: 20, expanded: true, x: 800, y: 290 }
+      }
+    });
+
+    const weeklyReviewTask = this.buildSeriesTask({
+      title: "周复盘",
+      projectId,
+      status: "todo",
+      priority: "low",
+      tags: ["示例", "复盘"],
+      date: today,
+      startTime: "11:05",
+      endTime: "11:20",
+      recurrence: "weekly",
+      recurrenceCount: 4,
+      viewState: {
+        board: { columnId: "todo", order: 23 },
+        mindmap: { parentTaskId: buildTask.id, childOrder: 30, expanded: true, x: 800, y: 370 }
       }
     });
 
@@ -1531,13 +1663,13 @@ export class ProjectManagementStore extends Events {
       }
     });
 
-    [planTask, buildTask, reviewTask].forEach((task) => this.insertTask(task));
+    [planTask, buildTask, createProjectTask, dailyDialogTask, weeklyReviewTask, reviewTask].forEach((task) => this.insertTask(task));
     this.writeHistory = [
       {
         id: crypto.randomUUID(),
         type: "import",
         summary: "初始化默认演示数据",
-        taskIds: [planTask.id, buildTask.id, reviewTask.id],
+        taskIds: [planTask.id, buildTask.id, createProjectTask.id, dailyDialogTask.id, weeklyReviewTask.id, reviewTask.id],
         createdAt: timestamp
       }
     ];
@@ -2018,6 +2150,7 @@ function expandTask(task: Task): TaskOccurrence[] {
     return [{
       id: buildOccurrenceKey(task.id, date),
       taskId: task.id,
+      parentTaskId: task.viewState.mindmap.parentTaskId ?? null,
       occurrenceDate: date,
       occurrenceNumber: index + 1,
       kind: task.kind,
@@ -2133,9 +2266,6 @@ function normalizeSubtaskInputs(subtasks: TaskSubtaskInput[] | undefined, kind: 
   const normalized = (subtasks ?? [])
     .map((item, index) => ({ id: item.id, title: item.title.trim(), order: item.order ?? index }))
     .filter((item) => item.title.length > 0);
-  if (normalized.length === 0) {
-    throw new Error("组合任务至少需要一个子任务");
-  }
   return normalized;
 }
 
@@ -2218,6 +2348,17 @@ function getOccurrenceProgress(
       progress: completed ? 1 : 0,
       totalSteps: 1,
       completedSteps: completed ? 1 : 0,
+      completedSubtaskIds: []
+    };
+  }
+
+  if (task.subtasks.length === 0) {
+    const state = getOccurrenceState(task, date);
+    return {
+      completed: Boolean(state?.completedAt),
+      progress: state?.completedAt ? 1 : 0,
+      totalSteps: 0,
+      completedSteps: 0,
       completedSubtaskIds: []
     };
   }
@@ -2427,6 +2568,34 @@ function collectTaskDescendants(tasks: Task[], rootId: string): Set<string> {
   return descendants;
 }
 
+function isCompositeContainerOverlap(leftTaskId: string, rightTaskId: string, taskById: Map<string, Task>): boolean {
+  if (leftTaskId === rightTaskId) {
+    return false;
+  }
+  return isCompositeAncestorOf(leftTaskId, rightTaskId, taskById) || isCompositeAncestorOf(rightTaskId, leftTaskId, taskById);
+}
+
+function isCompositeAncestorOf(ancestorTaskId: string, childTaskId: string, taskById: Map<string, Task>): boolean {
+  let current = taskById.get(childTaskId);
+  const visited = new Set<string>();
+  while (current?.viewState.mindmap.parentTaskId) {
+    const parentId = current.viewState.mindmap.parentTaskId;
+    if (visited.has(parentId)) {
+      return false;
+    }
+    visited.add(parentId);
+    const parent = taskById.get(parentId);
+    if (!parent) {
+      return false;
+    }
+    if (parent.id === ancestorTaskId) {
+      return parent.kind === "composite";
+    }
+    current = parent;
+  }
+  return false;
+}
+
 function mergeViewState(current: TaskViewState | undefined, patch: Partial<TaskViewState> | undefined, status: TaskStatus): TaskViewState {
   const base = current ?? defaultTaskViewState(status);
   return {
@@ -2565,7 +2734,10 @@ function applyOccurrenceWindow(task: Task, date: string, startTime: string, endT
   });
 }
 
-function buildOccupiedMinutesMap(occurrences: TaskOccurrence[]): Map<string, Array<{ start: number; end: number }>> {
+type OccupiedInterval = { start: number; end: number };
+type OccupiedOccurrenceInterval = OccupiedInterval & { taskId: string };
+
+function buildOccupiedMinutesMap(occurrences: TaskOccurrence[]): Map<string, OccupiedInterval[]> {
   const occupied = new Map<string, Array<{ start: number; end: number }>>();
   occurrences.forEach((occurrence) => {
     const start = parseTimeToMinutes(occurrence.startTime);
@@ -2580,16 +2752,31 @@ function buildOccupiedMinutesMap(occurrences: TaskOccurrence[]): Map<string, Arr
   return occupied;
 }
 
-function sortOccupiedMinutes(intervals: Array<{ start: number; end: number }>): Array<{ start: number; end: number }> {
+function buildOccupiedOccurrenceMap(occurrences: TaskOccurrence[]): Map<string, OccupiedOccurrenceInterval[]> {
+  const occupied = new Map<string, OccupiedOccurrenceInterval[]>();
+  occurrences.forEach((occurrence) => {
+    const start = parseTimeToMinutes(occurrence.startTime);
+    const end = parseTimeToMinutes(occurrence.endTime);
+    if (start === null || end === null) {
+      return;
+    }
+    const dateOccupied = occupied.get(occurrence.date) ?? [];
+    dateOccupied.push({ taskId: occurrence.taskId, start, end });
+    occupied.set(occurrence.date, sortOccupiedMinutes(dateOccupied));
+  });
+  return occupied;
+}
+
+function sortOccupiedMinutes<T extends OccupiedInterval>(intervals: T[]): T[] {
   return intervals.slice().sort((left, right) => left.start - right.start || left.end - right.end);
 }
 
-function hasTimeOverlap(intervals: Array<{ start: number; end: number }>, start: number, end: number): boolean {
+function hasTimeOverlap(intervals: OccupiedInterval[], start: number, end: number): boolean {
   return intervals.some((interval) => start < interval.end && end > interval.start);
 }
 
 function findAvailableOneMinuteWindow(
-  intervals: Array<{ start: number; end: number }>,
+  intervals: OccupiedInterval[],
   preferredStart: number
 ): { start: number; end: number; startTime: string; endTime: string } {
   const sorted = sortOccupiedMinutes(intervals);
@@ -2722,19 +2909,24 @@ function parseTaskLine(
 ): { input: TaskInput; projectName?: string; completionMode: TaskImportCompletionMode } {
   let title = rawTitle.trim();
   const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
+  const kindMatch = /\b(?:kind|type):(simple|composite)\b/.exec(title);
   const repeatMatch = /\brepeat:(once|daily|weekly|custom)\b/.exec(title);
   const countMatch = /\bcount:(\d+)\b/.exec(title);
   const untilMatch = /\buntil:(\d{4}-\d{2}-\d{2})\b/.exec(title);
+  const datesMatch = /\bdates:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
   const statusMatch = /\bstatus:(todo|doing|blocked|done)\b/.exec(title);
   const finishMatch = /\bfinish:(today|series)\b/.exec(title);
   const priorityMatch = /!(low|medium|high|urgent)\b/.exec(title);
   const tags = [...title.matchAll(/#([^\s#]+)/g)].map((match) => match[1]).filter((tag) => !tag.startsWith("项目"));
+  const customDates = datesMatch?.[1].split(",").filter(Boolean) ?? [];
 
   title = title
     .replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "")
+    .replace(/\b(?:kind|type):(simple|composite)\b/g, "")
     .replace(/\brepeat:(once|daily|weekly|custom)\b/g, "")
     .replace(/\bcount:\d+\b/g, "")
     .replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "")
+    .replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "")
     .replace(/\bstatus:(todo|doing|blocked|done)\b/g, "")
     .replace(/\bfinish:(today|series)\b/g, "")
     .replace(/!(low|medium|high|urgent)\b/g, "")
@@ -2747,14 +2939,16 @@ function parseTaskLine(
 
   return {
     input: {
+      kind: (kindMatch?.[1] as TaskKind | undefined) ?? "simple",
       title,
       projectId: context.projectId,
-      date: dateMatch?.[1] ?? context.defaultDate,
+      date: dateMatch?.[1] ?? customDates[0] ?? context.defaultDate,
       startTime: dateMatch?.[2],
       endTime: dateMatch?.[3],
       recurrence: (repeatMatch?.[1] as TaskRecurrence | undefined) ?? "once",
       recurrenceCount: countMatch ? Number(countMatch[1]) : null,
       recurrenceUntil: untilMatch?.[1] ?? null,
+      occurrenceDates: customDates.length > 0 ? customDates : undefined,
       status: (statusMatch?.[1] as TaskStatus | undefined) ?? (context.completed ? "done" : "todo"),
       priority: priorityMatch?.[1] as TaskPriority | undefined,
       tags,
@@ -2788,10 +2982,45 @@ function renderTaskOccurrenceForExport(
   mode: "current" | "complete-today" | "complete-series"
 ): string {
   const shouldComplete = mode === "current" ? task.completed : true;
-  const parts = [task.title];
-  if (task.date) {
-    parts.push(`@${task.date}${task.startTime && task.endTime ? ` ${task.startTime}-${task.endTime}` : ""}`);
+  const parts = buildFormattedTaskParts({
+    ...task,
+    occurrenceDates: task.recurrence === "custom" ? [task.date] : undefined
+  });
+  const completionMode = resolveExportCompletionMode(task, mode);
+  if (shouldComplete && completionMode !== "pending") {
+    parts.push(`finish:${completionMode}`);
   }
+  return `- [${shouldComplete ? "x" : " "}] ${parts.join(" ")}`.trim();
+}
+
+function renderTaskSeriesForExport(task: Task): string {
+  const completed = isTaskFullyCompleted(task);
+  const parts = buildFormattedTaskParts(task);
+  if (completed && task.recurrence !== "once") {
+    parts.push("finish:series");
+  }
+  return `- [${completed ? "x" : " "}] ${parts.join(" ")}`.trim();
+}
+
+type FormattedTaskSource = {
+  title: string;
+  kind: TaskKind;
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  tags: string[];
+  priority?: TaskPriority;
+  status: TaskStatus;
+  recurrence: TaskRecurrence;
+  recurrenceCount?: number | null;
+  recurrenceUntil?: string | null;
+  occurrenceDates?: string[];
+};
+
+function buildFormattedTaskParts(task: FormattedTaskSource): string[] {
+  const parts = [task.title];
+  parts.push(`kind:${task.kind}`);
+  parts.push(`@${task.date}${task.startTime && task.endTime ? ` ${task.startTime}-${task.endTime}` : ""}`);
   task.tags.forEach((tag) => parts.push(`#${tag}`));
   if (task.priority) {
     parts.push(`!${task.priority}`);
@@ -2806,11 +3035,10 @@ function renderTaskOccurrenceForExport(
   if (task.recurrenceUntil) {
     parts.push(`until:${task.recurrenceUntil}`);
   }
-  const completionMode = resolveExportCompletionMode(task, mode);
-  if (shouldComplete && completionMode !== "pending") {
-    parts.push(`finish:${completionMode}`);
+  if (task.recurrence === "custom" && task.occurrenceDates?.length) {
+    parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
   }
-  return `- [${shouldComplete ? "x" : " "}] ${parts.join(" ")}`.trim();
+  return parts;
 }
 
 function resolveExportCompletionMode(

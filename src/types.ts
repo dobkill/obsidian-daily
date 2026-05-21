@@ -128,6 +128,7 @@ export type Task = {
 export type TaskOccurrence = {
   id: string;
   taskId: string;
+  parentTaskId?: string | null;
   occurrenceDate: string;
   occurrenceNumber: number;
   kind: TaskKind;

@@ -1,10 +1,11 @@
-import { App, ButtonComponent, Modal, Notice, Setting } from "obsidian";
+import { App, ButtonComponent, DropdownComponent, Modal, Notice, Setting } from "obsidian";
 import { Project, Task, TaskDeleteScope, TaskInput, TaskKind, TaskOccurrence, TaskPriority, TaskRecurrence, TaskStatus, TaskSubtaskInput, TaskUpdateScope } from "../types";
 
 type TaskModalOptions = {
   title: string;
   projects: Project[];
   initial: TaskInput;
+  compositeParents?: Task[];
   existingTask?: Task;
   occurrenceContext?: TaskOccurrence;
   allowSingleDelete?: boolean;
@@ -30,6 +31,7 @@ export class TaskModal extends Modal {
     const state: TaskInput = { ...this.options.initial };
     state.kind = state.kind ?? "simple";
     state.subtasks = [...(state.subtasks ?? [])];
+    state.viewState = cloneTaskInputViewState(state.viewState);
 
     if (this.options.existingTask?.occurrenceDates.length && this.options.existingTask.occurrenceDates.length > 1) {
       contentEl.createDiv({
@@ -53,7 +55,7 @@ export class TaskModal extends Modal {
 
     new Setting(contentEl)
       .setName("任务类型")
-      .setDesc("普通任务直接勾选完成；组合任务可拆成多个子任务分别完成")
+      .setDesc("组合任务可作为容器，挂载单次、每日或每周子任务")
       .addDropdown((dropdown) => {
         const labels: Record<TaskKind, string> = {
           simple: "普通任务",
@@ -63,7 +65,7 @@ export class TaskModal extends Modal {
         dropdown.setValue(state.kind ?? "simple");
         dropdown.onChange((value) => {
           state.kind = value as TaskKind;
-          state.subtasks = state.kind === "composite" ? state.subtasks ?? [{ title: "" }] : [];
+          state.subtasks = state.kind === "composite" ? state.subtasks ?? [] : [];
           renderSubtaskFields();
         });
       });
@@ -100,9 +102,11 @@ export class TaskModal extends Modal {
         })
       );
 
+    let projectDropdown: DropdownComponent | null = null;
     new Setting(contentEl)
       .setName("所属项目")
       .addDropdown((dropdown) => {
+        projectDropdown = dropdown;
         dropdown.addOption("", "未归属项目");
         this.options.projects.forEach((project) => dropdown.addOption(project.id, project.name));
         dropdown.setValue(state.projectId ?? "");
@@ -110,6 +114,38 @@ export class TaskModal extends Modal {
           state.projectId = value || undefined;
         });
       });
+
+    const compositeParents = this.options.compositeParents ?? [];
+    const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+    const parentOptions = compositeParents.filter((task) => task.id !== this.options.existingTask?.id);
+    if (currentParentId && !parentOptions.some((task) => task.id === currentParentId)) {
+      const currentParent = compositeParents.find((task) => task.id === currentParentId);
+      if (currentParent) {
+        parentOptions.push(currentParent);
+      }
+    }
+    if (parentOptions.length > 0) {
+      new Setting(contentEl)
+        .setName("挂入组合任务")
+        .setDesc("选择后，这条任务会作为该组合任务的子任务，并保留自己的重复规则")
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", "不挂入组合任务");
+          parentOptions.forEach((parent) => {
+            const projectName = this.options.projects.find((project) => project.id === parent.projectId)?.name ?? "未归属项目";
+            dropdown.addOption(parent.id, `${projectName} / ${parent.title}`);
+          });
+          dropdown.setValue(currentParentId);
+          dropdown.onChange((value) => {
+            const parentTaskId = value || null;
+            state.viewState = withMindmapParent(state.viewState, parentTaskId);
+            const parent = parentTaskId ? parentOptions.find((task) => task.id === parentTaskId) : undefined;
+            if (parent?.projectId) {
+              state.projectId = parent.projectId;
+              projectDropdown?.setValue(parent.projectId);
+            }
+          });
+        });
+    }
 
     new Setting(contentEl)
       .setName("状态")
@@ -210,7 +246,7 @@ export class TaskModal extends Modal {
       }
 
       subtaskFields.addClass("pm-subtask-editor");
-      subtaskFields.createDiv({ cls: "pm-muted", text: "组合任务会在周任务图和今日任务中渲染为一个大框，内部子任务可单独勾选完成。" });
+      subtaskFields.createDiv({ cls: "pm-muted", text: "下面是轻量检查项；需要单次、每日或每周子任务时，请新建任务并在“挂入组合任务”中选择此组合任务。" });
 
       const list = subtaskFields.createDiv({ cls: "pm-subtask-editor-list" });
       const subtasks = state.subtasks ?? [];
@@ -237,7 +273,7 @@ export class TaskModal extends Modal {
       });
 
       const actions = subtaskFields.createDiv({ cls: "pm-inline-actions" });
-      actions.createEl("button", { text: "新增子任务" }).addEventListener("click", () => {
+      actions.createEl("button", { text: "新增轻量检查项" }).addEventListener("click", () => {
         state.subtasks = [...(state.subtasks ?? []), { title: "" } satisfies TaskSubtaskInput];
         renderSubtaskFields();
       });
@@ -301,4 +337,27 @@ export class TaskModal extends Modal {
         });
     }
   }
+}
+
+function cloneTaskInputViewState(viewState: TaskInput["viewState"]): TaskInput["viewState"] {
+  if (!viewState) {
+    return undefined;
+  }
+  return {
+    board: viewState.board ? { ...viewState.board } : undefined,
+    gantt: viewState.gantt ? { ...viewState.gantt, dependencyIds: [...(viewState.gantt.dependencyIds ?? [])] } : undefined,
+    mindmap: viewState.mindmap ? { ...viewState.mindmap } : undefined
+  };
+}
+
+function withMindmapParent(viewState: TaskInput["viewState"], parentTaskId: string | null): TaskInput["viewState"] {
+  return {
+    ...(viewState ?? {}),
+    mindmap: {
+      ...(viewState?.mindmap ?? {}),
+      parentTaskId,
+      childOrder: viewState?.mindmap?.childOrder ?? Date.now(),
+      expanded: viewState?.mindmap?.expanded ?? true
+    }
+  };
 }

@@ -25,8 +25,8 @@ export class BulkImportModal extends Modal {
     contentEl.createDiv({
       cls: "pm-import-guide",
       text: this.options.projectId
-        ? `当前处于项目导入模式：未显式切换项目时，任务会按“${projectName}”处理。同名任务会覆盖；如果时间冲突，会自动改成同日 1 分钟空档占位。- [x] 默认完成当天，repeat 任务可用 finish:series 提前结束整个系列。`
-        : "支持 #项目：新项目名 自动建项目；同名任务会覆盖；如果时间冲突，会自动改成同日 1 分钟空档占位。- [x] 默认完成当天，repeat 任务可用 finish:series 提前结束整个系列。"
+        ? `当前处于项目导入模式：未显式切换项目时，任务会按“${projectName}”处理。支持普通/组合、单次/每日/每周任务；同名任务会覆盖，时间冲突会自动改成同日 1 分钟空档占位。`
+        : "支持 #项目：新项目名 自动建项目，也支持未归属任务。可导入普通/组合、单次/每日/每周任务；同名任务会覆盖，时间冲突会自动改成同日 1 分钟空档占位。"
     });
 
     const state = {
@@ -46,7 +46,7 @@ export class BulkImportModal extends Modal {
     const input = contentEl.createEl("textarea", {
       cls: "pm-bulk-import-input",
       placeholder:
-        "#项目：插件体验示例\n- [ ] 开发任务解析器 @2026-05-18 09:00-10:30 #parser !high status:doing\n  - 解析标题\n  - 解析日期\n- [x] 每周复盘导入流程 @2026-05-18 20:00-20:30 #review status:done repeat:weekly count:4 finish:series"
+        "#项目：插件体验示例\n- [ ] 开发任务解析器 kind:composite @2026-05-18 09:00-10:30 #parser !high status:doing\n  - 解析标题\n  - 解析日期\n- [ ] 每日回顾输入流程 kind:simple @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n- [x] 每周复盘导入流程 kind:simple @2026-05-18 20:30-21:00 #review status:done repeat:weekly count:4 finish:series"
     });
     input.addEventListener("input", () => {
       state.text = input.value;
@@ -88,6 +88,8 @@ export class BulkImportModal extends Modal {
         preview.tasks.slice(0, 12).forEach((task) => {
           const line = [
             importActionText(task.action),
+            task.input.kind === "composite" ? "组合任务" : "普通任务",
+            task.input.recurrence === "daily" ? "每日" : task.input.recurrence === "weekly" ? "每周此时" : "单次",
             task.projectName ?? "未归属项目",
             task.input.completed ? "已勾选完成" : task.input.status === "doing" ? "进行中" : task.input.status === "blocked" ? "阻塞" : "待办",
             task.input.date,

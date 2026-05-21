@@ -2,7 +2,8 @@ import { Menu, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { TaskModal } from "../components/taskModal";
 import type ProjectManagementPlugin from "../main";
 import { Task, TaskOccurrence } from "../types";
-import { now, toDateKey } from "../utils/date";
+import { copyTextToClipboard } from "../utils/clipboard";
+import { now, parseTimeToMinutes, toDateKey } from "../utils/date";
 import { BaseProjectView } from "./base";
 
 export const TODAY_VIEW_TYPE = "project-management-today-view";
@@ -31,10 +32,12 @@ export class TodayTasksView extends BaseProjectView {
 
     const today = toDateKey(now());
     const tasks = this.plugin.store.getTasksForDate(today);
+    const displayTasks = buildCompositeDisplayOccurrences(tasks, this.plugin.store.getAllTasks());
     const projects = this.plugin.store.getProjects();
     const totalSteps = tasks.reduce((sum, task) => sum + task.totalSteps, 0);
     const completedSteps = tasks.reduce((sum, task) => sum + task.completedSteps, 0);
     const progress = totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100);
+    const rawIncomplete = tasks.filter((task) => !task.completed);
 
     const header = container.createDiv({ cls: "pm-page-header" });
     const title = header.createDiv();
@@ -42,13 +45,14 @@ export class TodayTasksView extends BaseProjectView {
     title.createDiv({ text: today, cls: "pm-muted" });
     const actions = header.createDiv({ cls: "pm-inline-actions" });
     const exportButton = actions.createEl("button", { text: "导出今日任务", cls: "pm-button pm-button-secondary" });
-    exportButton.addEventListener("click", async () => this.copyIncompleteTasks(incomplete));
+    exportButton.addEventListener("click", async () => this.copyIncompleteTasks(rawIncomplete));
     const addButton = actions.createEl("button", { text: "+ 新增任务", cls: "pm-button pm-button-primary" });
     addButton.addEventListener("click", () => {
       const suggested = this.plugin.store.getSuggestedTaskWindow(today);
       new TaskModal(this.app, {
         title: "新增今日任务",
         projects,
+        compositeParents: this.plugin.store.getCompositeTasks(),
         initial: {
           title: "",
           description: "",
@@ -78,8 +82,8 @@ export class TodayTasksView extends BaseProjectView {
       attr: { style: `width: ${progress}%` }
     });
 
-    const incomplete = tasks.filter((task) => !task.completed);
-    const complete = tasks.filter((task) => task.completed);
+    const incomplete = displayTasks.filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed);
+    const complete = displayTasks.filter((item) => summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed);
 
     this.renderTaskSection(container, "未完成", incomplete, {
       emptyTitle: "今天暂时没有未完成任务",
@@ -95,7 +99,7 @@ export class TodayTasksView extends BaseProjectView {
     setIcon(icon, "sparkles");
     const copy = tipCard.createDiv();
     copy.createEl("strong", { text: "小贴士" });
-    copy.createDiv({ cls: "pm-muted", text: "导出按钮会直接复制今天仍未完成的任务，方便回贴或二次整理。" });
+    copy.createDiv({ cls: "pm-muted", text: "导出按钮会直接复制今天仍未完成的任务，文本可直接粘回快速记录或项目页批量导入。" });
   }
 
   private async copyIncompleteTasks(tasks: TaskOccurrence[]): Promise<void> {
@@ -111,7 +115,7 @@ export class TodayTasksView extends BaseProjectView {
   private renderTaskSection(
     container: HTMLElement,
     title: string,
-    tasks: TaskOccurrence[],
+    tasks: CompositeDisplayOccurrence[],
     emptyState: { emptyTitle: string; emptyBody: string }
   ): void {
     const section = container.createDiv({ cls: "pm-section pm-task-section" });
@@ -128,31 +132,35 @@ export class TodayTasksView extends BaseProjectView {
     }
 
     const list = section.createDiv({ cls: "pm-task-list" });
-    tasks.forEach((task) => {
-      const row = list.createDiv({ cls: `pm-task-card ${task.completed ? "is-complete" : ""}` });
+    tasks.forEach((item) => {
+      const task = item.occurrence;
+      const displayProgress = summarizeOccurrenceDisplay(task, item.childOccurrences);
+      const row = list.createDiv({ cls: `pm-task-card ${displayProgress.completed ? "is-complete" : ""}` });
       const main = row.createDiv({ cls: "pm-task-card-main" });
 
-      const checkbox = main.createEl("input", { type: "checkbox", cls: "pm-task-checkbox" });
-      checkbox.checked = task.completed;
-      checkbox.addEventListener("change", async () => {
-        try {
-          await this.plugin.store.updateTaskOccurrenceCompletion(task.taskId, task.date, checkbox.checked);
-        } catch (error) {
-          checkbox.checked = !checkbox.checked;
-          new Notice(error instanceof Error ? error.message : "更新失败");
-        }
-      });
+      if (task.kind === "simple") {
+        const checkbox = main.createEl("input", { type: "checkbox", cls: "pm-task-checkbox" });
+        checkbox.checked = task.completed;
+        checkbox.addEventListener("change", async () => {
+          try {
+            await this.plugin.store.updateTaskOccurrenceCompletion(task.taskId, task.date, checkbox.checked);
+          } catch (error) {
+            checkbox.checked = !checkbox.checked;
+            new Notice(error instanceof Error ? error.message : "更新失败");
+          }
+        });
+      }
 
       const copy = main.createDiv({ cls: "pm-task-copy" });
-      copy.createEl("div", { text: task.title, cls: `pm-task-title ${task.completed ? "is-complete" : ""}` });
+      copy.createEl("div", { text: task.title, cls: `pm-task-title ${displayProgress.completed ? "is-complete" : ""}` });
       const meta = copy.createDiv({ cls: "pm-task-meta" });
       appendBadge(meta, task.startTime && task.endTime ? `${task.startTime}-${task.endTime}` : "未排期", "muted");
       appendBadge(meta, recurrenceLabel(task), "repeat");
       appendBadge(meta, statusLabel(task.status), `status-${task.status}`);
       appendBadge(meta, this.plugin.store.getProject(task.projectId)?.name ?? "未归属项目", "tag");
       if (task.kind === "composite") {
-        appendBadge(meta, `${task.completedSteps}/${task.totalSteps} 子项`, "priority-medium");
-        this.renderSubtasks(copy, task);
+        appendBadge(meta, `${displayProgress.completedSteps}/${displayProgress.totalSteps} 子项`, "priority-medium");
+        this.renderSubtasks(copy, task, item.childOccurrences);
       }
 
       const actions = row.createDiv({ cls: "pm-task-card-actions" });
@@ -168,9 +176,20 @@ export class TodayTasksView extends BaseProjectView {
     const menu = new Menu();
     menu.addItem((item) =>
       item.setTitle("编辑任务").setIcon("square-pen").onClick(() => {
+        if (isSyntheticCompositeOccurrence(task)) {
+          const seriesTask = this.plugin.store.getTask(task.taskId);
+          if (seriesTask) {
+            this.openSeriesEditor(seriesTask);
+          }
+          return;
+        }
         this.openEditor(task);
       })
     );
+    if (isSyntheticCompositeOccurrence(task)) {
+      menu.showAtMouseEvent(event);
+      return;
+    }
     if (task.recurrence !== "once") {
       menu.addItem((item) =>
         item.setTitle("提前结束系列").setIcon("calendar-x").onClick(async () => {
@@ -191,9 +210,14 @@ export class TodayTasksView extends BaseProjectView {
     if (!seriesTask) {
       return;
     }
+    this.openSeriesEditor(seriesTask, task);
+  }
+
+  private openSeriesEditor(seriesTask: Task, task?: TaskOccurrence): void {
     new TaskModal(this.app, {
       title: "编辑任务",
       projects: this.plugin.store.getProjects(),
+      compositeParents: this.plugin.store.getCompositeTasks(),
       existingTask: seriesTask,
       occurrenceContext: task,
       initial: {
@@ -211,30 +235,31 @@ export class TodayTasksView extends BaseProjectView {
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
         kind: seriesTask.kind,
         subtasks: seriesTask.subtasks,
+        viewState: seriesTask.viewState,
         completed: isTaskSeriesCompleted(seriesTask)
       },
       onSubmit: async (input, scope) => {
-        if (scope === "occurrence") {
+        if (scope === "occurrence" && task) {
           await this.plugin.store.updateTaskOccurrenceWindow(seriesTask.id, task.date, input.startTime, input.endTime);
           return;
         }
         await this.plugin.store.updateTask(seriesTask.id, input, "series");
       },
       onDelete: async (scope) => {
-        if (scope === "single") {
+        if (scope === "single" && task) {
           await this.plugin.store.deleteTaskOccurrence(seriesTask.id, task.date);
           return;
         }
         await this.plugin.store.deleteTask(seriesTask.id, "series");
       },
       onCompleteSeries: async () => {
-        await this.plugin.store.completeTaskSeries(seriesTask.id, task.date);
+        await this.plugin.store.completeTaskSeries(seriesTask.id, task?.date);
       },
-      allowSingleDelete: true
+      allowSingleDelete: Boolean(task)
     }).open();
   }
 
-  private renderSubtasks(container: HTMLElement, task: TaskOccurrence): void {
+  private renderSubtasks(container: HTMLElement, task: TaskOccurrence, childOccurrences: TaskOccurrence[] = []): void {
     if (task.kind !== "composite") {
       return;
     }
@@ -253,7 +278,186 @@ export class TodayTasksView extends BaseProjectView {
         }
       });
     });
+    childOccurrences.forEach((child) => {
+      const item = grid.createDiv({
+        cls: `pm-subtask-chip pm-subtask-task ${child.completed ? "is-complete" : ""}`
+      });
+      item.addEventListener("click", async () => {
+        try {
+          await this.plugin.store.updateTaskOccurrenceCompletion(child.taskId, child.date, !child.completed);
+        } catch (error) {
+          new Notice(error instanceof Error ? error.message : "更新失败");
+        }
+      });
+      item.createDiv({ cls: "pm-subtask-title", text: child.title });
+      item.createDiv({
+        cls: "pm-subtask-meta",
+        text: `${recurrenceLabel(child)}${child.startTime && child.endTime ? ` · ${child.startTime}-${child.endTime}` : ""}`
+      });
+      const actions = item.createDiv({ cls: "pm-subtask-actions" });
+      const edit = actions.createEl("button", { text: "编辑", cls: "pm-subtask-action" });
+      edit.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.openEditor(child);
+      });
+      const remove = actions.createEl("button", { text: "删除", cls: "pm-subtask-action mod-warning" });
+      remove.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        await this.plugin.store.deleteTask(child.taskId, "series");
+      });
+    });
   }
+}
+
+type CompositeDisplayOccurrence = {
+  occurrence: TaskOccurrence;
+  childOccurrences: TaskOccurrence[];
+};
+
+function buildCompositeDisplayOccurrences(occurrences: TaskOccurrence[], seriesTasks: Task[]): CompositeDisplayOccurrence[] {
+  const taskById = new Map(seriesTasks.map((task) => [task.id, task]));
+  const childrenByParent = new Map<string, TaskOccurrence[]>();
+  const hiddenOccurrenceIds = new Set<string>();
+
+  occurrences.forEach((occurrence) => {
+    const parentId = getCompositeParentId(occurrence.taskId, taskById);
+    if (!parentId) {
+      return;
+    }
+    hiddenOccurrenceIds.add(occurrence.id);
+    childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), occurrence]);
+  });
+  childrenByParent.forEach((children, parentId) => childrenByParent.set(parentId, children.slice().sort(compareTaskOccurrences)));
+
+  const display = occurrences
+    .filter((occurrence) => !hiddenOccurrenceIds.has(occurrence.id))
+    .map<CompositeDisplayOccurrence>((occurrence) => ({
+      occurrence,
+      childOccurrences: childrenByParent.get(occurrence.taskId) ?? []
+    }));
+
+  const displayedTaskIds = new Set(display.map((item) => item.occurrence.taskId));
+  childrenByParent.forEach((children, parentId) => {
+    if (displayedTaskIds.has(parentId)) {
+      return;
+    }
+    const parent = taskById.get(parentId);
+    if (!parent) {
+      return;
+    }
+    display.push({
+      occurrence: buildCompositeContainerOccurrence(parent, children[0].date, children),
+      childOccurrences: children
+    });
+  });
+
+  return display.sort((left, right) => compareTaskOccurrences(left.occurrence, right.occurrence));
+}
+
+function getCompositeParentId(taskId: string, taskById: Map<string, Task>): string | null {
+  const parentId = taskById.get(taskId)?.viewState.mindmap.parentTaskId ?? null;
+  if (!parentId) {
+    return null;
+  }
+  const parent = taskById.get(parentId);
+  return parent?.kind === "composite" ? parent.id : null;
+}
+
+function buildCompositeContainerOccurrence(parent: Task, date: string, childOccurrences: TaskOccurrence[]): TaskOccurrence {
+  const progress = summarizeChildOccurrences(childOccurrences);
+  const window = summarizeChildWindow(childOccurrences);
+  return {
+    id: `${parent.id}::${date}::children`,
+    taskId: parent.id,
+    parentTaskId: parent.viewState.mindmap.parentTaskId ?? null,
+    occurrenceDate: date,
+    occurrenceNumber: parent.occurrenceDates.findIndex((entry) => entry === date) + 1 || 1,
+    kind: parent.kind,
+    title: parent.title,
+    description: parent.description,
+    projectId: parent.projectId,
+    status: parent.status,
+    priority: parent.priority,
+    tags: [...parent.tags],
+    date,
+    startTime: window.startTime ?? parent.startTime,
+    endTime: window.endTime ?? parent.endTime,
+    recurrence: parent.recurrence,
+    recurrenceCount: parent.recurrenceCount ?? null,
+    recurrenceUntil: parent.recurrenceUntil ?? null,
+    subtasks: parent.subtasks.map((subtask) => ({ ...subtask })),
+    sourceLinks: parent.sourceLinks.map((source) => ({ ...source })),
+    notes: parent.notes.map((note) => ({ ...note })),
+    completedSubtaskIds: [],
+    progress: progress.totalSteps === 0 ? 0 : progress.completedSteps / progress.totalSteps,
+    totalSteps: progress.totalSteps,
+    completedSteps: progress.completedSteps,
+    completed: progress.completed,
+    completedAt: progress.completed ? childOccurrences.map((child) => child.completedAt).filter(Boolean).sort().reverse()[0] ?? null : null,
+    createdAt: parent.createdAt,
+    updatedAt: parent.updatedAt,
+    revision: parent.revision
+  };
+}
+
+function isSyntheticCompositeOccurrence(occurrence: TaskOccurrence): boolean {
+  return occurrence.id.endsWith("::children");
+}
+
+function summarizeOccurrenceDisplay(
+  occurrence: TaskOccurrence,
+  childOccurrences: TaskOccurrence[]
+): { totalSteps: number; completedSteps: number; completed: boolean } {
+  const childProgress = summarizeChildOccurrences(childOccurrences);
+  const totalSteps = occurrence.totalSteps + childProgress.totalSteps;
+  const completedSteps = occurrence.completedSteps + childProgress.completedSteps;
+  return {
+    totalSteps,
+    completedSteps,
+    completed: totalSteps > 0 ? completedSteps === totalSteps : occurrence.completed
+  };
+}
+
+function summarizeChildOccurrences(childOccurrences: TaskOccurrence[]): { totalSteps: number; completedSteps: number; completed: boolean } {
+  const totalSteps = childOccurrences.reduce((sum, child) => sum + child.totalSteps, 0);
+  const completedSteps = childOccurrences.reduce((sum, child) => sum + child.completedSteps, 0);
+  return {
+    totalSteps,
+    completedSteps,
+    completed: childOccurrences.length > 0 && totalSteps > 0 && completedSteps === totalSteps
+  };
+}
+
+function summarizeChildWindow(childOccurrences: TaskOccurrence[]): { startTime?: string; endTime?: string } {
+  const timed = childOccurrences
+    .map((child) => ({
+      start: parseTimeToMinutes(child.startTime),
+      end: parseTimeToMinutes(child.endTime),
+      startTime: child.startTime,
+      endTime: child.endTime
+    }))
+    .filter((item): item is { start: number; end: number; startTime: string; endTime: string } => item.start !== null && item.end !== null && Boolean(item.startTime && item.endTime));
+  if (timed.length === 0) {
+    return {};
+  }
+  const first = timed.reduce((best, item) => (item.start < best.start ? item : best), timed[0]);
+  const last = timed.reduce((best, item) => (item.end > best.end ? item : best), timed[0]);
+  return { startTime: first.startTime, endTime: last.endTime };
+}
+
+function compareTaskOccurrences(a: TaskOccurrence, b: TaskOccurrence): number {
+  const startA = parseTimeToMinutes(a.startTime);
+  const startB = parseTimeToMinutes(b.startTime);
+  if (startA === null && startB === null) {
+    return a.title.localeCompare(b.title);
+  }
+  if (startA === null) {
+    return 1;
+  }
+  if (startB === null) {
+    return -1;
+  }
+  return startA - startB || a.title.localeCompare(b.title);
 }
 
 function renderProgressRing(container: HTMLElement, progress: number): void {
@@ -301,26 +505,10 @@ function isTaskSeriesCompleted(task: Task): boolean {
     if (task.kind === "simple") {
       return Boolean(state);
     }
+    if (task.subtasks.length === 0) {
+      return Boolean(state?.completedAt);
+    }
     const completedIds = new Set(state?.completedSubtaskIds ?? []);
     return task.subtasks.every((subtask) => completedIds.has(subtask.id));
   });
-}
-
-async function copyTextToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  document.body.removeChild(textarea);
-  if (!copied) {
-    throw new Error("复制失败，请检查系统剪贴板权限");
-  }
 }

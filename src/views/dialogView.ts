@@ -72,9 +72,10 @@ export class QuickDialogView extends BaseProjectView {
     container.addClass("pm-view", "pm-dialog-view");
 
     const tasks = sortTasksForMindmapSelection(this.plugin.store.getAllTasks(), (task) => this.projectNameForTask(task));
-    const recentFiles = this.getRecentMarkdownFiles();
+    const allNoteFiles = this.getAllMarkdownFiles();
+    const recentNoteFiles = this.getRecentNoteFiles(allNoteFiles);
     const mindmapProjects = buildMindmapProjectOptions(tasks, (task) => this.projectNameForTask(task));
-    this.ensureDialogSelections(tasks, recentFiles, mindmapProjects);
+    this.ensureDialogSelections(tasks, allNoteFiles, recentNoteFiles, mindmapProjects);
     const projectTasks = this.selectedMindmapProjectId
       ? tasks.filter((task) => mindmapProjectKey(task) === this.selectedMindmapProjectId)
       : [];
@@ -92,6 +93,7 @@ export class QuickDialogView extends BaseProjectView {
       const card = targetCards.createEl("button", {
         cls: `pm-dialog-target ${this.target === item.value ? "is-active" : ""}`
       });
+      card.dataset.target = item.value;
       const icon = card.createDiv({ cls: "pm-dialog-target-icon" });
       setIcon(icon, item.icon);
       card.createSpan({ cls: "pm-dialog-target-title", text: item.label });
@@ -112,7 +114,7 @@ export class QuickDialogView extends BaseProjectView {
     }
 
     if (this.target === "task-note") {
-      this.renderTaskNoteControls(container, recentFiles);
+      this.renderTaskNoteControls(container, allNoteFiles, recentNoteFiles);
     }
 
     if (this.target === "mindmap") {
@@ -125,8 +127,9 @@ export class QuickDialogView extends BaseProjectView {
       hintHeader.createEl("strong", { text: "任务导入规则" });
       hintHeader.createDiv({ cls: "pm-muted", text: "这套语法与项目页批量导入、今日任务导出完全互通。" });
       [
-        "可用 #项目：新项目名 自动建项目；#项目： 会导入为未归属任务。",
-        "同项目下若任务名重复，会直接覆盖旧任务，而不是重复新增；若时间冲突，会自动改成同日 1 分钟空档占位。",
+        "支持普通任务与组合任务；组合任务可写 kind:composite，也可直接在下一行缩进写子任务。",
+        "支持单次、每日、每周此时：repeat:once / daily / weekly；需要限制次数可继续写 count:4 或 until:2026-06-30。",
+        "可用 #项目：新项目名 自动建项目；同项目下若任务名重复会覆盖旧任务，时间冲突会自动改成同日 1 分钟空档占位。",
         "勾选 - [x] 默认只完成当天；repeat 任务加 finish:series 可提前结束整个系列。"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
     }
@@ -142,38 +145,58 @@ export class QuickDialogView extends BaseProjectView {
       placeholder: this.placeholderForTarget()
     });
     textarea.value = this.draftContent;
-    textarea.addEventListener("input", () => {
+    const updateEditorCount = (): void => {
       this.draftContent = textarea.value;
       const counter = editorCard.querySelector(".pm-editor-count");
       if (counter instanceof HTMLElement) {
         counter.setText(`字数：${this.draftContent.length}`);
       }
+    };
+    textarea.addEventListener("input", updateEditorCount);
+    textarea.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        submitButton.click();
+      }
     });
 
     const toolbar = editorCard.createDiv({ cls: "pm-editor-toolbar" });
-    const toolActions: Array<{ label: string; action: ToolbarAction }> = [
-      { label: "B", action: "bold" },
-      { label: "I", action: "italic" },
-      { label: "H", action: "heading" },
-      { label: "列表", action: "list" },
-      { label: "引用", action: "quote" },
-      { label: "代码", action: "code" }
-    ];
-    toolActions.forEach((item) => {
-      const button = toolbar.createEl("button", { text: item.label, cls: "pm-button pm-button-ghost pm-editor-tool" });
-      button.addEventListener("click", () => {
-        applyEditorFormat(textarea, item.action);
-        this.draftContent = textarea.value;
-        const counter = editorCard.querySelector(".pm-editor-count");
-        if (counter instanceof HTMLElement) {
-          counter.setText(`字数：${this.draftContent.length}`);
-        }
+    if (this.target === "quick-task") {
+      toolbar.addClass("is-task-toolbar");
+      buildQuickTaskShortcuts().forEach((item) => {
+        const button = toolbar.createEl("button", { text: item.label, cls: "pm-button pm-button-secondary pm-editor-tool" });
+        button.title = item.hint;
+        button.addEventListener("click", () => {
+          insertQuickTaskSnippet(textarea, item.snippet);
+          updateEditorCount();
+        });
       });
-    });
+    } else {
+      const toolActions: Array<{ label: string; action: ToolbarAction }> = [
+        { label: "B", action: "bold" },
+        { label: "I", action: "italic" },
+        { label: "H", action: "heading" },
+        { label: "列表", action: "list" },
+        { label: "引用", action: "quote" },
+        { label: "代码", action: "code" }
+      ];
+      toolActions.forEach((item) => {
+        const button = toolbar.createEl("button", { text: item.label, cls: "pm-button pm-button-ghost pm-editor-tool" });
+        button.addEventListener("click", () => {
+          applyEditorFormat(textarea, item.action);
+          updateEditorCount();
+        });
+      });
+    }
+
+    if (this.target === "quick-task") {
+      this.renderQuickTaskPreview(editorCard, textarea);
+    }
 
     const footer = editorCard.createDiv({ cls: "pm-editor-footer" });
     footer.createDiv({ cls: "pm-editor-count pm-muted", text: `字数：${this.draftContent.length}` });
     const submitButton = footer.createEl("button", { text: "提交内容", cls: "pm-button pm-button-primary" });
+    submitButton.setAttribute("aria-keyshortcuts", "Ctrl+Enter Meta+Enter");
     submitButton.addEventListener("click", async () => {
       try {
         await this.submit(this.draftContent, tasks);
@@ -187,21 +210,22 @@ export class QuickDialogView extends BaseProjectView {
     });
   }
 
-  private renderTaskNoteControls(container: HTMLElement, recentFiles: TFile[]): void {
+  private renderTaskNoteControls(container: HTMLElement, allFiles: TFile[], recentFiles: TFile[]): void {
     const pathCard = this.renderPathCard(container, {
       icon: "file-text",
       title: "目标文件",
       path: this.selectedNotePath || "请选择 Markdown 文件",
-      muted: "支持最近文件快捷选择，也可以手动输入 Vault 内路径。"
+      muted: "支持全库按文件名相似度检索，并保留最近 10 个操作文件快捷追加。"
     });
+    pathCard.querySelector(".pm-path-value")?.setAttribute("title", this.selectedNotePath || "请选择 Markdown 文件");
     const actions = pathCard.createDiv({ cls: "pm-path-actions" });
     const pickerButton = actions.createEl("button", { cls: "pm-button pm-button-secondary pm-path-button" });
     setIcon(pickerButton, "folder-open");
     pickerButton.title = "选择文件";
     pickerButton.addEventListener("click", () => {
       new EntitySuggestModal<TFile>(this.app, {
-        items: recentFiles,
-        placeholder: "选择 Markdown 文件",
+        items: allFiles,
+        placeholder: "按文件名搜索整个 Vault",
         emptyStateText: "没有可选的 Markdown 文件",
         getItemText: (file) => file.basename,
         getItemNote: (file) => file.path,
@@ -212,19 +236,26 @@ export class QuickDialogView extends BaseProjectView {
       }).open();
     });
 
-    const inputCard = container.createDiv({ cls: "pm-input-card" });
-    inputCard.createDiv({ cls: "pm-muted", text: "手动路径" });
-    const pathInput = inputCard.createEl("input", {
-      type: "text",
-      value: this.selectedNotePath,
-      placeholder: "例如：Projects/英语四级.md"
-    });
-    pathInput.addEventListener("input", () => {
-      this.selectedNotePath = pathInput.value.trim();
-      const pathEl = pathCard.querySelector(".pm-path-value");
-      if (pathEl instanceof HTMLElement) {
-        pathEl.setText(this.selectedNotePath || "请选择 Markdown 文件");
-      }
+    const recentCard = container.createDiv({ cls: "pm-input-card" });
+    const recentHeader = recentCard.createDiv({ cls: "pm-input-card-header" });
+    recentHeader.createEl("strong", { text: "最近 10 个操作文件" });
+    recentHeader.createDiv({ cls: "pm-muted", text: "点击即可切换为当前追加目标。" });
+    const recentList = recentCard.createDiv({ cls: "pm-anchor-chip-list pm-anchor-shortcut-list" });
+    if (recentFiles.length === 0) {
+      recentList.createDiv({ cls: "pm-muted", text: "还没有最近操作记录，首次追加后会出现在这里。" });
+      return;
+    }
+    recentFiles.slice(0, 10).forEach((file) => {
+      const chip = recentList.createEl("button", {
+        cls: `pm-anchor-chip pm-anchor-shortcut ${file.path === this.selectedNotePath ? "is-active" : ""}`
+      });
+      chip.title = file.path;
+      chip.createSpan({ cls: "pm-anchor-shortcut-task", text: file.basename });
+      chip.createSpan({ cls: "pm-anchor-shortcut-label", text: file.path });
+      chip.addEventListener("click", () => {
+        this.selectedNotePath = file.path;
+        this.render();
+      });
     });
   }
 
@@ -343,13 +374,71 @@ export class QuickDialogView extends BaseProjectView {
     return card;
   }
 
-  private ensureDialogSelections(tasks: Task[], recentFiles: TFile[], projects: MindmapProjectOption[]): void {
+  private renderQuickTaskPreview(container: HTMLElement, textarea: HTMLTextAreaElement): void {
+    const previewCard = container.createDiv({ cls: "pm-input-card pm-dialog-task-preview" });
+    const header = previewCard.createDiv({ cls: "pm-input-card-header" });
+    header.createEl("strong", { text: "实时任务预览" });
+    header.createDiv({ cls: "pm-muted", text: "和项目页批量导入、今日任务导出使用同一套解析规则。" });
+    const body = previewCard.createDiv({ cls: "pm-dialog-task-preview-body" });
+
+    const renderPreview = (): void => {
+      body.empty();
+      const preview = this.plugin.store.previewFormattedTasks(textarea.value, {
+        defaultDate: toDateKey(now())
+      });
+      const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
+      [
+        ["任务总数", String(preview.summary.total)],
+        ["普通 / 组合", `${preview.tasks.filter((task) => task.input.kind !== "composite").length} / ${preview.summary.composite}`],
+        ["单次 / 每日 / 每周", `${preview.tasks.filter((task) => task.input.recurrence === "once").length} / ${preview.tasks.filter((task) => task.input.recurrence === "daily").length} / ${preview.tasks.filter((task) => task.input.recurrence === "weekly").length}`],
+        ["新增 / 覆盖", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
+      ].forEach(([label, value]) => {
+        const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
+        card.createDiv({ cls: "pm-muted", text: label });
+        card.createEl("strong", { text: value });
+      });
+
+      const rows = body.createDiv({ cls: "pm-dialog-task-preview-list" });
+      if (preview.tasks.length === 0) {
+        rows.createDiv({ cls: "pm-muted", text: "输入任务后，这里会显示任务类型、重复规则和导入动作。" });
+      } else {
+        preview.tasks.slice(0, 8).forEach((task) => {
+          const row = rows.createDiv({ cls: "pm-dialog-task-preview-item" });
+          row.createEl("strong", { text: task.input.title });
+          row.createDiv({
+            cls: "pm-muted",
+            text: [
+              task.input.kind === "composite" ? "组合任务" : "普通任务",
+              recurrenceText(task.input.recurrence),
+              task.projectName ?? "未归属项目",
+              task.input.date,
+              task.input.startTime && task.input.endTime ? `${task.input.startTime}-${task.input.endTime}` : "未排期",
+              importActionText(task.action)
+            ].join(" · ")
+          });
+        });
+      }
+
+      if (preview.issues.length > 0) {
+        const issueList = body.createEl("ul", { cls: "pm-import-issues" });
+        preview.issues.slice(0, 6).forEach((issue) => {
+          issueList.createEl("li", { text: `第 ${issue.line} 行：${issue.message}` });
+        });
+      }
+    };
+
+    renderPreview();
+    textarea.addEventListener("input", renderPreview);
+  }
+
+  private ensureDialogSelections(tasks: Task[], allFiles: TFile[], recentFiles: TFile[], projects: MindmapProjectOption[]): void {
     if ((!this.selectedTaskId || !tasks.some((task) => task.id === this.selectedTaskId)) && tasks.length > 0) {
       this.selectedTaskId = tasks[0].id;
       this.selectedCommentId = "";
     }
-    if ((!this.selectedNotePath || !recentFiles.some((file) => file.path === this.selectedNotePath)) && recentFiles.length > 0) {
-      this.selectedNotePath = recentFiles[0].path;
+    const noteFiles = recentFiles.length > 0 ? recentFiles : allFiles;
+    if ((!this.selectedNotePath || !allFiles.some((file) => file.path === this.selectedNotePath)) && noteFiles.length > 0) {
+      this.selectedNotePath = noteFiles[0].path;
     }
     if ((!this.selectedMindmapProjectId || !projects.some((project) => project.id === this.selectedMindmapProjectId)) && tasks.length > 0) {
       const selectedTask = tasks.find((task) => task.id === this.selectedTaskId);
@@ -363,7 +452,15 @@ export class QuickDialogView extends BaseProjectView {
 
   private placeholderForTarget(): string {
     if (this.target === "quick-task") {
-      return "#项目：新的学习计划\n- [ ] 快速任务 @2026-05-18 09:00-10:00 #tag !high status:doing\n- [x] 每周回顾 @2026-05-18 20:00-20:30 #review status:done repeat:weekly count:4 finish:series";
+      return [
+        "#项目：新的学习计划",
+        "- [ ] 普通任务 kind:simple @2026-05-18 09:00-10:00 #tag !high status:doing",
+        "- [ ] 组合任务 kind:composite @2026-05-18 14:00-15:00 #plan !medium status:todo",
+        "  - 子任务一",
+        "  - 子任务二",
+        "- [ ] 每日复习 @2026-05-18 20:00-20:30 #review repeat:daily count:5",
+        "- [x] 每周回顾 @2026-05-18 21:00-21:30 #review status:done repeat:weekly count:4 finish:series"
+      ].join("\n");
     }
     if (this.target === "mindmap") {
       return this.mindmapInsertMode === "inside"
@@ -490,7 +587,7 @@ export class QuickDialogView extends BaseProjectView {
   private async appendMarkdownNote(path: string, content: string): Promise<void> {
     const filePath = normalizePath(path.trim());
     if (!filePath || filePath.endsWith("/")) {
-      throw new Error("请选择或输入有效的 Markdown 文件路径");
+      throw new Error("请选择有效的 Markdown 文件");
     }
     await this.ensureParentFolder(filePath);
     const existing = await this.app.vault.adapter.read(filePath).catch(() => "");
@@ -501,6 +598,7 @@ export class QuickDialogView extends BaseProjectView {
     } else {
       await this.app.vault.adapter.write(filePath, next);
     }
+    await this.plugin.store.recordDialogWrite(filePath, `快速记录写入 ${filePath}`);
   }
 
   private async ensureParentFolder(filePath: string): Promise<void> {
@@ -512,11 +610,31 @@ export class QuickDialogView extends BaseProjectView {
     }
   }
 
-  private getRecentMarkdownFiles(): TFile[] {
-    return this.app.vault
-      .getMarkdownFiles()
-      .sort((a, b) => b.stat.mtime - a.stat.mtime)
-      .slice(0, this.plugin.settings.taskNoteRecentLimit);
+  private getAllMarkdownFiles(): TFile[] {
+    return this.app.vault.getMarkdownFiles().sort((left, right) => {
+      const basenameCompare = left.basename.localeCompare(right.basename, "zh-Hans-CN");
+      if (basenameCompare !== 0) {
+        return basenameCompare;
+      }
+      return left.path.localeCompare(right.path, "zh-Hans-CN");
+    });
+  }
+
+  private getRecentNoteFiles(allFiles: TFile[]): TFile[] {
+    const byPath = new Map(allFiles.map((file) => [file.path, file]));
+    const operated = this.plugin.store
+      .getRecentDialogFilePaths(10)
+      .map((path) => byPath.get(path))
+      .filter((file): file is TFile => Boolean(file));
+    if (operated.length >= 10) {
+      return operated.slice(0, 10);
+    }
+    const used = new Set(operated.map((file) => file.path));
+    const fallback = [...allFiles]
+      .sort((left, right) => right.stat.mtime - left.stat.mtime)
+      .filter((file) => !used.has(file.path))
+      .slice(0, Math.max(0, 10 - operated.length));
+    return [...operated, ...fallback];
   }
 
   private async ensureFolder(path: string): Promise<void> {
@@ -539,6 +657,11 @@ export class QuickDialogView extends BaseProjectView {
 }
 
 type ToolbarAction = "bold" | "italic" | "heading" | "list" | "quote" | "code";
+type QuickTaskShortcut = {
+  label: string;
+  hint: string;
+  snippet: string;
+};
 
 function getTargetCards(): QuickTargetCard[] {
   return [
@@ -649,9 +772,54 @@ function editorHint(target: DialogTarget, mode: MindmapInsertMode): string {
     return mode === "inside" ? "当前会把内容并入所选节点正文。" : "当前会把每一行解析成一个新的评语节点。";
   }
   if (target === "quick-task") {
-    return "支持任务语法批量导入，适合快速拆分待办。";
+    return "支持普通 / 组合、单次 / 每日 / 每周任务；按 Ctrl+Enter 可直接提交。";
   }
   return "编辑区已包裹成独立卡片，便于专注输入。";
+}
+
+function buildQuickTaskShortcuts(): QuickTaskShortcut[] {
+  const today = toDateKey(now());
+  return [
+    {
+      label: "普通任务",
+      hint: "插入普通任务模板",
+      snippet: `- [ ] 普通任务 kind:simple @${today} 09:00-09:30 status:todo`
+    },
+    {
+      label: "组合任务",
+      hint: "插入组合任务模板和两个子任务",
+      snippet: `- [ ] 组合任务 kind:composite @${today} 10:00-11:00 status:todo\n  - 子任务一\n  - 子任务二`
+    },
+    {
+      label: "单次",
+      hint: "插入单次任务模板",
+      snippet: `- [ ] 单次任务 kind:simple @${today} 14:00-14:30 repeat:once status:todo`
+    },
+    {
+      label: "每日",
+      hint: "插入每日任务模板",
+      snippet: `- [ ] 每日任务 kind:simple @${today} 20:00-20:20 repeat:daily count:7 status:todo`
+    },
+    {
+      label: "每周此时",
+      hint: "插入每周重复模板",
+      snippet: `- [ ] 每周任务 kind:simple @${today} 21:00-21:30 repeat:weekly count:4 status:todo`
+    },
+    {
+      label: "未归属项目",
+      hint: "插入未归属项目分组",
+      snippet: "#项目："
+    }
+  ];
+}
+
+function insertQuickTaskSnippet(textarea: HTMLTextAreaElement, snippet: string): void {
+  const value = textarea.value.trimEnd();
+  const next = value ? `${value}\n${snippet}` : snippet;
+  textarea.value = next;
+  textarea.dispatchEvent(new Event("input"));
+  textarea.focus();
+  textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
 }
 
 function applyEditorFormat(textarea: HTMLTextAreaElement, action: ToolbarAction): void {
@@ -718,6 +886,32 @@ function statusText(status: Task["status"]): string {
     return "已完成";
   }
   return "待办";
+}
+
+function recurrenceText(recurrence: Task["recurrence"]): string {
+  if (recurrence === "daily") {
+    return "每日";
+  }
+  if (recurrence === "weekly") {
+    return "每周此时";
+  }
+  if (recurrence === "custom") {
+    return "自定义";
+  }
+  return "单次";
+}
+
+function importActionText(action: "create" | "overwrite" | "overwrite-and-complete-today" | "overwrite-and-complete-series"): string {
+  if (action === "overwrite-and-complete-series") {
+    return "覆盖并结束整个系列";
+  }
+  if (action === "overwrite-and-complete-today") {
+    return "覆盖并完成当天";
+  }
+  if (action === "overwrite") {
+    return "覆盖已有任务";
+  }
+  return "新增任务";
 }
 
 function truncateText(value: string, maxLength: number): string {

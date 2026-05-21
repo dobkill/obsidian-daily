@@ -3,16 +3,23 @@ import type ProjectManagementPlugin from "./main";
 
 const IMPORT_SAMPLE_TEXT = [
   "#项目：英语四级冲刺",
-  "- [ ] 搭建复习看板 @2026-05-18 09:00-10:30 #planning !high status:doing",
-  "  - 整理词汇任务",
-  "  - 安排阅读计划",
-  "- [ ] 模考复盘 @2026-05-19 19:30-21:00 #mock !medium status:todo repeat:weekly count:4",
-  "- [x] 提交报名材料 @2026-05-17 18:00-18:30 #admin status:done",
+  "- [ ] 搭建复习看板 kind:simple @2026-05-18 09:00-10:30 #planning !high status:doing",
+  "- [ ] 拆解每日背词 kind:composite @2026-05-18 12:00-12:40 #vocab !medium status:todo",
+  "  - 复习昨天错词",
+  "  - 新增 30 个高频词",
+  "  - 记录易混词组",
+  "- [ ] 晚间听力打卡 kind:simple @2026-05-18 21:00-21:25 #listen !medium status:todo repeat:daily count:5",
+  "- [ ] 模考复盘 kind:simple @2026-05-19 19:30-21:00 #mock !medium status:todo repeat:weekly count:4",
+  "- [x] 提交报名材料 kind:simple @2026-05-17 18:00-18:30 #admin status:done",
   "#项目：写作素材库",
-  "- [ ] 修订作文模板 @2026-05-20 20:00-21:30 #writing !urgent status:blocked",
-  "- [x] 周复盘总任务 @2026-05-21 21:00-21:30 #review status:done repeat:weekly count:6 finish:series",
+  "- [ ] 修订作文模板 kind:simple @2026-05-20 20:00-21:30 #writing !urgent status:blocked",
+  "- [ ] 每周摘抄整理 kind:composite @2026-05-21 21:00-22:00 #review status:doing repeat:weekly count:6",
+  "  - 归类开头句",
+  "  - 归类论证句",
+  "  - 归类结尾句",
+  "- [x] 周复盘总任务 kind:simple @2026-05-21 22:00-22:20 #review status:done repeat:weekly count:6 finish:series",
   "#项目：",
-  "- [ ] 补一条未归属临时任务 @2026-05-18 22:00-22:30 #adhoc status:todo"
+  "- [ ] 补一条未归属临时任务 kind:simple @2026-05-18 22:30-23:00 #adhoc status:todo"
 ].join("\n");
 
 export class ProjectManagementSettingTab extends PluginSettingTab {
@@ -66,7 +73,7 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
       [
         "表格视图会展示标题、状态、优先级、标签、重复规则与完成进度。",
         "看板会按照 status:todo / doing / blocked / done 自动分列。",
-        "甘特图直接读取日期和时间范围；repeat 任务会保留系列信息。",
+        "甘特图直接读取日期和时间范围；普通任务、组合任务、每日任务、每周任务都会按系列呈现。",
         "思维导图的评语节点、任务挂载关系和依赖关系，导入后继续在项目进度页或快速记录页补充。"
       ].forEach((item) => notes.createEl("div", { text: item, cls: "pm-settings-note-item" }));
 
@@ -167,7 +174,7 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("最近笔记数量")
-      .setDesc("快速记录追加任意笔记时显示的最近修改文件数量。")
+      .setDesc("当最近操作记录不足时，用于补充最近修改文件候选；快捷区固定展示最近 10 个操作文件。")
       .addText((text) =>
         text.setValue(String(this.plugin.settings.taskNoteRecentLimit)).onChange(async (value) => {
           const parsed = Number(value);

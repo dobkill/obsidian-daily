@@ -6,6 +6,7 @@ import { TaskModal } from "../components/taskModal";
 import { TextEntryModal } from "../components/textEntryModal";
 import type ProjectManagementPlugin from "../main";
 import { ProgressPage, Project, Task, TaskInput, TaskMindmapComment, TaskOccurrence, TaskStatus } from "../types";
+import { copyTextToClipboard } from "../utils/clipboard";
 import {
   addDays,
   compareDateKeys,
@@ -102,7 +103,7 @@ export class OverviewView extends BaseProjectView {
     this.createPrimaryTab(heroActions, this.plugin.settings.overviewTab2Name, "projects");
 
     if (this.activePrimaryTab === "activity") {
-      this.renderActivityTab(container, snapshot.occurrences, snapshot.projects);
+      this.renderActivityTab(container, snapshot.occurrences, snapshot.projects, snapshot.tasks);
     } else {
       this.renderProjectsTab(container, snapshot.progressPages, snapshot.projects, snapshot.tasks);
     }
@@ -116,7 +117,7 @@ export class OverviewView extends BaseProjectView {
     });
   }
 
-  private renderActivityTab(container: HTMLElement, tasks: TaskOccurrence[], projects: Project[]): void {
+  private renderActivityTab(container: HTMLElement, tasks: TaskOccurrence[], projects: Project[], seriesTasks: Task[]): void {
     const summary = container.createDiv({ cls: "pm-summary-strip" });
     const today = toDateKey(now());
     const weekStart = toDateKey(startOfWeek(this.weekAnchor));
@@ -160,7 +161,7 @@ export class OverviewView extends BaseProjectView {
       this.weekAnchor = addDays(this.weekAnchor, 7);
       this.render();
     });
-    this.renderWeekBoard(weekSection, tasks, projects);
+    this.renderWeekBoard(weekSection, tasks, projects, seriesTasks);
 
     const trendSection = container.createDiv({ cls: "pm-section" });
     const trendHeader = trendSection.createDiv({ cls: "pm-page-header" });
@@ -287,7 +288,7 @@ export class OverviewView extends BaseProjectView {
     });
   }
 
-  private renderWeekBoard(container: HTMLElement, tasks: TaskOccurrence[], projects: Project[]): void {
+  private renderWeekBoard(container: HTMLElement, tasks: TaskOccurrence[], projects: Project[], seriesTasks: Task[]): void {
     const weekDates = getWeekDates(this.weekAnchor);
     const board = container.createDiv({ cls: "pm-week-board" });
 
@@ -320,20 +321,21 @@ export class OverviewView extends BaseProjectView {
         });
       });
 
-      const dayTasks = tasks.filter((task) => task.date === key).sort(compareWeekTasks);
+      const dayTasks = buildCompositeDisplayOccurrences(tasks.filter((task) => task.date === key), seriesTasks);
       if (dayTasks.length === 0) {
         column.createDiv({ cls: "pm-empty pm-week-day-empty", text: "暂无任务" });
         return;
       }
 
       const list = column.createDiv({ cls: "pm-week-day-list" });
-      dayTasks.forEach((task) => this.renderWeekTaskCard(list, task));
+      dayTasks.forEach((item) => this.renderWeekTaskCard(list, item.occurrence, item.childOccurrences));
     });
   }
 
-  private renderWeekTaskCard(container: HTMLElement, task: TaskOccurrence): void {
+  private renderWeekTaskCard(container: HTMLElement, task: TaskOccurrence, childOccurrences: TaskOccurrence[] = []): void {
     const project = this.plugin.store.getProject(task.projectId);
-    const card = container.createDiv({ cls: `pm-week-task ${task.completed ? "is-complete" : ""} ${task.kind === "composite" ? "is-composite" : ""}` });
+    const displayProgress = summarizeOccurrenceDisplay(task, childOccurrences);
+    const card = container.createDiv({ cls: `pm-week-task ${displayProgress.completed ? "is-complete" : ""} ${task.kind === "composite" ? "is-composite" : ""}` });
     if (project?.color) {
       card.style.borderLeftColor = project.color;
     }
@@ -357,7 +359,16 @@ export class OverviewView extends BaseProjectView {
     const editButton = top.createEl("button", { text: "✎", cls: "pm-week-task-edit" });
     editButton.setAttribute("aria-label", "编辑任务");
     editButton.title = "编辑任务";
-    editButton.addEventListener("click", () => this.openEditOccurrenceModal(task));
+    editButton.addEventListener("click", () => {
+      if (isSyntheticCompositeOccurrence(task)) {
+        const seriesTask = this.plugin.store.getTask(task.taskId);
+        if (seriesTask) {
+          this.openEditTaskModal(seriesTask);
+        }
+        return;
+      }
+      this.openEditOccurrenceModal(task);
+    });
 
     const meta = card.createDiv({ cls: "pm-task-meta" });
     meta.createSpan({ text: task.startTime && task.endTime ? `${task.startTime} - ${task.endTime}` : "未排期" });
@@ -366,12 +377,12 @@ export class OverviewView extends BaseProjectView {
       meta.createSpan({ text: `第 ${task.occurrenceNumber} 次` });
     }
     if (task.kind === "composite") {
-      meta.createSpan({ text: `${task.completedSteps}/${task.totalSteps} 子任务` });
-      this.renderCompositeSubtasks(card, task);
+      meta.createSpan({ text: `${displayProgress.completedSteps}/${displayProgress.totalSteps} 子任务` });
+      this.renderCompositeSubtasks(card, task, childOccurrences);
     }
   }
 
-  private renderCompositeSubtasks(container: HTMLElement, task: TaskOccurrence): void {
+  private renderCompositeSubtasks(container: HTMLElement, task: TaskOccurrence, childOccurrences: TaskOccurrence[] = []): void {
     const grid = container.createDiv({ cls: "pm-subtask-grid" });
     task.subtasks.forEach((subtask) => {
       const item = grid.createEl("button", {
@@ -385,6 +396,34 @@ export class OverviewView extends BaseProjectView {
         } catch (error) {
           new Notice(error instanceof Error ? error.message : "更新失败");
         }
+      });
+    });
+    childOccurrences.forEach((child) => {
+      const item = grid.createDiv({
+        cls: `pm-subtask-chip pm-subtask-task ${child.completed ? "is-complete" : ""}`
+      });
+      item.addEventListener("click", async () => {
+        try {
+          await this.plugin.store.updateTaskOccurrenceCompletion(child.taskId, child.date, !child.completed);
+        } catch (error) {
+          new Notice(error instanceof Error ? error.message : "更新失败");
+        }
+      });
+      item.createDiv({ cls: "pm-subtask-title", text: child.title });
+      item.createDiv({
+        cls: "pm-subtask-meta",
+        text: `${recurrenceLabel(child.recurrence)}${child.startTime && child.endTime ? ` · ${child.startTime}-${child.endTime}` : ""}`
+      });
+      const actions = item.createDiv({ cls: "pm-subtask-actions" });
+      const edit = actions.createEl("button", { text: "编辑", cls: "pm-subtask-action" });
+      edit.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.openEditOccurrenceModal(child);
+      });
+      const remove = actions.createEl("button", { text: "删除", cls: "pm-subtask-action mod-warning" });
+      remove.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        await this.plugin.store.deleteTask(child.taskId, "series");
       });
     });
   }
@@ -502,6 +541,19 @@ export class OverviewView extends BaseProjectView {
         projectId: project.id,
         defaultDate: toDateKey(now())
       }).open();
+    });
+    projectActions.createEl("button", { text: "导出 Markdown", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
+      try {
+        const text = this.plugin.store.exportProjectAsFormattedText(project.id);
+        if (!text.includes("- [")) {
+          new Notice("当前项目暂无任务可导出");
+          return;
+        }
+        await copyTextToClipboard(text);
+        new Notice(`已复制「${project.name}」项目 Markdown`);
+      } catch (error) {
+        new Notice(error instanceof Error ? error.message : "导出失败");
+      }
     });
     projectActions.createEl("button", { text: "今日自动排程", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
       try {
@@ -863,7 +915,9 @@ export class OverviewView extends BaseProjectView {
 
     const left = body.createDiv({ cls: "pm-gantt-left tm-gantt-left" });
     const leftHeader = left.createDiv({ cls: "pm-gantt-left-header tm-gantt-left-header" });
-    ["任务", "状态", "优先级", "计划"].forEach((label) => leftHeader.createDiv({ text: label }));
+    const leftHeaderMain = leftHeader.createDiv({ cls: "pm-gantt-left-heading" });
+    leftHeaderMain.createDiv({ text: "任务 / 状态 / 计划" });
+    leftHeaderMain.createDiv({ cls: "pm-muted", text: `共 ${items.length} 项` });
 
     viewportEl = body.createDiv({ cls: "pm-gantt-timeline-viewport tm-gantt-timeline-viewport" });
     const content = viewportEl.createDiv({ cls: "pm-gantt-timeline-content tm-gantt-timeline-content" });
@@ -893,7 +947,19 @@ export class OverviewView extends BaseProjectView {
       const leftRow = left.createDiv({ cls: "pm-gantt-left-row tm-gantt-left-row" });
       const taskCell = leftRow.createDiv({ cls: "pm-gantt-task-cell" });
       const taskTop = taskCell.createDiv({ cls: "pm-gantt-task-top" });
-      taskTop.createEl("strong", { text: item.task.title });
+      const titleLine = taskTop.createDiv({ cls: "pm-gantt-task-title-line" });
+      const titleText = titleLine.createEl("strong", { text: item.task.title, cls: "pm-gantt-task-title" });
+      titleText.title = item.task.title;
+      if (item.task.viewState.gantt.locked) {
+        const lockFlag = titleLine.createSpan({ cls: "pm-gantt-task-flag is-locked" });
+        lockFlag.setText("锁定");
+        lockFlag.title = "当前任务已锁定";
+      }
+      if (item.task.viewState.gantt.milestone) {
+        const milestoneFlag = titleLine.createSpan({ cls: "pm-gantt-task-flag is-milestone" });
+        milestoneFlag.setText("里程碑");
+        milestoneFlag.title = "当前任务已设置为里程碑";
+      }
       const rowActions = taskTop.createDiv({ cls: "pm-inline-actions" });
       rowActions
         .createEl("button", {
@@ -918,23 +984,12 @@ export class OverviewView extends BaseProjectView {
       const menuButton = rowActions.createEl("button", { cls: "pm-icon-button", attr: { "aria-label": "更多操作" } });
       setIcon(menuButton, "ellipsis");
       menuButton.addEventListener("click", (event) => this.openSeriesTaskMenu(event, item.task));
-      taskCell.createDiv({ cls: "pm-muted pm-gantt-task-desc", text: item.task.description?.trim() || completionSummary(item.task) });
-
-      const statusCell = leftRow.createDiv({ cls: "pm-gantt-status-cell" });
-      appendBadge(statusCell, statusLabel(item.task.status), `status-${item.task.status}`);
-      if (item.task.viewState.gantt.locked) {
-        appendBadge(statusCell, "已锁定", "status-blocked");
-      }
-
-      const priorityCell = leftRow.createDiv({ cls: "pm-gantt-priority-cell" });
-      appendBadge(priorityCell, priorityLabel(item.task.priority), priorityTone(item.task.priority));
-      if (item.task.viewState.gantt.milestone) {
-        appendBadge(priorityCell, "里程碑", "priority-medium");
-      }
-
-      const planCell = leftRow.createDiv({ cls: "pm-gantt-plan-cell" });
-      planCell.createDiv({ text: item.startDate === item.endDate ? item.startDate : `${item.startDate} -> ${item.endDate}` });
-      planCell.createDiv({ cls: "pm-muted", text: item.task.startTime && item.task.endTime ? `${item.task.startTime}-${item.task.endTime}` : "未排期" });
+      const meta = taskCell.createDiv({ cls: "pm-gantt-task-meta" });
+      meta.createSpan({ cls: `pm-gantt-meta-item is-status is-${item.task.status}`, text: statusLabel(item.task.status) });
+      meta.createSpan({ cls: "pm-gantt-meta-separator", text: "·" });
+      meta.createSpan({ cls: `pm-gantt-meta-item is-priority ${priorityTone(item.task.priority)}`, text: priorityLabel(item.task.priority) });
+      meta.createSpan({ cls: "pm-gantt-meta-separator", text: "·" });
+      meta.createSpan({ cls: "pm-gantt-meta-item", text: formatGanttPlan(item.startDate, item.endDate, item.task.startTime, item.task.endTime) });
 
       const row = rows.createDiv({ cls: "pm-gantt-bar-row tm-gantt-bar-row" });
       geometry.minorCells.forEach((cell) => {
@@ -960,7 +1015,9 @@ export class OverviewView extends BaseProjectView {
       bar.style.width = `${barWidth}px`;
       bar.title = [item.task.title, `${item.startDate} -> ${item.endDate}`, `进度 ${item.progress}%`, `状态 ${statusLabel(item.task.status)}`].join("\n");
       bar.addEventListener("click", () => this.openEditTaskModal(item.task));
-      bar.createSpan({ text: item.task.viewState.gantt.milestone ? `◆ ${item.progress}%` : `${item.progress}%` });
+      bar.createSpan({
+        text: item.task.viewState.gantt.milestone ? `◆ ${statusLabel(item.task.status)} ${item.progress}%` : `${statusLabel(item.task.status)} ${item.progress}%`
+      });
 
       if (item.task.viewState.gantt.dependencyIds.length > 0) {
         const dep = row.createDiv({ cls: "pm-gantt-dependency-note pm-muted", text: `依赖 ${item.task.viewState.gantt.dependencyIds.length} 项` });
@@ -1186,7 +1243,7 @@ export class OverviewView extends BaseProjectView {
         appendBadge(meta, priorityLabel(node.task.priority), priorityTone(node.task.priority));
         appendBadge(meta, recurrenceLabel(node.task.recurrence), "repeat");
         if (node.task.kind === "composite") {
-          appendBadge(meta, `${node.task.subtasks.length} 个子任务`, "tag");
+          appendBadge(meta, `${node.task.subtasks.length + countDirectChildTasks(tasks, node.task.id)} 个子任务`, "tag");
         }
       } else {
         appendBadge(meta, "评语", "tag");
@@ -1281,13 +1338,12 @@ export class OverviewView extends BaseProjectView {
       if (node.task.kind === "simple") {
         container.createEl("button", { text: "转为组合任务", cls: "pm-button pm-button-ghost" }).addEventListener("click", async () => {
           await this.plugin.store.updateTask(node.task!.id, {
-            kind: "composite",
-            subtasks: [{ title: "新子任务" }]
+            kind: "composite"
           });
           this.openEditTaskModal(this.plugin.store.getTask(node.task!.id) ?? node.task!);
         });
       } else {
-        container.createDiv({ cls: "pm-muted", text: `当前为组合任务，共 ${node.task.subtasks.length} 个子任务。` });
+        container.createDiv({ cls: "pm-muted", text: `当前为组合任务，共 ${node.task.subtasks.length + countDirectChildTasks(tasks, node.task.id)} 个子任务。` });
       }
 
       const relationCard = container.createDiv({ cls: "pm-input-card" });
@@ -1722,6 +1778,30 @@ export class OverviewView extends BaseProjectView {
         this.openEditTaskModal(task);
       })
     );
+    if (task.kind === "composite") {
+      menu.addItem((item) =>
+        item.setTitle("新增子任务").setIcon("list-plus").onClick(() => {
+          this.openCreateTaskModal("新增组合子任务", this.plugin.store.getProjects(), {
+            title: "",
+            description: "",
+            projectId: task.projectId,
+            status: "todo",
+            tags: [],
+            date: task.date,
+            recurrence: "once",
+            completed: false,
+            viewState: {
+              mindmap: {
+                parentTaskId: task.id,
+                childOrder: Date.now(),
+                expanded: true
+              }
+            },
+            ...this.plugin.store.getSuggestedTaskWindow(task.date)
+          });
+        })
+      );
+    }
     ([
       ["todo", "移动到待办"],
       ["doing", "移动到进行中"],
@@ -1790,6 +1870,7 @@ export class OverviewView extends BaseProjectView {
     new TaskModal(this.app, {
       title,
       projects,
+      compositeParents: this.plugin.store.getCompositeTasks(),
       initial,
       onSubmit: async (input) => {
         await this.plugin.store.createTask(input);
@@ -1801,6 +1882,7 @@ export class OverviewView extends BaseProjectView {
     new TaskModal(this.app, {
       title: "编辑任务",
       projects: this.plugin.store.getProjects(),
+      compositeParents: this.plugin.store.getCompositeTasks(),
       existingTask: task,
       initial: {
         title: task.title,
@@ -1817,6 +1899,7 @@ export class OverviewView extends BaseProjectView {
         recurrenceUntil: task.recurrenceUntil ?? null,
         kind: task.kind,
         subtasks: task.subtasks,
+        viewState: task.viewState,
         completed: isTaskSeriesCompleted(task)
       },
       onSubmit: async (input) => {
@@ -1840,6 +1923,7 @@ export class OverviewView extends BaseProjectView {
     new TaskModal(this.app, {
       title: "编辑任务",
       projects: this.plugin.store.getProjects(),
+      compositeParents: this.plugin.store.getCompositeTasks(),
       existingTask: seriesTask,
       occurrenceContext: task,
       initial: {
@@ -1857,6 +1941,7 @@ export class OverviewView extends BaseProjectView {
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
         kind: seriesTask.kind,
         subtasks: seriesTask.subtasks,
+        viewState: seriesTask.viewState,
         completed: isTaskSeriesCompleted(seriesTask)
       },
       onSubmit: async (input, scope) => {
@@ -1890,9 +1975,9 @@ const MINDMAP_VIEW_PADDING = 48;
 const MINDMAP_MIN_ZOOM = 0.35;
 const MINDMAP_MAX_ZOOM = 1.6;
 const MINDMAP_ZOOM_STEP = 0.1;
-const GANTT_ROW_HEIGHT = 72;
+const GANTT_ROW_HEIGHT = 76;
 const GANTT_HEADER_HEIGHT = 64;
-const GANTT_LEFT_WIDTH = 420;
+const GANTT_LEFT_WIDTH = 360;
 const GANTT_MIN_ZOOM = 0.4;
 const GANTT_MAX_ZOOM = 2;
 const GANTT_ZOOM_STEP = 0.1;
@@ -1913,6 +1998,11 @@ type MindmapNode = {
   height: number;
   storedX?: number;
   storedY?: number;
+};
+
+type CompositeDisplayOccurrence = {
+  occurrence: TaskOccurrence;
+  childOccurrences: TaskOccurrence[];
 };
 
 function buildMindmapPath(parent: MindmapNode, node: MindmapNode): string {
@@ -2257,6 +2347,10 @@ function collectTaskDescendantIds(tasks: Task[], taskId: string): Set<string> {
   return descendants;
 }
 
+function countDirectChildTasks(tasks: Task[], taskId: string): number {
+  return tasks.filter((task) => (task.viewState.mindmap.parentTaskId ?? null) === taskId).length;
+}
+
 function collectCommentDescendantIds(comments: TaskMindmapComment[], commentId: string): Set<string> {
   const descendants = new Set<string>();
   const queue = [commentId];
@@ -2369,6 +2463,14 @@ function priorityLabel(priority: Task["priority"]): string {
   return "无";
 }
 
+function formatGanttPlan(startDate: string, endDate: string, startTime?: string, endTime?: string): string {
+  const dateLabel = startDate === endDate ? startDate.slice(5) : `${startDate.slice(5)}~${endDate.slice(5)}`;
+  if (startTime && endTime) {
+    return `${dateLabel} ${startTime}-${endTime}`;
+  }
+  return dateLabel;
+}
+
 function compareWeekTasks(a: TaskOccurrence, b: TaskOccurrence): number {
   const startA = parseTimeToMinutes(a.startTime);
   const startB = parseTimeToMinutes(b.startTime);
@@ -2382,6 +2484,137 @@ function compareWeekTasks(a: TaskOccurrence, b: TaskOccurrence): number {
     return -1;
   }
   return startA - startB;
+}
+
+function buildCompositeDisplayOccurrences(occurrences: TaskOccurrence[], seriesTasks: Task[]): CompositeDisplayOccurrence[] {
+  const taskById = new Map(seriesTasks.map((task) => [task.id, task]));
+  const childrenByParent = new Map<string, TaskOccurrence[]>();
+  const hiddenOccurrenceIds = new Set<string>();
+
+  occurrences.forEach((occurrence) => {
+    const parentId = getCompositeParentId(occurrence.taskId, taskById);
+    if (!parentId) {
+      return;
+    }
+    hiddenOccurrenceIds.add(occurrence.id);
+    childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), occurrence]);
+  });
+  childrenByParent.forEach((children, parentId) => childrenByParent.set(parentId, children.slice().sort(compareWeekTasks)));
+
+  const display = occurrences
+    .filter((occurrence) => !hiddenOccurrenceIds.has(occurrence.id))
+    .map<CompositeDisplayOccurrence>((occurrence) => ({
+      occurrence,
+      childOccurrences: childrenByParent.get(occurrence.taskId) ?? []
+    }));
+
+  const displayedTaskIds = new Set(display.map((item) => item.occurrence.taskId));
+  childrenByParent.forEach((children, parentId) => {
+    if (displayedTaskIds.has(parentId)) {
+      return;
+    }
+    const parent = taskById.get(parentId);
+    if (!parent) {
+      return;
+    }
+    display.push({
+      occurrence: buildCompositeContainerOccurrence(parent, children[0].date, children),
+      childOccurrences: children
+    });
+  });
+
+  return display.sort((left, right) => compareWeekTasks(left.occurrence, right.occurrence));
+}
+
+function getCompositeParentId(taskId: string, taskById: Map<string, Task>): string | null {
+  const parentId = taskById.get(taskId)?.viewState.mindmap.parentTaskId ?? null;
+  if (!parentId) {
+    return null;
+  }
+  const parent = taskById.get(parentId);
+  return parent?.kind === "composite" ? parent.id : null;
+}
+
+function buildCompositeContainerOccurrence(parent: Task, date: string, childOccurrences: TaskOccurrence[]): TaskOccurrence {
+  const progress = summarizeChildOccurrences(childOccurrences);
+  const window = summarizeChildWindow(childOccurrences);
+  return {
+    id: `${parent.id}::${date}::children`,
+    taskId: parent.id,
+    parentTaskId: parent.viewState.mindmap.parentTaskId ?? null,
+    occurrenceDate: date,
+    occurrenceNumber: parent.occurrenceDates.findIndex((entry) => entry === date) + 1 || 1,
+    kind: parent.kind,
+    title: parent.title,
+    description: parent.description,
+    projectId: parent.projectId,
+    status: parent.status,
+    priority: parent.priority,
+    tags: [...parent.tags],
+    date,
+    startTime: window.startTime ?? parent.startTime,
+    endTime: window.endTime ?? parent.endTime,
+    recurrence: parent.recurrence,
+    recurrenceCount: parent.recurrenceCount ?? null,
+    recurrenceUntil: parent.recurrenceUntil ?? null,
+    subtasks: parent.subtasks.map((subtask) => ({ ...subtask })),
+    sourceLinks: parent.sourceLinks.map((source) => ({ ...source })),
+    notes: parent.notes.map((note) => ({ ...note })),
+    completedSubtaskIds: [],
+    progress: progress.totalSteps === 0 ? 0 : progress.completedSteps / progress.totalSteps,
+    totalSteps: progress.totalSteps,
+    completedSteps: progress.completedSteps,
+    completed: progress.completed,
+    completedAt: progress.completed ? childOccurrences.map((child) => child.completedAt).filter(Boolean).sort().reverse()[0] ?? null : null,
+    createdAt: parent.createdAt,
+    updatedAt: parent.updatedAt,
+    revision: parent.revision
+  };
+}
+
+function isSyntheticCompositeOccurrence(occurrence: TaskOccurrence): boolean {
+  return occurrence.id.endsWith("::children");
+}
+
+function summarizeOccurrenceDisplay(
+  occurrence: TaskOccurrence,
+  childOccurrences: TaskOccurrence[]
+): { totalSteps: number; completedSteps: number; completed: boolean } {
+  const childProgress = summarizeChildOccurrences(childOccurrences);
+  const totalSteps = occurrence.totalSteps + childProgress.totalSteps;
+  const completedSteps = occurrence.completedSteps + childProgress.completedSteps;
+  return {
+    totalSteps,
+    completedSteps,
+    completed: totalSteps > 0 ? completedSteps === totalSteps : occurrence.completed
+  };
+}
+
+function summarizeChildOccurrences(childOccurrences: TaskOccurrence[]): { totalSteps: number; completedSteps: number; completed: boolean } {
+  const totalSteps = childOccurrences.reduce((sum, child) => sum + child.totalSteps, 0);
+  const completedSteps = childOccurrences.reduce((sum, child) => sum + child.completedSteps, 0);
+  return {
+    totalSteps,
+    completedSteps,
+    completed: childOccurrences.length > 0 && totalSteps > 0 && completedSteps === totalSteps
+  };
+}
+
+function summarizeChildWindow(childOccurrences: TaskOccurrence[]): { startTime?: string; endTime?: string } {
+  const timed = childOccurrences
+    .map((child) => ({
+      start: parseTimeToMinutes(child.startTime),
+      end: parseTimeToMinutes(child.endTime),
+      startTime: child.startTime,
+      endTime: child.endTime
+    }))
+    .filter((item): item is { start: number; end: number; startTime: string; endTime: string } => item.start !== null && item.end !== null && Boolean(item.startTime && item.endTime));
+  if (timed.length === 0) {
+    return {};
+  }
+  const first = timed.reduce((best, item) => (item.start < best.start ? item : best), timed[0]);
+  const last = timed.reduce((best, item) => (item.end > best.end ? item : best), timed[0]);
+  return { startTime: first.startTime, endTime: last.endTime };
 }
 
 function compareSeriesTasks(a: Task, b: Task): number {
@@ -2457,6 +2690,9 @@ function isTaskSeriesCompleted(task: Task): boolean {
     const state = task.occurrenceStates.find((item) => item.date === date);
     if (task.kind === "simple") {
       return Boolean(state);
+    }
+    if (task.subtasks.length === 0) {
+      return Boolean(state?.completedAt);
     }
     const completedIds = new Set(state?.completedSubtaskIds ?? []);
     return task.subtasks.every((subtask) => completedIds.has(subtask.id));
