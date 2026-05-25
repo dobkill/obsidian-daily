@@ -46,6 +46,11 @@ export class TodayTasksView extends BaseProjectView {
     const actions = header.createDiv({ cls: "pm-inline-actions" });
     const exportButton = actions.createEl("button", { text: "导出今日任务", cls: "pm-button pm-button-secondary" });
     exportButton.addEventListener("click", async () => this.copyIncompleteTasks(rawIncomplete));
+    const exportAllButton = actions.createEl("button", { text: "导出全部记录", cls: "pm-button pm-button-secondary" });
+    exportAllButton.addEventListener("click", async () => {
+      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsMarkdown());
+      new Notice("已复制完整任务记录 Markdown");
+    });
     const addButton = actions.createEl("button", { text: "+ 新增任务", cls: "pm-button pm-button-primary" });
     addButton.addEventListener("click", () => {
       const suggested = this.plugin.store.getSuggestedTaskWindow(today);
@@ -266,7 +271,7 @@ export class TodayTasksView extends BaseProjectView {
     const grid = container.createDiv({ cls: "pm-subtask-grid" });
     task.subtasks.forEach((subtask) => {
       const item = grid.createEl("button", {
-        text: subtask.title,
+        text: formatSubtaskLabel(subtask),
         cls: `pm-subtask-chip ${task.completedSubtaskIds.includes(subtask.id) ? "is-complete" : ""}`
       });
       item.addEventListener("click", async () => {
@@ -494,6 +499,10 @@ function statusLabel(status: TaskOccurrence["status"]): string {
     return "已完成";
   }
   return "待办";
+}
+
+function formatSubtaskLabel(subtask: { title: string; startTime?: string; endTime?: string }): string {
+  return subtask.startTime && subtask.endTime ? `${subtask.title} · ${subtask.startTime}-${subtask.endTime}` : subtask.title;
 }
 
 function isTaskSeriesCompleted(task: Task): boolean {

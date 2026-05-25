@@ -12,12 +12,16 @@ export type TaskDeleteScope = "single" | "series";
 export type TaskSubtask = {
   id: string;
   title: string;
+  startTime?: string;
+  endTime?: string;
   order: number;
 };
 
 export type TaskSubtaskInput = {
   id?: string;
   title: string;
+  startTime?: string;
+  endTime?: string;
   order?: number;
 };
 
@@ -185,11 +189,24 @@ export type PluginConfig = {
   dailyNoteSingleFilePath: string;
   taskNoteRecentLimit: number;
   defaultDialogTarget: DialogTarget;
+  noteAppendHeader: AppendHeaderConfig;
+  dailyNoteHeader: AppendHeaderConfig;
 };
 
 export type DialogTarget = "daily-note" | "task-note" | "quick-task" | "mindmap";
 
 export type DailyNoteMode = "per-day" | "single-file";
+
+export type AppendHeaderConfig = {
+  enabled: boolean;
+  headingLevel: number;
+  includeTime: boolean;
+  dateFormat: string;
+  timeFormat: string;
+  separator: string;
+  prefix: string;
+  suffix: string;
+};
 
 export type ProjectsFile = {
   projects: Project[];

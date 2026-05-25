@@ -1,5 +1,6 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type ProjectManagementPlugin from "./main";
+import { AppendHeaderConfig, PluginConfig } from "./types";
 
 const IMPORT_SAMPLE_TEXT = [
   "#项目：英语四级冲刺",
@@ -97,6 +98,16 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
     renderSamplePreview();
 
     new Setting(containerEl)
+      .setName("导出 Markdown 语法说明")
+      .setDesc("生成一份当前插件支持的 Markdown 任务语法说明，包含完整记录导出格式。")
+      .addButton((button) =>
+        button.setButtonText("导出说明文件").setCta().onClick(async () => {
+          const path = await this.plugin.store.exportMarkdownGuide();
+          new Notice(`已导出到 ${path}`);
+        })
+      );
+
+    new Setting(containerEl)
       .setName("数据目录路径")
       .setDesc("必须是当前 Vault 内相对路径。目标目录已有有效插件数据时会直接加载；目录不存在、为空或插件数据损坏时会用当前数据创建新文件。")
       .addText((text) =>
@@ -151,6 +162,15 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
+      .setName("日记文件名日期格式")
+      .setDesc("支持 YYYY、MM、DD、HH、mm、ss，例如 YYYY-MM-DD。")
+      .addText((text) =>
+        text.setValue(this.plugin.settings.dailyNoteDateFormat).onChange(async (value) => {
+          await this.plugin.updateSettings({ dailyNoteDateFormat: value.trim() || "YYYY-MM-DD" });
+        })
+      );
+
+    new Setting(containerEl)
       .setName("日记保存方式")
       .setDesc("默认每天一个文件；也可以把快速记录统一追加到一个汇总文件。")
       .addDropdown((dropdown) => {
@@ -171,6 +191,9 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
           await this.plugin.updateSettings({ dailyNoteSingleFilePath: value.trim() || "日记/快速记录.md" });
         })
       );
+
+    this.renderAppendHeaderSettings(containerEl, "笔记追加头", "用于快速记录-追加笔记写入任意 Markdown 文件。", "noteAppendHeader");
+    this.renderAppendHeaderSettings(containerEl, "日记插入头", "用于快速记录-写日记写入每日文件或汇总文件。", "dailyNoteHeader");
 
     new Setting(containerEl)
       .setName("最近笔记数量")
@@ -240,5 +263,63 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
           await this.plugin.updateSettings({ showCompletedTasks: value });
         })
       );
+  }
+
+  private renderAppendHeaderSettings(
+    containerEl: HTMLElement,
+    title: string,
+    description: string,
+    key: "noteAppendHeader" | "dailyNoteHeader"
+  ): void {
+    const wrapper = containerEl.createDiv({ cls: "pm-settings-group" });
+    wrapper.createEl("h3", { text: title });
+    wrapper.createDiv({ cls: "pm-muted", text: description });
+    const current = this.plugin.settings[key];
+    const update = async (patch: Partial<AppendHeaderConfig>): Promise<void> => {
+      const next = { ...this.plugin.settings[key], ...patch };
+      await this.plugin.updateSettings({ [key]: next } as Partial<PluginConfig>);
+    };
+
+    new Setting(wrapper)
+      .setName("启用插入头")
+      .addToggle((toggle) => toggle.setValue(current.enabled).onChange(async (value) => update({ enabled: value })));
+
+    new Setting(wrapper)
+      .setName("包含时间")
+      .addToggle((toggle) => toggle.setValue(current.includeTime).onChange(async (value) => update({ includeTime: value })));
+
+    new Setting(wrapper)
+      .setName("标题级别")
+      .setDesc("1 到 6，对应 Markdown 标题层级。")
+      .addText((text) =>
+        text.setValue(String(current.headingLevel)).onChange(async (value) => {
+          const parsed = Number(value);
+          if (Number.isFinite(parsed)) {
+            await update({ headingLevel: Math.min(6, Math.max(1, Math.floor(parsed))) });
+          }
+        })
+      );
+
+    new Setting(wrapper)
+      .setName("日期格式")
+      .setDesc("支持 YYYY、MM、DD。")
+      .addText((text) => text.setValue(current.dateFormat).onChange(async (value) => update({ dateFormat: value.trim() || "YYYY-MM-DD" })));
+
+    new Setting(wrapper)
+      .setName("时间格式")
+      .setDesc("支持 HH、mm、ss。")
+      .addText((text) => text.setValue(current.timeFormat).onChange(async (value) => update({ timeFormat: value.trim() || "HH:mm:ss" })));
+
+    new Setting(wrapper)
+      .setName("日期时间分隔符")
+      .addText((text) => text.setValue(current.separator).onChange(async (value) => update({ separator: value })));
+
+    new Setting(wrapper)
+      .setName("前缀特殊文字")
+      .addText((text) => text.setValue(current.prefix).onChange(async (value) => update({ prefix: value })));
+
+    new Setting(wrapper)
+      .setName("后缀特殊文字")
+      .addText((text) => text.setValue(current.suffix).onChange(async (value) => update({ suffix: value })));
   }
 }

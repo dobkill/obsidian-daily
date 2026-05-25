@@ -1,8 +1,8 @@
 import { Notice, TFile, TFolder, WorkspaceLeaf, normalizePath, setIcon } from "obsidian";
 import { EntitySuggestModal } from "../components/entitySuggestModal";
 import type ProjectManagementPlugin from "../main";
-import { DialogTarget, Task } from "../types";
-import { now, toDateKey } from "../utils/date";
+import { AppendHeaderConfig, DialogTarget, Task } from "../types";
+import { formatDateTimePattern, now, toDateKey } from "../utils/date";
 import { BaseProjectView } from "./base";
 
 export const DIALOG_VIEW_TYPE = "project-management-dialog-view";
@@ -88,16 +88,15 @@ export class QuickDialogView extends BaseProjectView {
     title.createEl("h2", { text: "快速记录" });
     title.createDiv({ cls: "pm-muted", text: "快速记录、写日记、追加任意笔记，或给思维导图补充评语。" });
 
-    const targetCards = container.createDiv({ cls: "pm-dialog-target-grid" });
+    const targetCards = container.createDiv({ cls: "pm-dialog-tabs pm-segmented-control" });
     getTargetCards().forEach((item) => {
       const card = targetCards.createEl("button", {
-        cls: `pm-dialog-target ${this.target === item.value ? "is-active" : ""}`
+        cls: `pm-dialog-tab pm-segmented-item ${this.target === item.value ? "is-active" : ""}`
       });
       card.dataset.target = item.value;
-      const icon = card.createDiv({ cls: "pm-dialog-target-icon" });
+      const icon = card.createSpan({ cls: "pm-dialog-tab-icon" });
       setIcon(icon, item.icon);
-      card.createSpan({ cls: "pm-dialog-target-title", text: item.label });
-      card.createSpan({ cls: "pm-dialog-target-desc", text: item.desc });
+      card.createSpan({ cls: "pm-dialog-tab-title", text: item.label });
       card.addEventListener("click", () => {
         this.target = item.value;
         this.render();
@@ -496,7 +495,7 @@ export class QuickDialogView extends BaseProjectView {
       return;
     }
     if (this.target === "task-note") {
-      await this.appendMarkdownNote(this.selectedNotePath, trimmed);
+      await this.appendMarkdownNote(this.selectedNotePath, trimmed, this.plugin.settings.noteAppendHeader);
       return;
     }
     const selected = this.plugin.store.getTask(this.selectedTaskId) ?? tasks.find((task) => task.id === this.selectedTaskId);
@@ -575,23 +574,26 @@ export class QuickDialogView extends BaseProjectView {
   }
 
   private resolveDailyNotePath(): string {
+    const fileName = formatDateTimePattern(now(), this.plugin.settings.dailyNoteDateFormat || "YYYY-MM-DD");
     return this.plugin.settings.dailyNoteMode === "single-file"
       ? normalizePath(this.plugin.settings.dailyNoteSingleFilePath)
-      : normalizePath(`${this.plugin.settings.dailyNoteFolder}/${toDateKey(now())}.md`);
+      : normalizePath(`${this.plugin.settings.dailyNoteFolder}/${fileName}.md`);
   }
 
   private async appendDailyNote(content: string): Promise<void> {
-    await this.appendMarkdownNote(this.resolveDailyNotePath(), content);
+    await this.appendMarkdownNote(this.resolveDailyNotePath(), content, this.plugin.settings.dailyNoteHeader);
   }
 
-  private async appendMarkdownNote(path: string, content: string): Promise<void> {
+  private async appendMarkdownNote(path: string, content: string, headerConfig: AppendHeaderConfig): Promise<void> {
     const filePath = normalizePath(path.trim());
     if (!filePath || filePath.endsWith("/")) {
       throw new Error("请选择有效的 Markdown 文件");
     }
     await this.ensureParentFolder(filePath);
     const existing = await this.app.vault.adapter.read(filePath).catch(() => "");
-    const next = `${existing.trimEnd()}\n\n## ${toDateKey(now())} ${new Date().toLocaleTimeString()}\n\n${content}\n`;
+    const header = buildAppendHeader(headerConfig, now());
+    const blocks = [existing.trimEnd(), header, content].filter((part) => part.trim().length > 0);
+    const next = `${blocks.join("\n\n")}\n`;
     const file = this.app.vault.getAbstractFileByPath(filePath);
     if (file) {
       await this.app.vault.modify(file as TFile, next);
@@ -670,6 +672,18 @@ function getTargetCards(): QuickTargetCard[] {
     { value: "quick-task", label: "创建任务", desc: "解析多行任务语法", icon: "list-plus" },
     { value: "mindmap", label: "补充导图", desc: "支持节点正文 / 子节点两种方式", icon: "git-branch-plus" }
   ];
+}
+
+function buildAppendHeader(config: AppendHeaderConfig, date: Date): string {
+  if (!config.enabled) {
+    return "";
+  }
+  const headingLevel = Math.min(6, Math.max(1, Math.floor(config.headingLevel || 2)));
+  const dateText = formatDateTimePattern(date, config.dateFormat || "YYYY-MM-DD");
+  const timeText = config.includeTime ? formatDateTimePattern(date, config.timeFormat || "HH:mm:ss") : "";
+  const stamp = [dateText, timeText].filter(Boolean).join(config.separator ?? " ");
+  const text = `${config.prefix ?? ""}${stamp}${config.suffix ?? ""}`.trim();
+  return text ? `${"#".repeat(headingLevel)} ${text}` : "";
 }
 
 function sortTasksForMindmapSelection(tasks: Task[], getProjectName: (task: Task) => string): Task[] {

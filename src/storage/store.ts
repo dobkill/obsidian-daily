@@ -35,7 +35,8 @@ import {
   WriteHistoryFile,
   WriteHistoryRecord
 } from "../types";
-import { addDays, addMinutes, compareDateKeys, formatMinutesToTime, now, parseDateKey, parseTimeToMinutes, toDateKey, toIsoLocal, toMonthKey } from "../utils/date";
+import { addDays, addMinutes, compareDateKeys, formatMinutesToTime, now, parseDateKey, parseTimeToMinutes, toDateKey, toIsoLocal } from "../utils/date";
+import { MARKDOWN_FORMAT_GUIDE } from "../utils/markdownGuide";
 
 export const DEFAULT_CONFIG: PluginConfig = {
   version: "0.3.0",
@@ -54,7 +55,27 @@ export const DEFAULT_CONFIG: PluginConfig = {
   dailyNoteMode: "per-day",
   dailyNoteSingleFilePath: "日记/快速记录.md",
   taskNoteRecentLimit: 8,
-  defaultDialogTarget: "daily-note"
+  defaultDialogTarget: "daily-note",
+  noteAppendHeader: {
+    enabled: true,
+    headingLevel: 2,
+    includeTime: true,
+    dateFormat: "YYYY-MM-DD",
+    timeFormat: "HH:mm:ss",
+    separator: " ",
+    prefix: "",
+    suffix: ""
+  },
+  dailyNoteHeader: {
+    enabled: true,
+    headingLevel: 2,
+    includeTime: true,
+    dateFormat: "YYYY-MM-DD",
+    timeFormat: "HH:mm:ss",
+    separator: " ",
+    prefix: "",
+    suffix: ""
+  }
 };
 
 const PROJECTS_FILE = "projects.json";
@@ -63,6 +84,7 @@ const CONFIG_FILE = "config.json";
 const NOTE_TASK_INDEX_FILE = "note-task-index.json";
 const WRITE_HISTORY_FILE = "write-history.json";
 const TASKS_DIR = "tasks";
+const MARKDOWN_GUIDE_FILE = "markdown-format-guide.md";
 const UNASSIGNED_PROJECT_LABEL = "未归属项目";
 
 export class ProjectManagementStore extends Events {
@@ -274,7 +296,6 @@ export class ProjectManagementStore extends Events {
     this.readOnlyReason = null;
     this.seedDefaultDataIfEmpty();
     await this.flushAll();
-    await this.normalizeDeferredSingleTasks();
   }
 
   async refreshFromDisk(options: { triggerChange?: boolean } = {}): Promise<void> {
@@ -285,7 +306,6 @@ export class ProjectManagementStore extends Events {
       throw new Error(this.readOnlyReason);
     }
     this.readOnlyReason = null;
-    await this.normalizeDeferredSingleTasks();
     if (triggerChange) {
       this.trigger("changed");
     }
@@ -321,7 +341,7 @@ export class ProjectManagementStore extends Events {
     }
 
     const children = abstract instanceof TFolder ? abstract.children.map((child) => ({ name: child.name, isFolder: child instanceof TFolder })) : await this.listFolderEntries(normalized);
-    const allowed = new Set([CONFIG_FILE, PROJECTS_FILE, PROGRESS_FILE, NOTE_TASK_INDEX_FILE, WRITE_HISTORY_FILE, TASKS_DIR]);
+    const allowed = new Set([CONFIG_FILE, PROJECTS_FILE, PROGRESS_FILE, NOTE_TASK_INDEX_FILE, WRITE_HISTORY_FILE, MARKDOWN_GUIDE_FILE, TASKS_DIR]);
     const invalid = children.some((child) => !allowed.has(child.name));
     if (invalid) {
       return { ok: false, message: "目录中存在非插件文件，拒绝使用" };
@@ -342,6 +362,7 @@ export class ProjectManagementStore extends Events {
       throw new Error("任务创建失败");
     }
     assertValidTaskMindmapParent(created, this.getAllTasks());
+    this.assertCompositeTaskConsistency([created], new Set());
     this.assertNoConflicts([created], new Set());
     this.insertTask(created);
     await this.persistMonths(monthsForTasks([created]));
@@ -391,12 +412,16 @@ export class ProjectManagementStore extends Events {
       throw new Error("任务更新失败");
     }
     assertValidTaskMindmapParent(next, this.getAllTasks().filter((task) => task.id !== original.id));
-    this.assertNoConflicts([next], occurrenceKeysForTask(original));
-    this.replaceTasks([original.id], [next]);
-    await this.persistMonths(monthsForTasks([original, next]));
+    const mutation = this.prepareFutureMutation(original, next);
+    if (mutation.activeTask) {
+      this.assertCompositeTaskConsistency([mutation.activeTask], new Set([original.id]));
+      this.assertNoConflicts([mutation.activeTask], occurrenceKeysForTask(original));
+    }
+    this.replaceTasks([original.id], mutation.replacements);
+    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
-    return cloneTask(this.findTask(next.id) ?? next);
+    return cloneTask((mutation.activeTask ? this.findTask(mutation.activeTask.id) : undefined) ?? mutation.activeTask ?? mutation.replacements[0] ?? next);
   }
 
   async updateTaskOccurrenceCompletion(taskId: string, date: string, completed: boolean): Promise<void> {
@@ -408,6 +433,7 @@ export class ProjectManagementStore extends Events {
     if (!original.occurrenceDates.includes(date)) {
       throw new Error("任务发生日期不存在");
     }
+    assertMutableOccurrenceDate(date);
     const next = cloneTask(original);
     next.occurrenceStates = completed
       ? upsertOccurrenceState(original, date, {
@@ -416,8 +442,9 @@ export class ProjectManagementStore extends Events {
         })
       : next.occurrenceStates.filter((item) => item.date !== date);
     next.updatedAt = toIsoLocal(now());
-    this.replaceTasks([original.id], [next]);
-    await this.persistMonths(monthsForTasks([original, next]));
+    const mutation = this.prepareFutureMutation(original, next);
+    this.replaceTasks([original.id], mutation.replacements);
+    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -434,6 +461,7 @@ export class ProjectManagementStore extends Events {
     if (!original.occurrenceDates.includes(date)) {
       throw new Error("任务发生日期不存在");
     }
+    assertMutableOccurrenceDate(date);
     if (!original.subtasks.some((item) => item.id === subtaskId)) {
       throw new Error("子任务不存在");
     }
@@ -456,8 +484,9 @@ export class ProjectManagementStore extends Events {
             completedAt: nextCompletedIds.length === original.subtasks.length ? toIsoLocal(now()) : null
           });
     next.updatedAt = toIsoLocal(now());
-    this.replaceTasks([original.id], [next]);
-    await this.persistMonths(monthsForTasks([original, next]));
+    const mutation = this.prepareFutureMutation(original, next);
+    this.replaceTasks([original.id], mutation.replacements);
+    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -471,6 +500,7 @@ export class ProjectManagementStore extends Events {
     if (!original.occurrenceDates.includes(date)) {
       throw new Error("任务发生日期不存在");
     }
+    assertMutableOccurrenceDate(date);
     const start = startTime?.trim() || undefined;
     const end = endTime?.trim() || undefined;
     if ((start && !end) || (!start && end)) {
@@ -495,9 +525,13 @@ export class ProjectManagementStore extends Events {
     }
     next.updatedAt = toIsoLocal(now());
     next.revision = (next.revision ?? 0) + 1;
-    this.assertNoConflicts([next], occurrenceKeysForTask(original));
-    this.replaceTasks([original.id], [next]);
-    await this.persistMonths(monthsForTasks([original, next]));
+    const mutation = this.prepareFutureMutation(original, next);
+    if (mutation.activeTask) {
+      this.assertCompositeTaskConsistency([mutation.activeTask], new Set([original.id]));
+      this.assertNoConflicts([mutation.activeTask], occurrenceKeysForTask(original));
+    }
+    this.replaceTasks([original.id], mutation.replacements);
+    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -537,11 +571,15 @@ export class ProjectManagementStore extends Events {
     assertValidTaskMindmapParent(next, this.getAllTasks().filter((task) => task.id !== original.id));
     next.updatedAt = toIsoLocal(now());
     next.revision = (next.revision ?? 0) + 1;
-    this.replaceTasks([original.id], [next]);
-    await this.persistMonths(monthsForTasks([original, next]));
+    const mutation = this.prepareFutureMutation(original, next);
+    if (mutation.activeTask) {
+      this.assertCompositeTaskConsistency([mutation.activeTask], new Set([original.id]));
+    }
+    this.replaceTasks([original.id], mutation.replacements);
+    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
-    return cloneTask(this.findTask(next.id) ?? next);
+    return cloneTask((mutation.activeTask ? this.findTask(mutation.activeTask.id) : undefined) ?? mutation.activeTask ?? mutation.replacements[0] ?? next);
   }
 
   async addTaskMindmapComment(taskId: string, content: string, parentCommentId?: string | null): Promise<TaskMindmapComment> {
@@ -701,7 +739,7 @@ export class ProjectManagementStore extends Events {
         sections.push(renderTaskOccurrenceForExport(task, mode));
         if (task.kind === "composite") {
           task.subtasks.forEach((subtask) => {
-            sections.push(`  - ${subtask.title}`);
+            sections.push(renderSubtaskForExport(subtask));
           });
         }
       });
@@ -721,15 +759,81 @@ export class ProjectManagementStore extends Events {
       lines.push(renderTaskSeriesForExport(task));
       if (task.kind === "composite") {
         task.subtasks.forEach((subtask) => {
-          lines.push(`  - ${subtask.title}`);
+          lines.push(renderSubtaskForExport(subtask));
         });
       }
     });
     return lines.join("\n").trim();
   }
 
+  exportAllRecordsAsMarkdown(): string {
+    const snapshot = this.getSnapshot();
+    const exportedAt = toIsoLocal(now());
+    const projectById = new Map(snapshot.projects.map((project) => [project.id, project]));
+    const grouped = new Map<string, Task[]>();
+    snapshot.tasks
+      .slice()
+      .sort(compareSeriesTasks)
+      .forEach((task) => {
+        const key = task.projectId ?? UNASSIGNED_PROJECT_LABEL;
+        grouped.set(key, [...(grouped.get(key) ?? []), task]);
+      });
+
+    const lines = [
+      "# 项目管理完整记录导出",
+      "",
+      `导出时间：${exportedAt}`,
+      `项目数：${snapshot.projects.length}`,
+      `任务系列数：${snapshot.tasks.length}`,
+      `任务发生次数：${snapshot.occurrences.length}`,
+      "",
+      "## 可读摘要"
+    ];
+
+    [...grouped.entries()].forEach(([projectKey, tasks]) => {
+      const projectName = projectKey === UNASSIGNED_PROJECT_LABEL ? UNASSIGNED_PROJECT_LABEL : projectById.get(projectKey)?.name ?? UNASSIGNED_PROJECT_LABEL;
+      lines.push("", `### ${projectName}`);
+      tasks.forEach((task) => {
+        lines.push(renderTaskSeriesForExport(task));
+        if (task.kind === "composite") {
+          task.subtasks.forEach((subtask) => {
+            lines.push(renderSubtaskForExport(subtask));
+          });
+        }
+      });
+    });
+
+    const payload = {
+      format: "pm-project-management-full-export",
+      version: this.config.version,
+      exportedAt,
+      includes: ["projects", "progressPages", "tasks", "occurrences", "table", "board", "gantt", "mindmap", "sources", "notes", "writeHistory"],
+      data: snapshot
+    };
+
+    lines.push(
+      "",
+      "## 完整 JSON 数据",
+      "",
+      "<!-- pm:full-export:start -->",
+      "```pm-project-management-json",
+      JSON.stringify(payload, null, 2),
+      "```",
+      "<!-- pm:full-export:end -->"
+    );
+    return lines.join("\n").trim();
+  }
+
+  async exportMarkdownGuide(): Promise<string> {
+    this.assertWritable();
+    const path = this.pathFor(MARKDOWN_GUIDE_FILE);
+    await this.enqueueWrite(() => this.writeText(path, MARKDOWN_FORMAT_GUIDE));
+    return path;
+  }
+
   async autoArrangeDate(date: string, options: Partial<AutoArrangeOptions> = {}): Promise<AutoArrangeResult> {
     this.assertWritable();
+    assertMutableOccurrenceDate(date);
     const config: AutoArrangeOptions = {
       direction: options.direction ?? "forward",
       scope: options.scope ?? "same-day",
@@ -872,9 +976,14 @@ export class ProjectManagementStore extends Events {
         sourceLinks: [sourceLink]
       };
       try {
+        const isPastInput = compareDateKeys(input.date, toDateKey(now())) < 0;
         const saved = existingTask
           ? await this.updateTask(existingTask.id, { ...input, completed: false }, "series", { autoResolveConflicts: true })
-          : await this.createTask({ ...input, completed: input.completed && parsedTask.completionMode === "pending" }, { autoResolveConflicts: true });
+          : await this.createTask({ ...input, completed: input.completed && (parsedTask.completionMode === "pending" || isPastInput) }, { autoResolveConflicts: true });
+        if (isPastInput) {
+          createdIds.push(saved.id);
+          continue;
+        }
         if (input.completed && parsedTask.completionMode === "today") {
           await this.updateTaskOccurrenceCompletion(saved.id, input.date, true);
         } else if (input.completed && parsedTask.completionMode === "series") {
@@ -927,24 +1036,34 @@ export class ProjectManagementStore extends Events {
       await this.deleteTaskOccurrence(taskId, task.date);
       return;
     }
+    const today = toDateKey(now());
+    const futureDates = task.occurrenceDates.filter((date) => compareDateKeys(date, today) >= 0);
+    if (futureDates.length === 0) {
+      throw new Error("不能删除过去日期的任务记录");
+    }
+    const pastDates = task.occurrenceDates.filter((date) => compareDateKeys(date, today) < 0);
     const timestamp = toIsoLocal(now());
-    const replacements = this.getAllTasks()
-      .filter((candidate) => (candidate.viewState.mindmap.parentTaskId ?? null) === taskId)
-      .map((child) => {
-        const next = cloneTask(child);
-        next.viewState = mergeViewState(next.viewState, {
-          mindmap: {
-            ...next.viewState.mindmap,
-            parentTaskId: task.viewState.mindmap.parentTaskId ?? null,
-            childOrder: Date.now()
-          }
-        }, next.status);
-        next.updatedAt = timestamp;
-        next.revision = (next.revision ?? 0) + 1;
-        return next;
-      });
-    const removed = this.replaceTasks([taskId, ...replacements.map((child) => child.id)], replacements);
-    await this.persistMonths(monthsForTasks([...removed, ...replacements]));
+    const mutableChildrenToReparent = this.getAllTasks().filter(
+      (candidate) => (candidate.viewState.mindmap.parentTaskId ?? null) === taskId && hasMutableOccurrences(candidate)
+    );
+    const childMutations = mutableChildrenToReparent.flatMap((child) => {
+      const next = cloneTask(child);
+      next.viewState = mergeViewState(next.viewState, {
+        mindmap: {
+          ...next.viewState.mindmap,
+          parentTaskId: task.viewState.mindmap.parentTaskId ?? null,
+          childOrder: Date.now()
+        }
+      }, next.status);
+      next.updatedAt = timestamp;
+      next.revision = (next.revision ?? 0) + 1;
+      return this.prepareFutureMutation(child, next).replacements;
+    });
+    const preservedPast = pastDates.length > 0 ? sliceTaskToDates(task, pastDates, task.id) : null;
+    const childIds = new Set(mutableChildrenToReparent.map((child) => child.id));
+    const finalReplacements = [preservedPast, ...childMutations].filter((item): item is Task => Boolean(item));
+    const removed = this.replaceTasks([taskId, ...childIds], finalReplacements);
+    await this.persistMonths(monthsForTasks([...removed, ...finalReplacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -958,6 +1077,7 @@ export class ProjectManagementStore extends Events {
     if (!task.occurrenceDates.includes(date)) {
       throw new Error("任务发生日期不存在");
     }
+    assertMutableOccurrenceDate(date);
     if (task.occurrenceDates.length === 1) {
       const removed = this.replaceTasks([task.id], []);
       await this.persistMonths(monthsForTasks(removed));
@@ -969,14 +1089,20 @@ export class ProjectManagementStore extends Events {
     next.occurrenceDates = task.occurrenceDates.filter((entry) => entry !== date);
     next.occurrenceStates = task.occurrenceStates.filter((entry) => entry.date !== date);
     next.occurrenceOverrides = task.occurrenceOverrides.filter((entry) => entry.date !== date);
-    next.date = next.occurrenceDates[0];
-    next.recurrence = detectRecurrenceFromDates(next.occurrenceDates);
-    next.recurrenceCount = next.recurrence === "once" ? null : next.occurrenceDates.length;
-    next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
+    if (next.occurrenceDates.length > 0) {
+      next.date = next.occurrenceDates[0];
+      next.recurrence = detectRecurrenceFromDates(next.occurrenceDates);
+      next.recurrenceCount = next.recurrence === "once" ? null : next.occurrenceDates.length;
+      next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
+    }
     next.updatedAt = toIsoLocal(now());
-    this.assertNoConflicts([next], occurrenceKeysForTask(task));
-    this.replaceTasks([task.id], [next]);
-    await this.persistMonths(monthsForTasks([task, next]));
+    const mutation = this.prepareFutureMutation(task, next);
+    if (mutation.activeTask) {
+      this.assertCompositeTaskConsistency([mutation.activeTask], new Set([task.id]));
+      this.assertNoConflicts([mutation.activeTask], occurrenceKeysForTask(task));
+    }
+    this.replaceTasks([task.id], mutation.replacements);
+    await this.persistMonths(monthsForTasks([task, ...mutation.replacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -988,8 +1114,13 @@ export class ProjectManagementStore extends Events {
       return;
     }
     const effectiveDate = throughDate ?? task.occurrenceDates[task.occurrenceDates.length - 1];
+    assertMutableOccurrenceDate(effectiveDate);
+    if (!hasMutableOccurrences(task)) {
+      throw new Error("不能修改过去日期的任务记录");
+    }
     const next = cloneTask(task);
-    const remainingDates = task.occurrenceDates.filter((date) => compareDateKeys(date, effectiveDate) <= 0);
+    const today = toDateKey(now());
+    const remainingDates = task.occurrenceDates.filter((date) => compareDateKeys(date, today) >= 0 && compareDateKeys(date, effectiveDate) <= 0);
     const stamp = toIsoLocal(now());
     next.occurrenceDates = remainingDates;
     next.occurrenceOverrides = task.occurrenceOverrides.filter((entry) => remainingDates.includes(entry.date));
@@ -1007,8 +1138,9 @@ export class ProjectManagementStore extends Events {
     next.recurrenceCount = next.recurrence === "once" ? null : next.occurrenceDates.length;
     next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
     next.updatedAt = stamp;
-    this.replaceTasks([task.id], [next]);
-    await this.persistMonths(monthsForTasks([task, next]));
+    const mutation = this.prepareFutureMutation(task, next, { allowNoFuture: true });
+    this.replaceTasks([task.id], mutation.replacements);
+    await this.persistMonths(monthsForTasks([task, ...mutation.replacements]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -1171,14 +1303,18 @@ export class ProjectManagementStore extends Events {
   }
 
   private findTaskByImportIdentity(title: string, projectId: string | undefined, date: string): Task | undefined {
+    if (compareDateKeys(date, toDateKey(now())) < 0) {
+      return undefined;
+    }
     const sameProject = this.getAllTasks().filter(
       (task) => normalizeImportIdentity(task.title) === normalizeImportIdentity(title) && (task.projectId ?? undefined) === projectId
     );
-    const sameDate = sameProject.find((task) => task.occurrenceDates.includes(date));
+    const mutable = sameProject.filter(hasMutableOccurrences);
+    const sameDate = mutable.find((task) => task.occurrenceDates.includes(date));
     if (sameDate) {
       return sameDate;
     }
-    return sameProject.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+    return mutable.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
   }
 
   private async ensureImportProject(projectName?: string): Promise<string | undefined> {
@@ -1221,10 +1357,13 @@ export class ProjectManagementStore extends Events {
     const created = await this.createTask(
       {
         ...input,
-        completed: input.completed && entry.completionMode === "pending"
+        completed: input.completed && (entry.completionMode === "pending" || compareDateKeys(input.date, toDateKey(now())) < 0)
       },
       { autoResolveConflicts: true }
     );
+    if (compareDateKeys(input.date, toDateKey(now())) < 0) {
+      return this.getTask(created.id) ?? created;
+    }
     if (input.completed && entry.completionMode === "today") {
       await this.updateTaskOccurrenceCompletion(created.id, input.date, true);
       return this.getTask(created.id) ?? created;
@@ -1410,45 +1549,55 @@ export class ProjectManagementStore extends Events {
     return adjusted;
   }
 
-  private async normalizeDeferredSingleTasks(): Promise<void> {
+  private prepareFutureMutation(original: Task, next: Task, options: { allowNoFuture?: boolean } = {}): { replacements: Task[]; activeTask?: Task } {
     const today = toDateKey(now());
-    const overdue = this.getAllTasks()
-      .filter((task) => isOverdueSingleTask(task, today))
-      .sort(compareSeriesTasks);
-    if (overdue.length === 0) {
-      return;
+    const originalFutureDates = original.occurrenceDates.filter((date) => compareDateKeys(date, today) >= 0);
+    if (originalFutureDates.length === 0) {
+      throw new Error("不能修改过去日期的任务记录");
+    }
+    const originalPastDates = original.occurrenceDates.filter((date) => compareDateKeys(date, today) < 0);
+    const nextFutureDates = next.occurrenceDates.filter((date) => compareDateKeys(date, today) >= 0);
+
+    if (originalPastDates.length === 0) {
+      if (nextFutureDates.length === 0) {
+        if (options.allowNoFuture) {
+          return { replacements: [] };
+        }
+        throw new Error("修改后的任务没有今天或未来的发生日期");
+      }
+      const active = sliceTaskToDates(next, nextFutureDates, original.id);
+      return { replacements: [active], activeTask: active };
     }
 
-    const stamp = toIsoLocal(now());
-    const removeIds = overdue.map((task) => task.id);
-    const occupied = buildOccupiedMinutesMap(this.getAllTaskOccurrences().filter((occurrence) => !removeIds.includes(occurrence.taskId)));
-    const replacements = overdue.map((task) => {
-      const next = cloneTask(task);
-      const preferredStart = parseTimeToMinutes(task.startTime) ?? parseTimeToMinutes(this.config.defaultTaskStartTime) ?? 0;
-      const dateOccupied = occupied.get(today) ?? [];
-      const resolved = findAvailableOneMinuteWindow(dateOccupied, preferredStart);
-      next.date = today;
-      next.occurrenceDates = [today];
-      next.occurrenceStates = task.occurrenceStates.map((state) => ({
-        ...state,
-        date: today,
-        completedSubtaskIds: [...(state.completedSubtaskIds ?? [])]
-      }));
-      next.occurrenceOverrides = [];
-      next.startTime = resolved.startTime;
-      next.endTime = resolved.endTime;
-      next.recurrence = "once";
-      next.recurrenceCount = null;
-      next.recurrenceUntil = null;
-      next.updatedAt = stamp;
-      next.revision = (next.revision ?? 0) + 1;
-      dateOccupied.push({ start: resolved.start, end: resolved.end });
-      occupied.set(today, sortOccupiedMinutes(dateOccupied));
-      return next;
-    });
+    const past = sliceTaskToDates(original, originalPastDates, crypto.randomUUID());
+    if (nextFutureDates.length === 0) {
+      return { replacements: [past] };
+    }
+    const active = sliceTaskToDates(next, nextFutureDates, original.id);
+    return { replacements: [past, active], activeTask: active };
+  }
 
-    this.replaceTasks(removeIds, replacements);
-    await this.persistMonths(monthsForTasks([...overdue, ...replacements]));
+  private assertCompositeTaskConsistency(candidates: Task[], excludedTaskIds: Set<string>): void {
+    const taskById = new Map(this.getAllTasks().filter((task) => !excludedTaskIds.has(task.id)).map((task) => [task.id, task]));
+    candidates.forEach((task) => taskById.set(task.id, task));
+
+    const validateTaskAndChildren = (task: Task): void => {
+      assertCompositeDefinitionValid(task);
+      const parentId = task.viewState.mindmap.parentTaskId ?? null;
+      if (parentId) {
+        const parent = taskById.get(parentId);
+        if (parent?.kind === "composite") {
+          assertChildTaskWithinComposite(task, parent);
+        }
+      }
+      if (task.kind === "composite") {
+        [...taskById.values()]
+          .filter((candidate) => (candidate.viewState.mindmap.parentTaskId ?? null) === task.id)
+          .forEach((child) => assertChildTaskWithinComposite(child, task));
+      }
+    };
+
+    candidates.forEach(validateTaskAndChildren);
   }
 
   private insertTask(task: Task): void {
@@ -1493,7 +1642,9 @@ export class ProjectManagementStore extends Events {
   }
 
   private findTaskBySource(path: string, hash: string): Task | undefined {
-    return this.getAllTasks().find((task) => task.sourceLinks.some((source) => source.path === path && source.hash === hash));
+    return this.getAllTasks()
+      .filter(hasMutableOccurrences)
+      .find((task) => task.sourceLinks.some((source) => source.path === path && source.hash === hash));
   }
 
   private async recordWriteHistory(input: Omit<WriteHistoryRecord, "id" | "createdAt">): Promise<void> {
@@ -1836,6 +1987,16 @@ export class ProjectManagementStore extends Events {
     await this.app.vault.modify(file as any, payload);
   }
 
+  private async writeText(path: string, payload: string): Promise<void> {
+    const normalized = normalizePath(path);
+    const file = this.app.vault.getAbstractFileByPath(normalized);
+    if (!file) {
+      await this.app.vault.adapter.write(normalized, payload);
+      return;
+    }
+    await this.app.vault.modify(file as any, payload);
+  }
+
   private async enqueueWrite(job: () => Promise<void>): Promise<void> {
     const run = this.writeQueue.catch(() => undefined).then(job);
     this.writeQueue = run.catch((error) => {
@@ -2034,14 +2195,17 @@ type DataFolderUsage = {
   invalidPaths: string[];
 };
 
-function normalizeStoredTask(task: Task & { completedOccurrences?: Array<{ date: string; completedAt: string }> }): Task {
+function normalizeStoredTask(task: Task): Task {
   const kind: TaskKind = task.kind ?? ((task.subtasks?.length ?? 0) > 0 ? "composite" : "simple");
   const status = normalizeTaskStatus(task.status);
-  const subtasks = (task.subtasks ?? []).map((item, index) => ({ id: item.id, title: item.title, order: item.order ?? index }));
-  const legacyStates = (task.completedOccurrences ?? []).map((item) =>
-    buildNormalizedOccurrenceState(item.date, kind, subtasks, subtasks.map((subtask) => subtask.id), item.completedAt)
-  );
-  const occurrenceStates = (task.occurrenceStates ?? legacyStates).map((item) =>
+  const subtasks = (task.subtasks ?? []).map((item, index) => ({
+    id: item.id,
+    title: item.title,
+    startTime: item.startTime,
+    endTime: item.endTime,
+    order: item.order ?? index
+  }));
+  const occurrenceStates = (task.occurrenceStates ?? []).map((item) =>
     buildNormalizedOccurrenceState(item.date, kind, subtasks, item.completedSubtaskIds ?? subtasks.map((subtask) => subtask.id), item.completedAt ?? null)
   );
   return {
@@ -2095,7 +2259,6 @@ function isStoredTaskRecord(value: unknown): value is Task {
   }
   const subtasks = value.subtasks;
   const occurrenceStates = value.occurrenceStates;
-  const completedOccurrences = value.completedOccurrences;
   return (
     typeof value.id === "string" &&
     typeof value.title === "string" &&
@@ -2104,8 +2267,7 @@ function isStoredTaskRecord(value: unknown): value is Task {
     Array.isArray(value.occurrenceDates) &&
     value.occurrenceDates.every((date) => typeof date === "string") &&
     (subtasks === undefined || (Array.isArray(subtasks) && subtasks.every(isTaskSubtaskRecord))) &&
-    (occurrenceStates === undefined || (Array.isArray(occurrenceStates) && occurrenceStates.every(isOccurrenceStateRecord))) &&
-    (completedOccurrences === undefined || (Array.isArray(completedOccurrences) && completedOccurrences.every(isCompletedOccurrenceRecord)))
+    (occurrenceStates === undefined || (Array.isArray(occurrenceStates) && occurrenceStates.every(isOccurrenceStateRecord)))
   );
 }
 
@@ -2115,10 +2277,6 @@ function isTaskSubtaskRecord(value: unknown): value is TaskSubtask {
 
 function isOccurrenceStateRecord(value: unknown): value is TaskOccurrenceState {
   return isRecord(value) && typeof value.date === "string";
-}
-
-function isCompletedOccurrenceRecord(value: unknown): value is { date: string; completedAt: string } {
-  return isRecord(value) && typeof value.date === "string" && typeof value.completedAt === "string";
 }
 
 function cloneTask(task: Task): Task {
@@ -2264,7 +2422,19 @@ function normalizeSubtaskInputs(subtasks: TaskSubtaskInput[] | undefined, kind: 
     return [];
   }
   const normalized = (subtasks ?? [])
-    .map((item, index) => ({ id: item.id, title: item.title.trim(), order: item.order ?? index }))
+    .map((item, index) => {
+      const startTime = item.startTime?.trim() || undefined;
+      const endTime = item.endTime?.trim() || undefined;
+      if ((startTime && !endTime) || (!startTime && endTime)) {
+        throw new Error("轻量子任务开始时间和结束时间必须同时填写");
+      }
+      const start = parseTimeToMinutes(startTime);
+      const end = parseTimeToMinutes(endTime);
+      if (start !== null && end !== null && start >= end) {
+        throw new Error("轻量子任务结束时间必须晚于开始时间");
+      }
+      return { id: item.id, title: item.title.trim(), startTime, endTime, order: item.order ?? index };
+    })
     .filter((item) => item.title.length > 0);
   return normalized;
 }
@@ -2278,6 +2448,8 @@ function resolveTaskSubtasks(inputSubtasks: TaskSubtaskInput[] | undefined, kind
     return {
       id: original?.id ?? item.id ?? crypto.randomUUID(),
       title: item.title.trim(),
+      startTime: item.startTime?.trim() || undefined,
+      endTime: item.endTime?.trim() || undefined,
       order: item.order ?? original?.order ?? index
     };
   });
@@ -2296,6 +2468,54 @@ function getAllSubtaskIds(task: Task): string[] {
     return task.subtasks.map((item) => item.id);
   }
   return [];
+}
+
+function assertCompositeDefinitionValid(task: Task): void {
+  if (task.kind !== "composite") {
+    return;
+  }
+  const parentStart = parseTimeToMinutes(task.startTime);
+  const parentEnd = parseTimeToMinutes(task.endTime);
+  if (parentStart === null || parentEnd === null) {
+    throw new Error("组合任务必须填写开始时间和结束时间");
+  }
+  task.subtasks.forEach((subtask) => {
+    const start = parseTimeToMinutes(subtask.startTime);
+    const end = parseTimeToMinutes(subtask.endTime);
+    if (start === null && end === null) {
+      return;
+    }
+    if (start === null || end === null) {
+      throw new Error(`轻量子任务「${subtask.title}」开始时间和结束时间必须同时填写`);
+    }
+    if (start < parentStart || end > parentEnd) {
+      throw new Error(`轻量子任务「${subtask.title}」必须在组合任务时间范围内`);
+    }
+  });
+}
+
+function assertChildTaskWithinComposite(child: Task, parent: Task): void {
+  const parentOccurrences = expandTask(parent);
+  const childOccurrences = expandTask(child);
+  childOccurrences.forEach((childOccurrence) => {
+    const parentOccurrence = parentOccurrences.find((occurrence) => occurrence.date === childOccurrence.date);
+    if (!parentOccurrence) {
+      throw new Error(`子任务「${child.title}」必须发生在组合任务「${parent.title}」的日期范围内`);
+    }
+    const parentStart = parseTimeToMinutes(parentOccurrence.startTime);
+    const parentEnd = parseTimeToMinutes(parentOccurrence.endTime);
+    const childStart = parseTimeToMinutes(childOccurrence.startTime);
+    const childEnd = parseTimeToMinutes(childOccurrence.endTime);
+    if (parentStart === null || parentEnd === null) {
+      throw new Error(`组合任务「${parent.title}」必须填写开始时间和结束时间`);
+    }
+    if (childStart === null || childEnd === null) {
+      throw new Error(`挂入组合任务的子任务「${child.title}」必须填写开始时间和结束时间`);
+    }
+    if (childStart < parentStart || childEnd > parentEnd) {
+      throw new Error(`子任务「${child.title}」必须在组合任务「${parent.title}」的时间范围内`);
+    }
+  });
 }
 
 function buildNormalizedOccurrenceState(
@@ -2395,6 +2615,36 @@ function occurrenceKeysForTask(task: Task): Set<string> {
   return new Set(task.occurrenceDates.map((date) => buildOccurrenceKey(task.id, date)));
 }
 
+function sliceTaskToDates(task: Task, dates: string[], id: string): Task {
+  if (dates.length === 0) {
+    throw new Error("任务切片必须至少包含一个发生日期");
+  }
+  const sliced = cloneTask(task);
+  sliced.id = id;
+  sliced.occurrenceDates = [...dates].sort(compareDateKeys);
+  sliced.date = sliced.occurrenceDates[0];
+  sliced.occurrenceStates = task.occurrenceStates
+    .filter((state) => sliced.occurrenceDates.includes(state.date))
+    .map((state) => ({ ...state, completedSubtaskIds: [...(state.completedSubtaskIds ?? [])] }));
+  sliced.occurrenceOverrides = task.occurrenceOverrides.filter((override) => sliced.occurrenceDates.includes(override.date)).map((override) => ({ ...override }));
+  sliced.recurrence = detectRecurrenceFromDates(sliced.occurrenceDates);
+  sliced.recurrenceCount = sliced.recurrence === "once" ? null : sliced.occurrenceDates.length;
+  sliced.recurrenceUntil = sliced.recurrence === "once" ? null : sliced.occurrenceDates[sliced.occurrenceDates.length - 1];
+  sliced.mindmapComments = sliced.mindmapComments.map((comment) => ({ ...comment, taskId: id }));
+  return sliced;
+}
+
+function hasMutableOccurrences(task: Task): boolean {
+  const today = toDateKey(now());
+  return task.occurrenceDates.some((date) => compareDateKeys(date, today) >= 0);
+}
+
+function assertMutableOccurrenceDate(date: string): void {
+  if (compareDateKeys(date, toDateKey(now())) < 0) {
+    throw new Error("不能修改过去日期的任务记录");
+  }
+}
+
 function isTaskFullyCompleted(task: Task): boolean {
   return task.occurrenceDates.length > 0 && task.occurrenceDates.every((date) => getOccurrenceProgress(task, date).completed);
 }
@@ -2412,7 +2662,7 @@ function detectRecurrenceFromDates(dates: string[]): TaskRecurrence {
   if (diffDays === 7) {
     return "weekly";
   }
-  return "once";
+  return "custom";
 }
 
 function normalizePositiveInteger(value?: number | null): number | null {
@@ -2716,10 +2966,6 @@ function snapMinutes(value: number, slot: number): number {
   return Math.ceil(value / slot) * slot;
 }
 
-function isOverdueSingleTask(task: Task, today: string): boolean {
-  return task.recurrence === "once" && task.occurrenceDates.length === 1 && !isTaskFullyCompleted(task) && compareDateKeys(task.date, today) < 0;
-}
-
 function applyOccurrenceWindow(task: Task, date: string, startTime: string, endTime: string): void {
   if (task.recurrence === "once" && task.occurrenceDates.length === 1 && task.date === date) {
     task.startTime = startTime;
@@ -2736,21 +2982,6 @@ function applyOccurrenceWindow(task: Task, date: string, startTime: string, endT
 
 type OccupiedInterval = { start: number; end: number };
 type OccupiedOccurrenceInterval = OccupiedInterval & { taskId: string };
-
-function buildOccupiedMinutesMap(occurrences: TaskOccurrence[]): Map<string, OccupiedInterval[]> {
-  const occupied = new Map<string, Array<{ start: number; end: number }>>();
-  occurrences.forEach((occurrence) => {
-    const start = parseTimeToMinutes(occurrence.startTime);
-    const end = parseTimeToMinutes(occurrence.endTime);
-    if (start === null || end === null) {
-      return;
-    }
-    const dateOccupied = occupied.get(occurrence.date) ?? [];
-    dateOccupied.push({ start, end });
-    occupied.set(occurrence.date, sortOccupiedMinutes(dateOccupied));
-  });
-  return occupied;
-}
 
 function buildOccupiedOccurrenceMap(occurrences: TaskOccurrence[]): Map<string, OccupiedOccurrenceInterval[]> {
   const occupied = new Map<string, OccupiedOccurrenceInterval[]>();
@@ -2882,9 +3113,10 @@ function parseFormattedTaskText(
     const subtaskMatch = /^\s{2,}-\s+(.+)$/.exec(line);
     if (subtaskMatch && currentTask) {
       currentTask.input.kind = "composite";
+      const subtask = parseSubtaskLine(subtaskMatch[1]);
       currentTask.input.subtasks = [
         ...(currentTask.input.subtasks ?? []),
-        { title: subtaskMatch[1].trim(), order: currentTask.input.subtasks?.length ?? 0 }
+        { ...subtask, order: currentTask.input.subtasks?.length ?? 0 }
       ];
       return;
     }
@@ -2895,6 +3127,16 @@ function parseFormattedTaskText(
   });
   flushCurrent();
   return { tasks, issues };
+}
+
+function parseSubtaskLine(raw: string): TaskSubtaskInput {
+  const match = /\s@(\d{2}:\d{2})-(\d{2}:\d{2})\s*$/.exec(raw);
+  const title = raw.replace(/\s@\d{2}:\d{2}-\d{2}:\d{2}\s*$/, "").trim();
+  return {
+    title,
+    startTime: match?.[1],
+    endTime: match?.[2]
+  };
 }
 
 function parseTaskLine(
@@ -3000,6 +3242,11 @@ function renderTaskSeriesForExport(task: Task): string {
     parts.push("finish:series");
   }
   return `- [${completed ? "x" : " "}] ${parts.join(" ")}`.trim();
+}
+
+function renderSubtaskForExport(subtask: TaskSubtask): string {
+  const time = subtask.startTime && subtask.endTime ? ` @${subtask.startTime}-${subtask.endTime}` : "";
+  return `  - ${subtask.title}${time}`;
 }
 
 type FormattedTaskSource = {

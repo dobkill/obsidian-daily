@@ -25,7 +25,7 @@ export class TaskModal extends Modal {
   onOpen(): void {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass("pm-modal");
+    contentEl.addClass("pm-modal", "pm-task-modal");
     contentEl.createEl("h2", { text: this.options.title });
 
     const state: TaskInput = { ...this.options.initial };
@@ -33,8 +33,15 @@ export class TaskModal extends Modal {
     state.subtasks = [...(state.subtasks ?? [])];
     state.viewState = cloneTaskInputViewState(state.viewState);
 
+    const form = contentEl.createDiv({ cls: "pm-task-modal-form" });
+    const basicSection = createTaskModalSection(form, "基础信息");
+    const scheduleSection = createTaskModalSection(form, "时间安排");
+    const relationSection = createTaskModalSection(form, "归属与状态");
+    const recurrenceSection = createTaskModalSection(form, "重复规则");
+    const subtaskSection = createTaskModalSection(form, "组合轻量项");
+
     if (this.options.existingTask?.occurrenceDates.length && this.options.existingTask.occurrenceDates.length > 1) {
-      contentEl.createDiv({
+      basicSection.createDiv({
         cls: "pm-muted",
         text: this.options.occurrenceContext
           ? `当前正在查看 ${this.options.occurrenceContext.occurrenceDate} 这次发生，但保存会更新整条重复任务。`
@@ -42,7 +49,7 @@ export class TaskModal extends Modal {
       });
     }
 
-    new Setting(contentEl)
+    new Setting(basicSection)
       .setName("标题")
       .addText((text) =>
         text
@@ -53,7 +60,7 @@ export class TaskModal extends Modal {
           })
       );
 
-    new Setting(contentEl)
+    new Setting(basicSection)
       .setName("任务类型")
       .setDesc("组合任务可作为容器，挂载单次、每日或每周子任务")
       .addDropdown((dropdown) => {
@@ -70,7 +77,7 @@ export class TaskModal extends Modal {
         });
       });
 
-    new Setting(contentEl)
+    new Setting(basicSection)
       .setName("描述")
       .addTextArea((text) =>
         text.setValue(state.description ?? "").onChange((value) => {
@@ -78,7 +85,8 @@ export class TaskModal extends Modal {
         })
       );
 
-    new Setting(contentEl)
+    const scheduleGrid = scheduleSection.createDiv({ cls: "pm-task-field-grid" });
+    new Setting(scheduleGrid)
       .setName("日期")
       .addText((text) =>
         text.setPlaceholder("YYYY-MM-DD").setValue(state.date).onChange((value) => {
@@ -86,7 +94,7 @@ export class TaskModal extends Modal {
         })
       );
 
-    new Setting(contentEl)
+    new Setting(scheduleGrid)
       .setName("开始时间")
       .addText((text) =>
         text.setPlaceholder("07:00").setValue(state.startTime ?? "").onChange((value) => {
@@ -94,7 +102,7 @@ export class TaskModal extends Modal {
         })
       );
 
-    new Setting(contentEl)
+    new Setting(scheduleGrid)
       .setName("结束时间")
       .addText((text) =>
         text.setPlaceholder("07:30").setValue(state.endTime ?? "").onChange((value) => {
@@ -103,7 +111,8 @@ export class TaskModal extends Modal {
       );
 
     let projectDropdown: DropdownComponent | null = null;
-    new Setting(contentEl)
+    const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
+    new Setting(relationGrid)
       .setName("所属项目")
       .addDropdown((dropdown) => {
         projectDropdown = dropdown;
@@ -125,7 +134,7 @@ export class TaskModal extends Modal {
       }
     }
     if (parentOptions.length > 0) {
-      new Setting(contentEl)
+      new Setting(relationSection)
         .setName("挂入组合任务")
         .setDesc("选择后，这条任务会作为该组合任务的子任务，并保留自己的重复规则")
         .addDropdown((dropdown) => {
@@ -147,7 +156,7 @@ export class TaskModal extends Modal {
         });
     }
 
-    new Setting(contentEl)
+    new Setting(relationGrid)
       .setName("状态")
       .addDropdown((dropdown) => {
         const labels: Record<TaskStatus, string> = {
@@ -163,7 +172,7 @@ export class TaskModal extends Modal {
         });
       });
 
-    new Setting(contentEl)
+    new Setting(relationGrid)
       .setName("优先级")
       .addDropdown((dropdown) => {
         dropdown.addOption("", "无");
@@ -180,7 +189,7 @@ export class TaskModal extends Modal {
         });
       });
 
-    new Setting(contentEl)
+    new Setting(relationSection)
       .setName("标签")
       .setDesc("多个标签用逗号分隔")
       .addText((text) =>
@@ -192,7 +201,7 @@ export class TaskModal extends Modal {
         })
       );
 
-    new Setting(contentEl)
+    new Setting(recurrenceSection)
       .setName("重复类型")
       .setDesc("单次、每日重复、每周此时重复")
       .addDropdown((dropdown) => {
@@ -213,8 +222,8 @@ export class TaskModal extends Modal {
         });
       });
 
-    const recurrenceFields = contentEl.createDiv();
-    const subtaskFields = contentEl.createDiv();
+    const recurrenceFields = recurrenceSection.createDiv({ cls: "pm-task-nested-fields" });
+    const subtaskFields = subtaskSection.createDiv({ cls: "pm-task-nested-fields" });
     const renderRecurrenceFields = (): void => {
       recurrenceFields.empty();
       if (state.recurrence === "once") {
@@ -242,26 +251,55 @@ export class TaskModal extends Modal {
     const renderSubtaskFields = (): void => {
       subtaskFields.empty();
       if (state.kind !== "composite") {
+        subtaskSection.addClass("is-hidden");
         return;
       }
+      subtaskSection.removeClass("is-hidden");
 
       subtaskFields.addClass("pm-subtask-editor");
-      subtaskFields.createDiv({ cls: "pm-muted", text: "下面是轻量检查项；需要单次、每日或每周子任务时，请新建任务并在“挂入组合任务”中选择此组合任务。" });
+      subtaskFields.createDiv({
+        cls: "pm-muted",
+        text: "轻量项可只写标题；如填写时间，必须落在组合任务的开始与结束时间内。需要独立重复规则时，请新建任务并挂入组合任务。"
+      });
 
       const list = subtaskFields.createDiv({ cls: "pm-subtask-editor-list" });
       const subtasks = state.subtasks ?? [];
       subtasks.forEach((subtask, index) => {
         const row = list.createDiv({ cls: "pm-subtask-editor-row" });
         row.createSpan({ cls: "pm-subtask-editor-index", text: `${index + 1}.` });
-        const input = row.createEl("input", {
+        const titleInput = row.createEl("input", {
           type: "text",
           placeholder: `子任务 ${index + 1}`
         });
-        input.value = subtask.title;
-        input.addEventListener("input", () => {
+        titleInput.value = subtask.title;
+        titleInput.addEventListener("input", () => {
           subtasks[index] = {
             ...subtasks[index],
-            title: input.value
+            title: titleInput.value
+          };
+          state.subtasks = [...subtasks];
+        });
+        const startInput = row.createEl("input", {
+          type: "text",
+          placeholder: "开始"
+        });
+        startInput.value = subtask.startTime ?? "";
+        startInput.addEventListener("input", () => {
+          subtasks[index] = {
+            ...subtasks[index],
+            startTime: startInput.value.trim() || undefined
+          };
+          state.subtasks = [...subtasks];
+        });
+        const endInput = row.createEl("input", {
+          type: "text",
+          placeholder: "结束"
+        });
+        endInput.value = subtask.endTime ?? "";
+        endInput.addEventListener("input", () => {
+          subtasks[index] = {
+            ...subtasks[index],
+            endTime: endInput.value.trim() || undefined
           };
           state.subtasks = [...subtasks];
         });
@@ -348,6 +386,12 @@ function cloneTaskInputViewState(viewState: TaskInput["viewState"]): TaskInput["
     gantt: viewState.gantt ? { ...viewState.gantt, dependencyIds: [...(viewState.gantt.dependencyIds ?? [])] } : undefined,
     mindmap: viewState.mindmap ? { ...viewState.mindmap } : undefined
   };
+}
+
+function createTaskModalSection(container: HTMLElement, title: string): HTMLElement {
+  const section = container.createDiv({ cls: "pm-task-modal-section" });
+  section.createEl("h3", { text: title });
+  return section;
 }
 
 function withMindmapParent(viewState: TaskInput["viewState"], parentTaskId: string | null): TaskInput["viewState"] {

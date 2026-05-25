@@ -26,6 +26,16 @@ export function toIsoLocal(date: Date): string {
   return `${toDateKey(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}${sign}${hours}:${minutes}`;
 }
 
+export function formatDateTimePattern(date: Date, pattern: string): string {
+  return pattern
+    .replace(/YYYY/g, String(date.getFullYear()))
+    .replace(/MM/g, pad(date.getMonth() + 1))
+    .replace(/DD/g, pad(date.getDate()))
+    .replace(/HH/g, pad(date.getHours()))
+    .replace(/mm/g, pad(date.getMinutes()))
+    .replace(/ss/g, pad(date.getSeconds()));
+}
+
 export function parseDateKey(value: string): Date {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day);

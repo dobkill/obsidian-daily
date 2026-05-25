@@ -98,9 +98,14 @@ export class OverviewView extends BaseProjectView {
     const titleBlock = hero.createDiv();
     titleBlock.createEl("h1", { text: "任务总览" });
     titleBlock.createDiv({ cls: "pm-muted", text: "热度图、周任务图和近 30 天趋势统一按任务发生实例统计。" });
-    const heroActions = hero.createDiv({ cls: "pm-tab-bar" });
-    this.createPrimaryTab(heroActions, this.plugin.settings.overviewTab1Name, "activity");
-    this.createPrimaryTab(heroActions, this.plugin.settings.overviewTab2Name, "projects");
+    const heroActions = hero.createDiv({ cls: "pm-overview-actions" });
+    const primaryTabs = heroActions.createDiv({ cls: "pm-tab-bar" });
+    this.createPrimaryTab(primaryTabs, this.plugin.settings.overviewTab1Name, "activity");
+    this.createPrimaryTab(primaryTabs, this.plugin.settings.overviewTab2Name, "projects");
+    heroActions.createEl("button", { text: "导出全部记录", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
+      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsMarkdown());
+      new Notice("已复制完整任务记录 Markdown");
+    });
 
     if (this.activePrimaryTab === "activity") {
       this.renderActivityTab(container, snapshot.occurrences, snapshot.projects, snapshot.tasks);
@@ -290,7 +295,21 @@ export class OverviewView extends BaseProjectView {
 
   private renderWeekBoard(container: HTMLElement, tasks: TaskOccurrence[], projects: Project[], seriesTasks: Task[]): void {
     const weekDates = getWeekDates(this.weekAnchor);
-    const board = container.createDiv({ cls: "pm-week-board" });
+    const weekStart = toDateKey(weekDates[0]);
+    const weekEnd = toDateKey(weekDates[6]);
+    const weekTasks = tasks.filter((task) => compareDateKeys(task.date, weekStart) >= 0 && compareDateKeys(task.date, weekEnd) <= 0);
+    const timelineRange = buildWeekTimelineRange(weekTasks);
+    const boardShell = container.createDiv({ cls: "pm-week-timeline-shell" });
+    boardShell.style.setProperty("--pm-week-hour-height", `${WEEK_TIMELINE_HOUR_HEIGHT}px`);
+    boardShell.style.setProperty("--pm-week-hour-count", String(timelineRange.endHour - timelineRange.startHour));
+
+    const axis = boardShell.createDiv({ cls: "pm-week-time-axis" });
+    axis.createDiv({ cls: "pm-week-axis-header", text: "时间" });
+    for (let hour = timelineRange.startHour; hour < timelineRange.endHour; hour += 1) {
+      axis.createDiv({ cls: "pm-week-axis-label", text: `${String(hour).padStart(2, "0")}:00` });
+    }
+
+    const board = boardShell.createDiv({ cls: "pm-week-board pm-week-timeline-board" });
 
     weekDates.forEach((date) => {
       const key = toDateKey(date);
@@ -323,16 +342,35 @@ export class OverviewView extends BaseProjectView {
 
       const dayTasks = buildCompositeDisplayOccurrences(tasks.filter((task) => task.date === key), seriesTasks);
       if (dayTasks.length === 0) {
-        column.createDiv({ cls: "pm-empty pm-week-day-empty", text: "暂无任务" });
+        const emptyLane = column.createDiv({ cls: "pm-week-day-timeline" });
+        emptyLane.style.height = `${(timelineRange.endHour - timelineRange.startHour) * WEEK_TIMELINE_HOUR_HEIGHT}px`;
+        emptyLane.createDiv({ cls: "pm-empty pm-week-day-empty", text: "暂无任务" });
         return;
       }
 
-      const list = column.createDiv({ cls: "pm-week-day-list" });
-      dayTasks.forEach((item) => this.renderWeekTaskCard(list, item.occurrence, item.childOccurrences));
+      const untimed = dayTasks.filter((item) => !getOccurrenceTimelinePosition(item.occurrence, timelineRange));
+      if (untimed.length > 0) {
+        const untimedList = column.createDiv({ cls: "pm-week-untimed-list" });
+        untimed.forEach((item) => this.renderWeekTaskCard(untimedList, item.occurrence, item.childOccurrences));
+      }
+      const lane = column.createDiv({ cls: "pm-week-day-timeline" });
+      lane.style.height = `${(timelineRange.endHour - timelineRange.startHour) * WEEK_TIMELINE_HOUR_HEIGHT}px`;
+      dayTasks
+        .filter((item) => getOccurrenceTimelinePosition(item.occurrence, timelineRange))
+        .forEach((item) => {
+          const position = getOccurrenceTimelinePosition(item.occurrence, timelineRange);
+          if (!position) {
+            return;
+          }
+          const card = this.renderWeekTaskCard(lane, item.occurrence, item.childOccurrences);
+          card.addClass("is-positioned");
+          card.style.top = `${position.top}px`;
+          card.style.height = `${position.height}px`;
+        });
     });
   }
 
-  private renderWeekTaskCard(container: HTMLElement, task: TaskOccurrence, childOccurrences: TaskOccurrence[] = []): void {
+  private renderWeekTaskCard(container: HTMLElement, task: TaskOccurrence, childOccurrences: TaskOccurrence[] = []): HTMLElement {
     const project = this.plugin.store.getProject(task.projectId);
     const displayProgress = summarizeOccurrenceDisplay(task, childOccurrences);
     const card = container.createDiv({ cls: `pm-week-task ${displayProgress.completed ? "is-complete" : ""} ${task.kind === "composite" ? "is-composite" : ""}` });
@@ -380,13 +418,14 @@ export class OverviewView extends BaseProjectView {
       meta.createSpan({ text: `${displayProgress.completedSteps}/${displayProgress.totalSteps} 子任务` });
       this.renderCompositeSubtasks(card, task, childOccurrences);
     }
+    return card;
   }
 
   private renderCompositeSubtasks(container: HTMLElement, task: TaskOccurrence, childOccurrences: TaskOccurrence[] = []): void {
     const grid = container.createDiv({ cls: "pm-subtask-grid" });
     task.subtasks.forEach((subtask) => {
       const item = grid.createEl("button", {
-        text: subtask.title,
+        text: formatSubtaskLabel(subtask),
         cls: `pm-subtask-chip ${task.completedSubtaskIds.includes(subtask.id) ? "is-complete" : ""}`
       });
       item.addEventListener("click", async () => {
@@ -1981,6 +2020,7 @@ const GANTT_LEFT_WIDTH = 360;
 const GANTT_MIN_ZOOM = 0.4;
 const GANTT_MAX_ZOOM = 2;
 const GANTT_ZOOM_STEP = 0.1;
+const WEEK_TIMELINE_HOUR_HEIGHT = 72;
 
 type GanttScale = "day" | "week" | "month";
 
@@ -2437,6 +2477,10 @@ function recurrenceLabel(recurrence: Task["recurrence"]): string {
   return "单次任务";
 }
 
+function formatSubtaskLabel(subtask: { title: string; startTime?: string; endTime?: string }): string {
+  return subtask.startTime && subtask.endTime ? `${subtask.title} · ${subtask.startTime}-${subtask.endTime}` : subtask.title;
+}
+
 function statusLabel(status: TaskStatus): string {
   const labels: Record<TaskStatus, string> = {
     todo: "待办",
@@ -2484,6 +2528,42 @@ function compareWeekTasks(a: TaskOccurrence, b: TaskOccurrence): number {
     return -1;
   }
   return startA - startB;
+}
+
+function buildWeekTimelineRange(tasks: TaskOccurrence[]): { startHour: number; endHour: number } {
+  const timed = tasks
+    .map((task) => ({ start: parseTimeToMinutes(task.startTime), end: parseTimeToMinutes(task.endTime) }))
+    .filter((item): item is { start: number; end: number } => item.start !== null && item.end !== null);
+  if (timed.length === 0) {
+    return { startHour: 7, endHour: 22 };
+  }
+  const minStart = Math.min(...timed.map((item) => item.start));
+  const maxEnd = Math.max(...timed.map((item) => item.end));
+  const startHour = Math.max(0, Math.floor(minStart / 60) - 1);
+  const endHour = Math.min(24, Math.ceil(maxEnd / 60) + 1);
+  if (endHour - startHour >= 6) {
+    return { startHour, endHour };
+  }
+  return { startHour, endHour: Math.min(24, startHour + 6) };
+}
+
+function getOccurrenceTimelinePosition(
+  task: TaskOccurrence,
+  range: { startHour: number; endHour: number }
+): { top: number; height: number } | null {
+  const start = parseTimeToMinutes(task.startTime);
+  const end = parseTimeToMinutes(task.endTime);
+  if (start === null || end === null) {
+    return null;
+  }
+  const rangeStart = range.startHour * 60;
+  const rangeEnd = range.endHour * 60;
+  const top = ((Math.max(start, rangeStart) - rangeStart) / 60) * WEEK_TIMELINE_HOUR_HEIGHT;
+  const height = ((Math.min(end, rangeEnd) - Math.max(start, rangeStart)) / 60) * WEEK_TIMELINE_HOUR_HEIGHT;
+  return {
+    top,
+    height: Math.max(44, height)
+  };
 }
 
 function buildCompositeDisplayOccurrences(occurrences: TaskOccurrence[], seriesTasks: Task[]): CompositeDisplayOccurrence[] {

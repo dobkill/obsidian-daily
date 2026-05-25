@@ -28,6 +28,7 @@
 
 .pm-summary-strip,
 .pm-tab-bar,
+.pm-overview-actions,
 .pm-inline-actions,
 .pm-task-actions,
 .pm-modal-actions,
@@ -39,6 +40,11 @@
 
 .pm-summary-strip {
   margin-bottom: 18px;
+}
+
+.pm-overview-actions {
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .pm-summary-card {
@@ -312,6 +318,72 @@
   border: 1px dashed color-mix(in srgb, var(--background-modifier-border) 72%, var(--interactive-accent) 28%);
   border-radius: 8px;
   background: color-mix(in srgb, var(--background-primary) 94%, var(--background-secondary) 6%);
+}
+
+.pm-week-timeline-shell {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.pm-week-time-axis {
+  display: grid;
+  grid-template-rows: 58px repeat(var(--pm-week-hour-count), var(--pm-week-hour-height));
+  min-width: 64px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.pm-week-axis-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.pm-week-axis-label {
+  display: flex;
+  justify-content: flex-end;
+  padding-right: 8px;
+  transform: translateY(-0.6em);
+}
+
+.pm-week-timeline-board {
+  min-width: 1540px;
+}
+
+.pm-week-day-timeline {
+  position: relative;
+  min-height: calc(var(--pm-week-hour-count) * var(--pm-week-hour-height));
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 72%, transparent);
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--background-secondary) 44%, transparent) 0,
+      color-mix(in srgb, var(--background-secondary) 44%, transparent) 1px,
+      transparent 1px,
+      transparent var(--pm-week-hour-height)
+    );
+}
+
+.pm-week-untimed-list {
+  display: grid;
+  gap: 6px;
+}
+
+.pm-week-task.is-positioned {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.pm-week-task.is-positioned .pm-subtask-grid {
+  display: none;
 }
 
 .pm-line-chart-legend {
@@ -620,7 +692,7 @@
 
 .pm-subtask-editor-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(140px, 1fr) 82px 82px auto;
   gap: 8px;
   align-items: center;
 }
@@ -632,6 +704,55 @@
 
 .pm-subtask-editor-row input[type="text"] {
   width: 100%;
+}
+
+.pm-task-modal {
+  max-width: min(920px, 92vw);
+}
+
+.pm-task-modal-form {
+  display: grid;
+  gap: 14px;
+}
+
+.pm-task-modal-section,
+.pm-settings-group {
+  padding: 14px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--background-primary) 94%, var(--background-secondary) 6%);
+}
+
+.pm-task-modal-section.is-hidden {
+  display: none;
+}
+
+.pm-task-modal-section h3,
+.pm-settings-group h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.pm-task-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.pm-task-field-grid .setting-item {
+  display: block;
+  min-width: 0;
+}
+
+.pm-task-field-grid .setting-item-control,
+.pm-task-field-grid input,
+.pm-task-field-grid select {
+  width: 100%;
+}
+
+.pm-task-nested-fields {
+  display: grid;
+  gap: 10px;
 }
 
 .pm-task-actions button,
@@ -1061,6 +1182,11 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .pm-dialog-tabs,
+  .pm-task-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .pm-dialog-controls select,
   .pm-dialog-controls input {
     width: 100%;
@@ -1431,6 +1557,38 @@
     radial-gradient(circle at bottom left, rgba(41, 121, 255, 0.06), transparent 28%);
 }
 
+.pm-dialog-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.pm-dialog-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.pm-dialog-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.pm-dialog-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .pm-dialog-target-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1633,17 +1791,23 @@
 
 .pm-anchor-shortcut {
   display: grid;
+  grid-template-rows: auto 1fr;
   gap: 4px;
   min-width: min(220px, 100%);
+  min-height: 72px;
   padding: 10px 12px;
   text-align: left;
-  border-radius: 16px;
+  border-radius: 8px;
 }
 
 .pm-anchor-shortcut-task {
   color: var(--text-muted);
   font-size: 0.76rem;
   font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pm-anchor-shortcut-label {
@@ -1653,6 +1817,7 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  align-self: start;
 }
 
 .pm-editor-card {
@@ -2580,6 +2745,21 @@
 @media (max-width: 720px) {
   .pm-dialog-target-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pm-dialog-tabs,
+  .pm-task-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pm-subtask-editor-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .pm-subtask-editor-row input:nth-of-type(2),
+  .pm-subtask-editor-row input:nth-of-type(3),
+  .pm-subtask-editor-row button {
+    grid-column: 2;
   }
 
   .pm-path-card {
