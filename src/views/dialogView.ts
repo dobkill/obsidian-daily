@@ -126,10 +126,11 @@ export class QuickDialogView extends BaseProjectView {
       hintHeader.createEl("strong", { text: "任务导入规则" });
       hintHeader.createDiv({ cls: "pm-muted", text: "这套语法与项目页批量导入、今日任务导出完全互通。" });
       [
+        "支持粘贴“导出全部记录”的完整迁移包；识别后会按迁移包恢复全量项目管理数据。",
         "支持普通任务与组合任务；组合任务可写 kind:composite，也可直接在下一行缩进写子任务。",
         "支持单次、每日、每周此时：repeat:once / daily / weekly；需要限制次数可继续写 count:4 或 until:2026-06-30。",
-        "可用 #项目：新项目名 自动建项目；同项目下若任务名重复会覆盖旧任务，时间冲突会自动改成同日 1 分钟空档占位。",
-        "勾选 - [x] 默认只完成当天；repeat 任务加 finish:series 可提前结束整个系列。"
+        "创建或覆盖任务必须写完整日期和时间段，例如 @2026-05-25 09:00-09:30。",
+        "极简 - [x] 标题 只会匹配并完成今日已有任务；找不到时会报错，不会创建新任务。"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
     }
 
@@ -385,6 +386,24 @@ export class QuickDialogView extends BaseProjectView {
       const preview = this.plugin.store.previewFormattedTasks(textarea.value, {
         defaultDate: toDateKey(now())
       });
+      if (preview.transferPackage) {
+        const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
+        [
+          ["恢复模式", "替换全部"],
+          ["项目 / 进度页", `${preview.transferPackage.projectCount} / ${preview.transferPackage.progressPageCount}`],
+          ["任务系列", String(preview.transferPackage.taskCount)],
+          ["历史 / 索引", `${preview.transferPackage.writeHistoryCount} / ${preview.transferPackage.noteTaskIndexCount}`]
+        ].forEach(([label, value]) => {
+          const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
+          card.createDiv({ cls: "pm-muted", text: label });
+          card.createEl("strong", { text: value });
+        });
+        body.createDiv({
+          cls: "pm-import-project-hint",
+          text: `检测到完整迁移包，导出时间 ${preview.transferPackage.exportedAt}。提交后会替换当前项目管理数据。`
+        });
+        return;
+      }
       const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
       [
         ["任务总数", String(preview.summary.total)],
@@ -421,7 +440,7 @@ export class QuickDialogView extends BaseProjectView {
       if (preview.issues.length > 0) {
         const issueList = body.createEl("ul", { cls: "pm-import-issues" });
         preview.issues.slice(0, 6).forEach((issue) => {
-          issueList.createEl("li", { text: `第 ${issue.line} 行：${issue.message}` });
+          issueList.createEl("li", { text: `第 ${issue.line} 行：${issue.message}${issue.blocking ? "（阻止导入）" : ""}` });
         });
       }
     };
@@ -492,6 +511,7 @@ export class QuickDialogView extends BaseProjectView {
         },
         historySummary: "从快速记录创建任务"
       });
+      this.plugin.settings = this.plugin.store.getConfig();
       return;
     }
     if (this.target === "task-note") {
@@ -786,7 +806,7 @@ function editorHint(target: DialogTarget, mode: MindmapInsertMode): string {
     return mode === "inside" ? "当前会把内容并入所选节点正文。" : "当前会把每一行解析成一个新的评语节点。";
   }
   if (target === "quick-task") {
-    return "支持普通 / 组合、单次 / 每日 / 每周任务；按 Ctrl+Enter 可直接提交。";
+    return "完整输入用于创建或覆盖任务；极简勾选只用于完成今日已有任务。";
   }
   return "编辑区已包裹成独立卡片，便于专注输入。";
 }
@@ -915,12 +935,12 @@ function recurrenceText(recurrence: Task["recurrence"]): string {
   return "单次";
 }
 
-function importActionText(action: "create" | "overwrite" | "overwrite-and-complete-today" | "overwrite-and-complete-series"): string {
-  if (action === "overwrite-and-complete-series") {
-    return "覆盖并结束整个系列";
+function importActionText(action: "create" | "overwrite" | "complete-today" | "complete-series"): string {
+  if (action === "complete-series") {
+    return "完成并结束整个系列";
   }
-  if (action === "overwrite-and-complete-today") {
-    return "覆盖并完成当天";
+  if (action === "complete-today") {
+    return "完成当天";
   }
   if (action === "overwrite") {
     return "覆盖已有任务";

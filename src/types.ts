@@ -285,11 +285,12 @@ export type TaskImportIssue = {
   line: number;
   message: string;
   raw: string;
+  blocking?: boolean;
 };
 
 export type TaskImportCompletionMode = "pending" | "today" | "series";
 
-export type TaskImportAction = "create" | "overwrite" | "overwrite-and-complete-today" | "overwrite-and-complete-series";
+export type TaskImportAction = "create" | "overwrite" | "complete-today" | "complete-series";
 
 export type TaskImportPreviewTask = {
   line: number;
@@ -306,6 +307,7 @@ export type TaskImportPreviewTask = {
 export type TaskImportPreview = {
   tasks: TaskImportPreviewTask[];
   issues: TaskImportIssue[];
+  transferPackage?: TaskTransferPackagePreview;
   summary: {
     total: number;
     completed: number;
@@ -316,6 +318,17 @@ export type TaskImportPreview = {
     completeSeriesCount: number;
     newProjectNames: string[];
   };
+};
+
+export type TaskTransferPackagePreview = {
+  schema: string;
+  exportedAt: string;
+  projectCount: number;
+  taskCount: number;
+  progressPageCount: number;
+  noteTaskIndexCount: number;
+  writeHistoryCount: number;
+  restoreMode: "replace-all";
 };
 
 export type AutoArrangeOptions = {

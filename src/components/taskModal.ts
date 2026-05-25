@@ -1,5 +1,6 @@
-import { App, ButtonComponent, DropdownComponent, Modal, Notice, Setting } from "obsidian";
+import { App, ButtonComponent, DropdownComponent, Modal, Notice, Setting, TextComponent } from "obsidian";
 import { Project, Task, TaskDeleteScope, TaskInput, TaskKind, TaskOccurrence, TaskPriority, TaskRecurrence, TaskStatus, TaskSubtaskInput, TaskUpdateScope } from "../types";
+import { addMinutes, parseTimeToMinutes } from "../utils/date";
 
 type TaskModalOptions = {
   title: string;
@@ -85,32 +86,53 @@ export class TaskModal extends Modal {
         })
       );
 
+    let dateInput: TextComponent | null = null;
+    let startTimeInput: TextComponent | null = null;
+    let endTimeInput: TextComponent | null = null;
+    const setDateValue = (value: string): void => {
+      state.date = value;
+      dateInput?.setValue(value);
+    };
+    const setStartTimeValue = (value?: string): void => {
+      state.startTime = value || undefined;
+      startTimeInput?.setValue(value ?? "");
+    };
+    const setEndTimeValue = (value?: string): void => {
+      state.endTime = value || undefined;
+      endTimeInput?.setValue(value ?? "");
+    };
+
     const scheduleGrid = scheduleSection.createDiv({ cls: "pm-task-field-grid" });
     new Setting(scheduleGrid)
       .setName("日期")
-      .addText((text) =>
-        text.setPlaceholder("YYYY-MM-DD").setValue(state.date).onChange((value) => {
+      .addText((text) => {
+        dateInput = text;
+        return text.setPlaceholder("YYYY-MM-DD").setValue(state.date).onChange((value) => {
           state.date = value;
-        })
-      );
+        });
+      });
 
     new Setting(scheduleGrid)
       .setName("开始时间")
-      .addText((text) =>
-        text.setPlaceholder("07:00").setValue(state.startTime ?? "").onChange((value) => {
+      .addText((text) => {
+        startTimeInput = text;
+        return text.setPlaceholder("07:00").setValue(state.startTime ?? "").onChange((value) => {
           state.startTime = value || undefined;
-        })
-      );
+        });
+      });
 
     new Setting(scheduleGrid)
       .setName("结束时间")
-      .addText((text) =>
-        text.setPlaceholder("07:30").setValue(state.endTime ?? "").onChange((value) => {
+      .addText((text) => {
+        endTimeInput = text;
+        return text.setPlaceholder("07:30").setValue(state.endTime ?? "").onChange((value) => {
           state.endTime = value || undefined;
-        })
-      );
+        });
+      });
 
     let projectDropdown: DropdownComponent | null = null;
+    let renderParentField = (): void => undefined;
+    let clearParentIfDisallowed = (): void => undefined;
     const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
     new Setting(relationGrid)
       .setName("所属项目")
@@ -121,20 +143,53 @@ export class TaskModal extends Modal {
         dropdown.setValue(state.projectId ?? "");
         dropdown.onChange((value) => {
           state.projectId = value || undefined;
+          clearParentIfDisallowed();
+          renderParentField();
         });
       });
 
     const compositeParents = this.options.compositeParents ?? [];
-    const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
-    const parentOptions = compositeParents.filter((task) => task.id !== this.options.existingTask?.id);
-    if (currentParentId && !parentOptions.some((task) => task.id === currentParentId)) {
-      const currentParent = compositeParents.find((task) => task.id === currentParentId);
-      if (currentParent) {
-        parentOptions.push(currentParent);
+    const parentField = relationSection.createDiv({ cls: "pm-task-parent-field" });
+    const getSelectableParents = (): Task[] =>
+      compositeParents
+        .filter((task) => task.id !== this.options.existingTask?.id)
+        .filter((task) => !state.projectId || task.projectId === state.projectId);
+    const applyParentSchedule = (parent: Task): void => {
+      const nextDate = parent.occurrenceDates.includes(state.date) ? state.date : parent.date;
+      setDateValue(nextDate);
+      if (!parent.startTime || !parent.endTime) {
+        return;
       }
-    }
-    if (parentOptions.length > 0) {
-      new Setting(relationSection)
+      const parentStart = parseTimeToMinutes(parent.startTime);
+      const parentEnd = parseTimeToMinutes(parent.endTime);
+      if (parentStart === null || parentEnd === null || parentStart >= parentEnd) {
+        return;
+      }
+      setStartTimeValue(parent.startTime);
+      setEndTimeValue(parentEnd - parentStart <= 1 ? parent.endTime : addMinutes(parent.startTime, 1));
+    };
+    clearParentIfDisallowed = (): void => {
+      const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+      if (!currentParentId) {
+        return;
+      }
+      if (!getSelectableParents().some((task) => task.id === currentParentId)) {
+        state.viewState = withMindmapParent(state.viewState, null);
+      }
+    };
+    renderParentField = (): void => {
+      parentField.empty();
+      clearParentIfDisallowed();
+      const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+      const parentOptions = getSelectableParents();
+      if (parentOptions.length === 0) {
+        parentField.createDiv({
+          cls: "pm-muted pm-task-parent-note",
+          text: state.projectId ? "当前项目下暂无可挂入的组合任务。" : "暂无可挂入的组合任务。"
+        });
+        return;
+      }
+      new Setting(parentField)
         .setName("挂入组合任务")
         .setDesc("选择后，这条任务会作为该组合任务的子任务，并保留自己的重复规则")
         .addDropdown((dropdown) => {
@@ -148,13 +203,16 @@ export class TaskModal extends Modal {
             const parentTaskId = value || null;
             state.viewState = withMindmapParent(state.viewState, parentTaskId);
             const parent = parentTaskId ? parentOptions.find((task) => task.id === parentTaskId) : undefined;
-            if (parent?.projectId) {
+            if (parent) {
               state.projectId = parent.projectId;
-              projectDropdown?.setValue(parent.projectId);
+              projectDropdown?.setValue(parent.projectId ?? "");
+              applyParentSchedule(parent);
+              renderParentField();
             }
           });
         });
-    }
+    };
+    renderParentField();
 
     new Setting(relationGrid)
       .setName("状态")

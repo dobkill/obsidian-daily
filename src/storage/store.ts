@@ -24,6 +24,7 @@ import {
   TaskOccurrenceOverride,
   TaskOccurrenceState,
   TaskPriority,
+  ProjectStatus,
   TaskRecurrence,
   TaskSourceLink,
   TaskStatus,
@@ -86,6 +87,10 @@ const WRITE_HISTORY_FILE = "write-history.json";
 const TASKS_DIR = "tasks";
 const MARKDOWN_GUIDE_FILE = "markdown-format-guide.md";
 const UNASSIGNED_PROJECT_LABEL = "未归属项目";
+const FULL_TRANSFER_SCHEMA = "obsidian-project-management.full-transfer.v1";
+const FULL_TRANSFER_START = "<!-- pm-full-transfer:v1:start -->";
+const FULL_TRANSFER_END = "<!-- pm-full-transfer:v1:end -->";
+const FULL_TRANSFER_CODE_BLOCK = "pm-json-base64";
 
 export class ProjectManagementStore extends Events {
   private app: App;
@@ -684,6 +689,10 @@ export class ProjectManagementStore extends Events {
   }
 
   previewFormattedTasks(text: string, options: { projectId?: string; defaultDate?: string; source?: TaskSourceLink } = {}): TaskImportPreview {
+    const transfer = parseFullTransferPackage(text);
+    if (transfer.found) {
+      return this.previewFullTransferPackage(transfer, Boolean(options.projectId));
+    }
     const parsed = parseFormattedTaskText(text, {
       projects: this.projects,
       projectId: options.projectId,
@@ -695,7 +704,21 @@ export class ProjectManagementStore extends Events {
 
   async importFormattedTasks(text: string, options: { projectId?: string; defaultDate?: string; source?: TaskSourceLink; historySummary?: string } = {}): Promise<Task[]> {
     this.assertWritable();
+    const transfer = parseFullTransferPackage(text);
+    if (transfer.found) {
+      if (options.projectId) {
+        throw new Error("完整迁移包只能在快速记录-创建任务中导入，不能导入到单个项目");
+      }
+      if (!transfer.package) {
+        throw new Error(transfer.message ?? "完整迁移包解析失败");
+      }
+      return this.restoreFullTransferPackage(transfer.package);
+    }
     const preview = this.previewFormattedTasks(text, options);
+    const blockingIssue = preview.issues.find((issue) => issue.blocking);
+    if (blockingIssue) {
+      throw new Error(`第 ${blockingIssue.line} 行：${blockingIssue.message}`);
+    }
     if (preview.tasks.length === 0) {
       throw new Error(preview.issues[0]?.message ?? "没有可导入的任务");
     }
@@ -714,10 +737,7 @@ export class ProjectManagementStore extends Events {
     return changed;
   }
 
-  exportTasksAsFormattedText(
-    tasks: TaskOccurrence[],
-    mode: "current" | "complete-today" | "complete-series" = "current"
-  ): string {
+  exportTasksAsMinimalCompletionText(tasks: TaskOccurrence[]): string {
     const grouped = new Map<string, TaskOccurrence[]>();
     tasks
       .slice()
@@ -736,12 +756,7 @@ export class ProjectManagementStore extends Events {
       }
       sections.push(`#项目：${projectName}`);
       group.forEach((task) => {
-        sections.push(renderTaskOccurrenceForExport(task, mode));
-        if (task.kind === "composite") {
-          task.subtasks.forEach((subtask) => {
-            sections.push(renderSubtaskForExport(subtask));
-          });
-        }
+        sections.push(`- [${task.completed ? "x" : " "}] ${task.title}`);
       });
     });
 
@@ -769,59 +784,99 @@ export class ProjectManagementStore extends Events {
   exportAllRecordsAsMarkdown(): string {
     const snapshot = this.getSnapshot();
     const exportedAt = toIsoLocal(now());
-    const projectById = new Map(snapshot.projects.map((project) => [project.id, project]));
-    const grouped = new Map<string, Task[]>();
-    snapshot.tasks
-      .slice()
-      .sort(compareSeriesTasks)
-      .forEach((task) => {
-        const key = task.projectId ?? UNASSIGNED_PROJECT_LABEL;
-        grouped.set(key, [...(grouped.get(key) ?? []), task]);
-      });
+    const transferPackage = buildFullTransferPackage(snapshot, exportedAt);
+    const encoded = wrapBase64(encodeBase64Text(JSON.stringify(transferPackage)));
 
-    const lines = [
-      "# 项目管理完整记录导出",
+    return [
+      "# 项目管理完整迁移包",
+      "",
+      "这份 Markdown 用于跨设备完整迁移。把全文复制到另一台设备的「快速记录 - 创建任务」并提交，会替换目标设备当前项目管理数据。",
       "",
       `导出时间：${exportedAt}`,
       `项目数：${snapshot.projects.length}`,
+      `进度页数：${snapshot.progressPages.length}`,
       `任务系列数：${snapshot.tasks.length}`,
       `任务发生次数：${snapshot.occurrences.length}`,
+      `笔记索引数：${snapshot.noteTaskIndex.length}`,
+      `写入历史数：${snapshot.writeHistory.length}`,
       "",
-      "## 可读摘要"
-    ];
-
-    [...grouped.entries()].forEach(([projectKey, tasks]) => {
-      const projectName = projectKey === UNASSIGNED_PROJECT_LABEL ? UNASSIGNED_PROJECT_LABEL : projectById.get(projectKey)?.name ?? UNASSIGNED_PROJECT_LABEL;
-      lines.push("", `### ${projectName}`);
-      tasks.forEach((task) => {
-        lines.push(renderTaskSeriesForExport(task));
-        if (task.kind === "composite") {
-          task.subtasks.forEach((subtask) => {
-            lines.push(renderSubtaskForExport(subtask));
-          });
-        }
-      });
-    });
-
-    const payload = {
-      format: "pm-project-management-full-export",
-      version: this.config.version,
-      exportedAt,
-      includes: ["projects", "progressPages", "tasks", "occurrences", "table", "board", "gantt", "mindmap", "sources", "notes", "writeHistory"],
-      data: snapshot
-    };
-
-    lines.push(
-      "",
-      "## 完整 JSON 数据",
-      "",
-      "<!-- pm:full-export:start -->",
-      "```pm-project-management-json",
-      JSON.stringify(payload, null, 2),
+      FULL_TRANSFER_START,
+      `\`\`\`${FULL_TRANSFER_CODE_BLOCK}`,
+      encoded,
       "```",
-      "<!-- pm:full-export:end -->"
-    );
-    return lines.join("\n").trim();
+      FULL_TRANSFER_END
+    ].join("\n").trim();
+  }
+
+  private previewFullTransferPackage(transfer: ParsedFullTransferPackage, blockedByProjectScope: boolean): TaskImportPreview {
+    const preview = createEmptyTaskImportPreview();
+    if (blockedByProjectScope) {
+      preview.issues.push({
+        line: 1,
+        raw: "",
+        blocking: true,
+        message: "完整迁移包只能在快速记录-创建任务中导入，不能导入到单个项目"
+      });
+      return preview;
+    }
+    if (!transfer.package) {
+      preview.issues.push({
+        line: 1,
+        raw: "",
+        blocking: true,
+        message: transfer.message ?? "完整迁移包解析失败"
+      });
+      return preview;
+    }
+    try {
+      const next = buildDataStateFromTransferPackage(transfer.package, this.config);
+      const taskCount = [...next.tasks.values()].reduce((sum, tasks) => sum + tasks.length, 0);
+      preview.transferPackage = {
+        schema: transfer.package.schema,
+        exportedAt: transfer.package.exportedAt,
+        projectCount: next.projects.length,
+        taskCount,
+        progressPageCount: next.progressPages.length,
+        noteTaskIndexCount: next.noteTaskIndex.length,
+        writeHistoryCount: next.writeHistory.length,
+        restoreMode: "replace-all"
+      };
+      preview.summary.total = taskCount;
+      preview.summary.composite = [...next.tasks.values()].flat().filter((task) => task.kind === "composite").length;
+      preview.summary.completed = [...next.tasks.values()].flat().filter(isTaskFullyCompleted).length;
+    } catch (error) {
+      preview.issues.push({
+        line: 1,
+        raw: "",
+        blocking: true,
+        message: error instanceof Error ? error.message : "完整迁移包数据校验失败"
+      });
+    }
+    return preview;
+  }
+
+  private async restoreFullTransferPackage(transferPackage: FullTransferPackage): Promise<Task[]> {
+    const next = buildDataStateFromTransferPackage(transferPackage, this.config);
+    const previousConfig = structuredClone(this.config);
+    const previousState = this.captureDataState();
+
+    try {
+      this.config = next.config;
+      this.projects = next.projects;
+      this.progressPages = next.progressPages;
+      this.tasks = next.tasks;
+      this.noteTaskIndex = next.noteTaskIndex;
+      this.writeHistory = next.writeHistory;
+      await this.ensureDataFolder();
+      await this.flushAll();
+      await this.reloadCurrentFolderData();
+      this.trigger("changed");
+      return this.getAllTasks();
+    } catch (error) {
+      this.config = previousConfig;
+      this.restoreDataState(previousState);
+      throw error;
+    }
   }
 
   async exportMarkdownGuide(): Promise<string> {
@@ -1244,13 +1299,35 @@ export class ProjectManagementStore extends Events {
 
   private buildTaskImportPreview(tasks: ParsedImportTask[], issues: TaskImportPreview["issues"]): TaskImportPreview {
     const newProjectNames = new Set<string>();
-    const previewTasks = tasks.map<TaskImportPreviewTask>((entry) => {
+    const previewTasks: TaskImportPreviewTask[] = [];
+    tasks.forEach((entry) => {
       const projectResolution = this.resolveImportProject(entry);
       const matched = this.findTaskByImportIdentity(entry.input.title, projectResolution.projectId, entry.input.date);
+      const isCompletionInput = entry.input.completed === true;
+      if (!matched && !entry.createReady) {
+        issues.push({
+          line: entry.line,
+          raw: entry.raw,
+          blocking: true,
+          message: isCompletionInput
+            ? `没有找到今日已有任务「${entry.input.title}」，极简完成输入不会创建新任务`
+            : "创建任务必须提供完整日期和时间，例如 @2026-05-25 09:00-09:30"
+        });
+        return;
+      }
+      if (matched && !isCompletionInput && !entry.createReady) {
+        issues.push({
+          line: entry.line,
+          raw: entry.raw,
+          blocking: true,
+          message: "极简未完成行不会创建或覆盖任务；创建或覆盖任务必须提供完整日期和时间"
+        });
+        return;
+      }
       if (projectResolution.newProjectName) {
         newProjectNames.add(projectResolution.newProjectName);
       }
-      return {
+      previewTasks.push({
         line: entry.line,
         raw: entry.raw,
         input: {
@@ -1261,9 +1338,9 @@ export class ProjectManagementStore extends Events {
         projectName: projectResolution.projectName,
         matchedTaskId: matched?.id,
         matchedTaskTitle: matched?.title,
-        action: resolveTaskImportAction(Boolean(matched), entry.completionMode),
+        action: resolveTaskImportAction(Boolean(matched), entry.completionMode, isCompletionInput),
         completionMode: entry.completionMode
-      };
+      });
     });
 
     return {
@@ -1274,9 +1351,9 @@ export class ProjectManagementStore extends Events {
         completed: previewTasks.filter((task) => task.input.completed).length,
         composite: previewTasks.filter((task) => task.input.kind === "composite").length,
         createCount: previewTasks.filter((task) => task.action === "create").length,
-        overwriteCount: previewTasks.filter((task) => task.action !== "create").length,
-        completeTodayCount: previewTasks.filter((task) => task.action === "overwrite-and-complete-today").length,
-        completeSeriesCount: previewTasks.filter((task) => task.action === "overwrite-and-complete-series").length,
+        overwriteCount: previewTasks.filter((task) => task.action === "overwrite").length,
+        completeTodayCount: previewTasks.filter((task) => task.action === "complete-today").length,
+        completeSeriesCount: previewTasks.filter((task) => task.action === "complete-series").length,
         newProjectNames: [...newProjectNames]
       }
     };
@@ -1338,19 +1415,19 @@ export class ProjectManagementStore extends Events {
     const existing = this.findTaskByImportIdentity(input.title, projectId, input.date);
 
     if (existing) {
+      if (entry.action === "complete-today") {
+        await this.updateTaskOccurrenceCompletion(existing.id, input.date, true);
+        return this.getTask(existing.id) ?? existing;
+      }
+      if (entry.action === "complete-series") {
+        await this.completeTaskSeries(existing.id, input.date);
+        return this.getTask(existing.id) ?? existing;
+      }
       const normalizedPatch: TaskInput = {
         ...input,
         completed: false
       };
       const updated = await this.updateTask(existing.id, normalizedPatch, "series", { autoResolveConflicts: true });
-      if (entry.completionMode === "today" && input.completed) {
-        await this.updateTaskOccurrenceCompletion(updated.id, input.date, true);
-        return this.getTask(updated.id) ?? updated;
-      }
-      if (entry.completionMode === "series" && input.completed) {
-        await this.completeTaskSeries(updated.id, input.date);
-        return this.getTask(updated.id) ?? updated;
-      }
       return updated;
     }
 
@@ -2190,6 +2267,27 @@ type StoreDataState = {
   writeHistory: WriteHistoryRecord[];
 };
 
+type FullTransferPackage = {
+  schema: typeof FULL_TRANSFER_SCHEMA;
+  exportedAt: string;
+  config: PluginConfig;
+  projects: Project[];
+  progressPages: ProgressPage[];
+  tasks: Task[];
+  noteTaskIndex: NoteTaskIndexEntry[];
+  writeHistory: WriteHistoryRecord[];
+};
+
+type ParsedFullTransferPackage = {
+  found: boolean;
+  package?: FullTransferPackage;
+  message?: string;
+};
+
+type RestoredStoreDataState = StoreDataState & {
+  config: PluginConfig;
+};
+
 type DataFolderUsage = {
   hasData: boolean;
   invalidPaths: string[];
@@ -2277,6 +2375,292 @@ function isTaskSubtaskRecord(value: unknown): value is TaskSubtask {
 
 function isOccurrenceStateRecord(value: unknown): value is TaskOccurrenceState {
   return isRecord(value) && typeof value.date === "string";
+}
+
+function createEmptyTaskImportPreview(): TaskImportPreview {
+  return {
+    tasks: [],
+    issues: [],
+    summary: {
+      total: 0,
+      completed: 0,
+      composite: 0,
+      createCount: 0,
+      overwriteCount: 0,
+      completeTodayCount: 0,
+      completeSeriesCount: 0,
+      newProjectNames: []
+    }
+  };
+}
+
+function buildFullTransferPackage(snapshot: StoreSnapshot, exportedAt: string): FullTransferPackage {
+  return {
+    schema: FULL_TRANSFER_SCHEMA,
+    exportedAt,
+    config: structuredClone(snapshot.config),
+    projects: snapshot.projects.map((project) => ({ ...project })),
+    progressPages: snapshot.progressPages.map((page) => ({ ...page, columnOrder: [...page.columnOrder] })),
+    tasks: snapshot.tasks.map(cloneTask),
+    noteTaskIndex: snapshot.noteTaskIndex.map((entry) => ({ ...entry, taskIds: [...entry.taskIds] })),
+    writeHistory: snapshot.writeHistory.map((record) => ({ ...record, taskIds: [...record.taskIds] }))
+  };
+}
+
+function parseFullTransferPackage(text: string): ParsedFullTransferPackage {
+  const startIndex = text.indexOf(FULL_TRANSFER_START);
+  if (startIndex < 0) {
+    return { found: false };
+  }
+  const endIndex = text.indexOf(FULL_TRANSFER_END, startIndex + FULL_TRANSFER_START.length);
+  if (endIndex < 0) {
+    return { found: true, message: "完整迁移包缺少结束标记" };
+  }
+  const block = text.slice(startIndex + FULL_TRANSFER_START.length, endIndex);
+  const fence = new RegExp(`\`\`\`${FULL_TRANSFER_CODE_BLOCK}\\s*([\\s\\S]*?)\\s*\`\`\``).exec(block);
+  if (!fence) {
+    return { found: true, message: "完整迁移包缺少数据块" };
+  }
+  try {
+    const decoded = decodeBase64Text(fence[1].replace(/\s+/g, ""));
+    const parsed = JSON.parse(decoded) as unknown;
+    if (!isFullTransferPackage(parsed)) {
+      return { found: true, message: "完整迁移包结构不符合当前插件格式" };
+    }
+    return { found: true, package: parsed };
+  } catch (error) {
+    return {
+      found: true,
+      message: error instanceof Error ? `完整迁移包解析失败：${error.message}` : "完整迁移包解析失败"
+    };
+  }
+}
+
+function isFullTransferPackage(value: unknown): value is FullTransferPackage {
+  return (
+    isRecord(value) &&
+    value.schema === FULL_TRANSFER_SCHEMA &&
+    typeof value.exportedAt === "string" &&
+    isPartialPluginConfig(value.config) &&
+    Array.isArray(value.projects) &&
+    value.projects.every(isProjectRecord) &&
+    Array.isArray(value.progressPages) &&
+    value.progressPages.every(isProgressPageRecord) &&
+    Array.isArray(value.tasks) &&
+    value.tasks.every(isStoredTaskRecord) &&
+    Array.isArray(value.noteTaskIndex) &&
+    value.noteTaskIndex.every(isNoteTaskIndexEntryRecord) &&
+    Array.isArray(value.writeHistory) &&
+    value.writeHistory.every(isWriteHistoryRecord)
+  );
+}
+
+function isProjectRecord(value: unknown): value is Project {
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.status === "string";
+}
+
+function isProgressPageRecord(value: unknown): value is ProgressPage {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.projectId === "string" &&
+    typeof value.name === "string" &&
+    Array.isArray(value.columnOrder) &&
+    value.columnOrder.every((item) => typeof item === "string")
+  );
+}
+
+function isNoteTaskIndexEntryRecord(value: unknown): value is NoteTaskIndexEntry {
+  return (
+    isRecord(value) &&
+    typeof value.path === "string" &&
+    typeof value.mtime === "number" &&
+    typeof value.hash === "string" &&
+    Array.isArray(value.taskIds) &&
+    value.taskIds.every((item) => typeof item === "string") &&
+    typeof value.parsedAt === "string"
+  );
+}
+
+function isWriteHistoryRecord(value: unknown): value is WriteHistoryRecord {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.type === "string" &&
+    typeof value.summary === "string" &&
+    Array.isArray(value.taskIds) &&
+    value.taskIds.every((item) => typeof item === "string") &&
+    typeof value.createdAt === "string"
+  );
+}
+
+function buildDataStateFromTransferPackage(transferPackage: FullTransferPackage, currentConfig: PluginConfig): RestoredStoreDataState {
+  const config: PluginConfig = {
+    ...DEFAULT_CONFIG,
+    ...transferPackage.config,
+    dataFolder: sanitizeFolder(currentConfig.dataFolder)
+  };
+  const projects = transferPackage.projects.map(normalizeImportedProject);
+  const progressPages = transferPackage.progressPages.map(normalizeImportedProgressPage);
+  const taskList = transferPackage.tasks.map(normalizeImportedTask).sort(compareSeriesTasks);
+  const next: RestoredStoreDataState = {
+    config,
+    projects,
+    progressPages,
+    tasks: groupTasksByMonth(taskList),
+    noteTaskIndex: transferPackage.noteTaskIndex.map((entry) => ({
+      path: entry.path,
+      mtime: entry.mtime,
+      hash: entry.hash,
+      taskIds: [...entry.taskIds],
+      parsedAt: entry.parsedAt
+    })),
+    writeHistory: transferPackage.writeHistory.map((record) => ({
+      ...record,
+      taskIds: [...record.taskIds]
+    }))
+  };
+  assertRestoredDataStateValid(next);
+  return next;
+}
+
+function normalizeImportedProject(project: Project): Project {
+  const timestamp = toIsoLocal(now());
+  return {
+    id: project.id,
+    name: project.name.trim() || "未命名项目",
+    description: project.description?.trim() || "",
+    color: project.color?.trim() || "",
+    status: normalizeProjectStatus(project.status),
+    createdAt: project.createdAt || timestamp,
+    updatedAt: project.updatedAt || project.createdAt || timestamp
+  };
+}
+
+function normalizeImportedProgressPage(page: ProgressPage): ProgressPage {
+  const timestamp = toIsoLocal(now());
+  return {
+    id: page.id,
+    projectId: page.projectId,
+    name: page.name.trim() || "未命名项目",
+    columnOrder: [...page.columnOrder],
+    createdAt: page.createdAt || timestamp,
+    updatedAt: page.updatedAt || page.createdAt || timestamp
+  };
+}
+
+function normalizeImportedTask(task: Task): Task {
+  const normalized = normalizeStoredTask(task);
+  const occurrenceDates = [...new Set(normalized.occurrenceDates)].sort(compareDateKeys);
+  if (occurrenceDates.length === 0) {
+    throw new Error(`任务「${normalized.title}」缺少发生日期`);
+  }
+  return {
+    ...normalized,
+    date: occurrenceDates[0],
+    occurrenceDates,
+    occurrenceStates: normalized.occurrenceStates.filter((state) => occurrenceDates.includes(state.date)),
+    occurrenceOverrides: normalized.occurrenceOverrides.filter((override) => occurrenceDates.includes(override.date)),
+    mindmapComments: normalized.mindmapComments.map((comment) => ({ ...comment, taskId: normalized.id }))
+  };
+}
+
+function normalizeProjectStatus(status: ProjectStatus | string | undefined): ProjectStatus {
+  if (status === "paused" || status === "completed" || status === "archived") {
+    return status;
+  }
+  return "active";
+}
+
+function groupTasksByMonth(tasks: Task[]): Map<string, Task[]> {
+  const grouped = new Map<string, Task[]>();
+  tasks.forEach((task) => {
+    const month = toMonthKeyFromTask(task);
+    grouped.set(month, [...(grouped.get(month) ?? []), task]);
+  });
+  grouped.forEach((items, month) => grouped.set(month, items.slice().sort(compareSeriesTasks)));
+  return grouped;
+}
+
+function assertRestoredDataStateValid(state: RestoredStoreDataState): void {
+  assertUniqueIds(state.projects.map((project) => project.id), "项目");
+  assertUniqueIds(state.progressPages.map((page) => page.id), "进度页");
+  const taskList = [...state.tasks.values()].flat();
+  assertUniqueIds(taskList.map((task) => task.id), "任务");
+
+  const projectIds = new Set(state.projects.map((project) => project.id));
+  state.progressPages.forEach((page) => {
+    if (!projectIds.has(page.projectId)) {
+      throw new Error(`进度页「${page.name}」引用了不存在的项目`);
+    }
+  });
+
+  const taskIds = new Set(taskList.map((task) => task.id));
+  taskList.forEach((task) => {
+    if (task.projectId && !projectIds.has(task.projectId)) {
+      throw new Error(`任务「${task.title}」引用了不存在的项目`);
+    }
+    task.viewState.gantt.dependencyIds.forEach((dependencyId) => {
+      if (!taskIds.has(dependencyId)) {
+        throw new Error(`任务「${task.title}」引用了不存在的甘特依赖`);
+      }
+    });
+    assertValidTaskMindmapParent(task, taskList);
+    assertCompositeDefinitionValid(task);
+    task.mindmapComments.forEach((comment) => {
+      if (comment.taskId !== task.id) {
+        throw new Error(`任务「${task.title}」存在归属异常的思维导图评语`);
+      }
+      assertValidCommentParent(task.mindmapComments, comment.id, comment.parentCommentId ?? null);
+    });
+  });
+
+  taskList.forEach((task) => {
+    const parentId = task.viewState.mindmap.parentTaskId ?? null;
+    if (!parentId) {
+      return;
+    }
+    const parent = taskList.find((item) => item.id === parentId);
+    if (parent?.kind === "composite") {
+      assertChildTaskWithinComposite(task, parent);
+    }
+  });
+}
+
+function assertUniqueIds(ids: string[], label: string): void {
+  const seen = new Set<string>();
+  ids.forEach((id) => {
+    if (!id) {
+      throw new Error(`${label}存在空 ID`);
+    }
+    if (seen.has(id)) {
+      throw new Error(`${label}存在重复 ID：${id}`);
+    }
+    seen.add(id);
+  });
+}
+
+function encodeBase64Text(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function decodeBase64Text(value: string): string {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function wrapBase64(value: string): string {
+  return value.match(/.{1,96}/g)?.join("\n") ?? "";
 }
 
 function cloneTask(task: Task): Task {
@@ -3039,6 +3423,7 @@ type ParsedImportTask = {
   input: TaskInput;
   projectName?: string;
   completionMode: TaskImportCompletionMode;
+  createReady: boolean;
 };
 
 function parseFormattedTaskText(
@@ -3102,7 +3487,8 @@ function parseFormattedTaskText(
           raw,
           input: parsed.input,
           projectName: parsed.projectName,
-          completionMode: parsed.completionMode
+          completionMode: parsed.completionMode,
+          createReady: parsed.createReady
         };
       } catch (error) {
         issues.push({ line: index + 1, message: error instanceof Error ? error.message : "任务解析失败", raw });
@@ -3148,7 +3534,7 @@ function parseTaskLine(
     defaultDate: string;
     source?: TaskSourceLink;
   }
-): { input: TaskInput; projectName?: string; completionMode: TaskImportCompletionMode } {
+): { input: TaskInput; projectName?: string; completionMode: TaskImportCompletionMode; createReady: boolean } {
   let title = rawTitle.trim();
   const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
   const kindMatch = /\b(?:kind|type):(simple|composite)\b/.exec(title);
@@ -3198,41 +3584,26 @@ function parseTaskLine(
       completed: context.completed
     },
     projectName: context.projectName,
-    completionMode: context.completed ? ((finishMatch?.[1] as TaskImportCompletionMode | undefined) ?? "today") : "pending"
+    completionMode: context.completed ? ((finishMatch?.[1] as TaskImportCompletionMode | undefined) ?? "today") : "pending",
+    createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
   };
 }
 
-function resolveTaskImportAction(matched: boolean, completionMode: TaskImportCompletionMode): TaskImportPreviewTask["action"] {
+function resolveTaskImportAction(matched: boolean, completionMode: TaskImportCompletionMode, completed: boolean): TaskImportPreviewTask["action"] {
   if (!matched) {
     return "create";
   }
-  if (completionMode === "series") {
-    return "overwrite-and-complete-series";
+  if (completed && completionMode === "series") {
+    return "complete-series";
   }
-  if (completionMode === "today") {
-    return "overwrite-and-complete-today";
+  if (completed && completionMode === "today") {
+    return "complete-today";
   }
   return "overwrite";
 }
 
 function normalizeImportIdentity(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("zh-Hans-CN");
-}
-
-function renderTaskOccurrenceForExport(
-  task: TaskOccurrence,
-  mode: "current" | "complete-today" | "complete-series"
-): string {
-  const shouldComplete = mode === "current" ? task.completed : true;
-  const parts = buildFormattedTaskParts({
-    ...task,
-    occurrenceDates: task.recurrence === "custom" ? [task.date] : undefined
-  });
-  const completionMode = resolveExportCompletionMode(task, mode);
-  if (shouldComplete && completionMode !== "pending") {
-    parts.push(`finish:${completionMode}`);
-  }
-  return `- [${shouldComplete ? "x" : " "}] ${parts.join(" ")}`.trim();
 }
 
 function renderTaskSeriesForExport(task: Task): string {
@@ -3286,19 +3657,6 @@ function buildFormattedTaskParts(task: FormattedTaskSource): string[] {
     parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
   }
   return parts;
-}
-
-function resolveExportCompletionMode(
-  task: TaskOccurrence,
-  mode: "current" | "complete-today" | "complete-series"
-): TaskImportCompletionMode {
-  if (mode === "complete-series" && task.recurrence !== "once") {
-    return "series";
-  }
-  if ((mode === "complete-today" || (mode === "current" && task.completed)) && task.recurrence !== "once") {
-    return "today";
-  }
-  return "pending";
 }
 
 function extractProjectTaskBlocks(text: string): string {

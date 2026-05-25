@@ -46,11 +46,6 @@ export class TodayTasksView extends BaseProjectView {
     const actions = header.createDiv({ cls: "pm-inline-actions" });
     const exportButton = actions.createEl("button", { text: "导出今日任务", cls: "pm-button pm-button-secondary" });
     exportButton.addEventListener("click", async () => this.copyIncompleteTasks(rawIncomplete));
-    const exportAllButton = actions.createEl("button", { text: "导出全部记录", cls: "pm-button pm-button-secondary" });
-    exportAllButton.addEventListener("click", async () => {
-      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsMarkdown());
-      new Notice("已复制完整任务记录 Markdown");
-    });
     const addButton = actions.createEl("button", { text: "+ 新增任务", cls: "pm-button pm-button-primary" });
     addButton.addEventListener("click", () => {
       const suggested = this.plugin.store.getSuggestedTaskWindow(today);
@@ -104,7 +99,7 @@ export class TodayTasksView extends BaseProjectView {
     setIcon(icon, "sparkles");
     const copy = tipCard.createDiv();
     copy.createEl("strong", { text: "小贴士" });
-    copy.createDiv({ cls: "pm-muted", text: "导出按钮会直接复制今天仍未完成的任务，文本可直接粘回快速记录或项目页批量导入。" });
+    copy.createDiv({ cls: "pm-muted", text: "导出按钮会复制极简今日清单；把某一行改成已完成后粘回快速记录，会只完成今天已有任务。" });
   }
 
   private async copyIncompleteTasks(tasks: TaskOccurrence[]): Promise<void> {
@@ -112,7 +107,7 @@ export class TodayTasksView extends BaseProjectView {
       new Notice("今天没有未完成任务可导出");
       return;
     }
-    const text = this.plugin.store.exportTasksAsFormattedText(tasks, "current");
+    const text = this.plugin.store.exportTasksAsMinimalCompletionText(tasks);
     await copyTextToClipboard(text);
     new Notice("已复制今日未完成任务");
   }

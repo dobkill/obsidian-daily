@@ -126,29 +126,38 @@ function getLastTwelveMonthsDays(anchor = now()) {
 // src/utils/markdownGuide.ts
 var MARKDOWN_FORMAT_GUIDE = `# \u9879\u76EE\u7BA1\u7406\u63D2\u4EF6 Markdown \u8BED\u6CD5\u8BF4\u660E
 
-\u672C\u8BF4\u660E\u5BF9\u5E94\u5F53\u524D\u63D2\u4EF6\u5B9E\u73B0\u3002\u8F7B\u91CF checklist \u8BED\u6CD5\u7528\u4E8E\u5FEB\u901F\u521B\u5EFA\u3001\u6279\u91CF\u5BFC\u5165\u548C\u5C40\u90E8\u5BFC\u51FA\uFF1B\u5B8C\u6574\u8BB0\u5F55\u5BFC\u51FA\u4F1A\u989D\u5916\u5305\u542B JSON \u6570\u636E\u5757\uFF0C\u7528\u4E8E\u4FDD\u7559\u9879\u76EE\u3001\u8868\u683C\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u3001\u601D\u7EF4\u5BFC\u56FE\u3001\u6765\u6E90\u3001\u7B14\u8BB0\u548C\u5199\u5165\u5386\u53F2\u3002
+\u672C\u8BF4\u660E\u5BF9\u5E94\u5F53\u524D\u63D2\u4EF6\u5B9E\u73B0\u3002\u5B8C\u6574\u4EFB\u52A1\u8F93\u5165\u7528\u4E8E\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u7684\u6781\u7B80\u6E05\u5355\u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002
 
-## \u9879\u76EE\u5206\u7EC4
-
-\`\`\`md
-#\u9879\u76EE\uFF1A\u9879\u76EE\u540D
-- [ ] \u666E\u901A\u4EFB\u52A1 kind:simple @2026-05-18 09:00-10:00 #tag !high status:doing
-\`\`\`
-
-- \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\`\uFF1A\u540E\u7EED\u4EFB\u52A1\u5F52\u5C5E\u8BE5\u9879\u76EE\uFF0C\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002
-- \`#\u9879\u76EE\uFF1A\` \u6216 \`#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE\`\uFF1A\u540E\u7EED\u4EFB\u52A1\u4E0D\u7ED1\u5B9A\u9879\u76EE\u3002
-
-## \u4EFB\u52A1\u884C
+## \u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1
 
 \`\`\`md
-- [ ] \u4EFB\u52A1\u6807\u9898 kind:simple @2026-05-18 09:00-10:00 status:todo
-- [x] \u5DF2\u5B8C\u6210\u7684\u5F53\u5929\u4EFB\u52A1 kind:simple @2026-05-18 10:00-10:30 status:done finish:today
+#\u9879\u76EE\uFF1A\u63D2\u4EF6\u4F53\u9A8C\u793A\u4F8B
+- [ ] \u666E\u901A\u4EFB\u52A1 kind:simple @2026-05-25 09:00-09:30 #tag !high status:doing
+- [ ] \u7EC4\u5408\u4EFB\u52A1 kind:composite @2026-05-25 14:00-15:00 status:todo
+  - \u5B50\u4EFB\u52A1\u4E00 @14:10-14:30
+  - \u5B50\u4EFB\u52A1\u4E8C
 \`\`\`
 
-\u652F\u6301\u53C2\u6570\uFF1A
+- \u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B \`@YYYY-MM-DD HH:mm-HH:mm\`\u3002
+- \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5C5E\u8BE5\u9879\u76EE\uFF0C\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002
+- \`#\u9879\u76EE\uFF1A\` \u6216 \`#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE\` \u8868\u793A\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002
+- \u540C\u9879\u76EE\u540C\u540D\u4E14\u540C\u65E5\u53EF\u5339\u914D\u7684\u6D3B\u52A8\u4EFB\u52A1\u4F1A\u88AB\u8986\u76D6\uFF1B\u5426\u5219\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002
+
+## \u4ECA\u65E5\u6781\u7B80\u5B8C\u6210
+
+\`\`\`md
+#\u9879\u76EE\uFF1A\u5929\u529B
+- [x] \u5220\u9664\u6309\u94AE
+\`\`\`
+
+- \u6781\u7B80 \`- [x] \u6807\u9898\` \u53EA\u5339\u914D\u5E76\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002
+- \u627E\u4E0D\u5230\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u65F6\u4F1A\u62A5\u9519\uFF0C\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002
+- \u6781\u7B80 \`- [ ] \u6807\u9898\` \u4E0D\u4F1A\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u8981\u521B\u5EFA\u4EFB\u52A1\u5FC5\u987B\u4F7F\u7528\u5B8C\u6574\u8F93\u5165\u3002
+
+## \u652F\u6301\u53C2\u6570
 
 - \`kind:simple | composite\`\uFF1A\u666E\u901A\u4EFB\u52A1\u6216\u7EC4\u5408\u4EFB\u52A1\u3002
-- \`@YYYY-MM-DD HH:mm-HH:mm\`\uFF1A\u65E5\u671F\u4E0E\u53EF\u9009\u65F6\u95F4\u6BB5\u3002
+- \`@YYYY-MM-DD HH:mm-HH:mm\`\uFF1A\u4EFB\u52A1\u65E5\u671F\u548C\u65F6\u95F4\u6BB5\u3002
 - \`#\u6807\u7B7E\`\uFF1A\u4EFB\u52A1\u6807\u7B7E\uFF0C\u53EF\u5199\u591A\u4E2A\u3002
 - \`!low | !medium | !high | !urgent\`\uFF1A\u4F18\u5148\u7EA7\u3002
 - \`status:todo | doing | blocked | done\`\uFF1A\u770B\u677F\u72B6\u6001\u3002
@@ -156,17 +165,13 @@ var MARKDOWN_FORMAT_GUIDE = `# \u9879\u76EE\u7BA1\u7406\u63D2\u4EF6 Markdown \u8
 - \`count:N\`\uFF1A\u91CD\u590D\u6B21\u6570\u3002
 - \`until:YYYY-MM-DD\`\uFF1A\u91CD\u590D\u7ED3\u675F\u65E5\u671F\u3002
 - \`dates:YYYY-MM-DD,YYYY-MM-DD\`\uFF1A\u81EA\u5B9A\u4E49\u53D1\u751F\u65E5\u671F\u3002
-- \`finish:today | series\`\uFF1A\u4EC5\u5728 \`- [x]\` \u65F6\u751F\u6548\u3002
+- \`finish:today | series\`\uFF1A\u4EC5\u5728\u5B8C\u6574 \`- [x]\` \u8F93\u5165\u65F6\u751F\u6548\u3002
 
-## \u7EC4\u5408\u4EFB\u52A1\u8F7B\u91CF\u9879
+## \u7EC4\u5408\u4EFB\u52A1
 
-\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u5177\u5907\u5F00\u59CB\u4E0E\u7ED3\u675F\u65F6\u95F4\u3002\u8F7B\u91CF\u9879\u53EF\u53EA\u5199\u6807\u9898\uFF0C\u4E5F\u53EF\u5199\u81EA\u5DF1\u7684\u65F6\u95F4\u6BB5\uFF1B\u4E00\u65E6\u586B\u5199\u65F6\u95F4\uFF0C\u5FC5\u987B\u5B8C\u5168\u843D\u5728\u7EC4\u5408\u4EFB\u52A1\u65F6\u95F4\u8303\u56F4\u5185\u3002
+\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u5177\u5907\u5F00\u59CB\u4E0E\u7ED3\u675F\u65F6\u95F4\u3002\u8F7B\u91CF\u9879\u53EF\u53EA\u5199\u6807\u9898\uFF0C\u4E5F\u53EF\u5199\u81EA\u5DF1\u7684\u65F6\u95F4\u6BB5\uFF1B\u4E00\u65E6\u586B\u5199\u65F6\u95F4\uFF0C\u5FC5\u987B\u5B8C\u5168\u843D\u5728\u7EC4\u5408\u4EFB\u52A1\u65F6\u95F4\u8303\u56F4\u5185\u3002\u6302\u5165\u7EC4\u5408\u4EFB\u52A1\u7684\u771F\u5B9E\u4EFB\u52A1\u4E5F\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u5B9E\u4F8B\u7684\u65E5\u671F\u4E0E\u65F6\u95F4\u8303\u56F4\u5185\u3002
 
-\`\`\`md
-- [ ] \u7EC4\u5408\u4EFB\u52A1 kind:composite @2026-05-18 14:00-16:00 status:todo
-  - \u68B3\u7406\u8D44\u6599 @14:10-14:40
-  - \u8F93\u51FA\u7ED3\u8BBA @15:00-15:40
-\`\`\`
+\u8868\u683C\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u53EA\u5C55\u793A\u7EC4\u5408\u7236\u4EFB\u52A1\u4F5C\u4E3A\u9876\u5C42\u5143\u7D20\uFF1B\u771F\u5B9E\u5B50\u4EFB\u52A1\u4F1A\u6536\u7EB3\u5728\u7236\u4EFB\u52A1\u6458\u8981\u4E2D\u3002\u601D\u7EF4\u5BFC\u56FE\u7EE7\u7EED\u5C55\u793A\u5B8C\u6574\u7236\u5B50\u5C42\u7EA7\u3002
 
 ## \u7B14\u8BB0\u540C\u6B65\u5757
 
@@ -175,7 +180,7 @@ var MARKDOWN_FORMAT_GUIDE = `# \u9879\u76EE\u7BA1\u7406\u63D2\u4EF6 Markdown \u8
 \`\`\`md
 <!-- pm:start -->
 #\u9879\u76EE\uFF1A\u63D2\u4EF6\u4F53\u9A8C\u793A\u4F8B
-- [ ] \u5199\u89E3\u6790\u5668 kind:simple @2026-05-18 09:00-10:30 #plugin status:todo
+- [ ] \u5199\u89E3\u6790\u5668 kind:simple @2026-05-25 09:00-10:30 #plugin status:todo
 <!-- pm:end -->
 \`\`\`
 
@@ -183,19 +188,11 @@ var MARKDOWN_FORMAT_GUIDE = `# \u9879\u76EE\u7BA1\u7406\u63D2\u4EF6 Markdown \u8
 
 \u4ECA\u5929\u4EE5\u524D\u7684\u4EFB\u52A1\u53D1\u751F\u8BB0\u5F55\u4E0D\u53EF\u88AB\u7F16\u8F91\u3001\u5220\u9664\u3001\u6539\u65F6\u95F4\u6216\u91CD\u65B0\u6807\u8BB0\u5B8C\u6210\u3002\u7F16\u8F91\u3001\u5220\u9664\u3001\u63D0\u524D\u7ED3\u675F\u91CD\u590D\u4EFB\u52A1\u65F6\uFF0C\u63D2\u4EF6\u53EA\u6539\u4ECA\u5929\u548C\u672A\u6765\u7684\u53D1\u751F\u8BB0\u5F55\uFF0C\u8FC7\u53BB\u8BB0\u5F55\u4FDD\u7559\u65E7\u7248\u672C\u3002
 
-## \u5B8C\u6574\u8BB0\u5F55\u5BFC\u51FA
+## \u5168\u90E8\u8BB0\u5F55\u5BFC\u51FA
 
-\u5B8C\u6574\u8BB0\u5F55\u5BFC\u51FA\u4F7F\u7528 Markdown \u5305\u88F9 JSON\uFF1A
+\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u4F4D\u4E8E\u4EFB\u52A1\u603B\u89C8\u7684\u9879\u76EE\u8FDB\u5EA6\u6807\u9898\u533A\u3002\u5BFC\u51FA\u7ED3\u679C\u662F\u5B8C\u6574\u8FC1\u79FB\u5305 Markdown\uFF0C\u5185\u90E8\u5305\u542B base64 \u7F16\u7801\u7684 JSON \u6570\u636E\u5757\u3002\u628A\u6574\u4EFD Markdown \u7C98\u8D34\u5230\u53E6\u4E00\u53F0\u8BBE\u5907\u7684\u201C\u5FEB\u901F\u8BB0\u5F55 - \u521B\u5EFA\u4EFB\u52A1\u201D\u5E76\u63D0\u4EA4\uFF0C\u4F1A\u66FF\u6362\u76EE\u6807\u8BBE\u5907\u5F53\u524D\u9879\u76EE\u7BA1\u7406\u6570\u636E\uFF0C\u5E76\u6062\u590D\u9879\u76EE\u3001\u8FDB\u5EA6\u9875\u3001\u4EFB\u52A1\u3001\u770B\u677F\u72B6\u6001\u3001\u7518\u7279\u8BBE\u7F6E\u3001\u601D\u7EF4\u5BFC\u56FE\u3001\u4EFB\u52A1\u7B14\u8BB0\u3001\u6765\u6E90\u7D22\u5F15\u548C\u5199\u5165\u5386\u53F2\u3002
 
-\`\`\`md
-<!-- pm:full-export:start -->
-\`\`\`pm-project-management-json
-{ "version": "0.4.0", "tasks": [] }
-\`\`\`
-<!-- pm:full-export:end -->
-\`\`\`
-
-JSON \u6570\u636E\u5757\u662F\u5B8C\u6574\u5907\u4EFD\u6570\u636E\uFF0C\u5305\u542B\u9879\u76EE\u3001\u4EFB\u52A1\u3001\u53D1\u751F\u5B9E\u4F8B\u3001\u8868\u683C/\u770B\u677F/\u7518\u7279\u56FE/\u601D\u7EF4\u5BFC\u56FE\u72B6\u6001\u3001\u6765\u6E90\u3001\u7B14\u8BB0\u548C\u5199\u5165\u5386\u53F2\u3002`;
+\u8FC1\u79FB\u5305\u5BFC\u5165\u53EA\u5728\u5FEB\u901F\u8BB0\u5F55\u7684\u521B\u5EFA\u4EFB\u52A1\u5165\u53E3\u751F\u6548\uFF1B\u9879\u76EE\u7EA7\u6279\u91CF\u5BFC\u5165\u4F1A\u963B\u65AD\u5B8C\u6574\u8FC1\u79FB\u5305\uFF0C\u907F\u514D\u8BEF\u628A\u5168\u5E93\u6062\u590D\u5F53\u6210\u5355\u9879\u76EE\u5BFC\u5165\u3002\u4E3A\u907F\u514D\u8DE8\u8BBE\u5907\u76EE\u5F55\u540D\u8BEF\u4F24\uFF0C\u5BFC\u5165\u65F6\u4FDD\u7559\u76EE\u6807\u8BBE\u5907\u5F53\u524D\u6570\u636E\u76EE\u5F55\uFF0C\u5176\u4F59\u4E1A\u52A1\u6570\u636E\u6309\u8FC1\u79FB\u5305\u6062\u590D\u3002`;
 
 // src/storage/store.ts
 var DEFAULT_CONFIG = {
@@ -245,6 +242,10 @@ var WRITE_HISTORY_FILE = "write-history.json";
 var TASKS_DIR = "tasks";
 var MARKDOWN_GUIDE_FILE = "markdown-format-guide.md";
 var UNASSIGNED_PROJECT_LABEL = "\u672A\u5F52\u5C5E\u9879\u76EE";
+var FULL_TRANSFER_SCHEMA = "obsidian-project-management.full-transfer.v1";
+var FULL_TRANSFER_START = "<!-- pm-full-transfer:v1:start -->";
+var FULL_TRANSFER_END = "<!-- pm-full-transfer:v1:end -->";
+var FULL_TRANSFER_CODE_BLOCK = "pm-json-base64";
 var ProjectManagementStore = class extends import_obsidian.Events {
   constructor(app, config) {
     super();
@@ -768,6 +769,10 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     await this.patchTask(taskId, { notes: [...task.notes, note] });
   }
   previewFormattedTasks(text, options = {}) {
+    const transfer = parseFullTransferPackage(text);
+    if (transfer.found) {
+      return this.previewFullTransferPackage(transfer, Boolean(options.projectId));
+    }
     const parsed = parseFormattedTaskText(text, {
       projects: this.projects,
       projectId: options.projectId,
@@ -778,7 +783,21 @@ var ProjectManagementStore = class extends import_obsidian.Events {
   }
   async importFormattedTasks(text, options = {}) {
     this.assertWritable();
+    const transfer = parseFullTransferPackage(text);
+    if (transfer.found) {
+      if (options.projectId) {
+        throw new Error("\u5B8C\u6574\u8FC1\u79FB\u5305\u53EA\u80FD\u5728\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u4E2D\u5BFC\u5165\uFF0C\u4E0D\u80FD\u5BFC\u5165\u5230\u5355\u4E2A\u9879\u76EE");
+      }
+      if (!transfer.package) {
+        throw new Error(transfer.message ?? "\u5B8C\u6574\u8FC1\u79FB\u5305\u89E3\u6790\u5931\u8D25");
+      }
+      return this.restoreFullTransferPackage(transfer.package);
+    }
     const preview = this.previewFormattedTasks(text, options);
+    const blockingIssue = preview.issues.find((issue) => issue.blocking);
+    if (blockingIssue) {
+      throw new Error(`\u7B2C ${blockingIssue.line} \u884C\uFF1A${blockingIssue.message}`);
+    }
     if (preview.tasks.length === 0) {
       throw new Error(preview.issues[0]?.message ?? "\u6CA1\u6709\u53EF\u5BFC\u5165\u7684\u4EFB\u52A1");
     }
@@ -794,7 +813,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     });
     return changed;
   }
-  exportTasksAsFormattedText(tasks, mode = "current") {
+  exportTasksAsMinimalCompletionText(tasks) {
     const grouped = /* @__PURE__ */ new Map();
     tasks.slice().sort(compareOccurrences).forEach((task) => {
       const key = task.projectId ?? UNASSIGNED_PROJECT_LABEL;
@@ -808,12 +827,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       }
       sections.push(`#\u9879\u76EE\uFF1A${projectName}`);
       group.forEach((task) => {
-        sections.push(renderTaskOccurrenceForExport(task, mode));
-        if (task.kind === "composite") {
-          task.subtasks.forEach((subtask) => {
-            sections.push(renderSubtaskForExport(subtask));
-          });
-        }
+        sections.push(`- [${task.completed ? "x" : " "}] ${task.title}`);
       });
     });
     return sections.join("\n").trim();
@@ -838,52 +852,95 @@ var ProjectManagementStore = class extends import_obsidian.Events {
   exportAllRecordsAsMarkdown() {
     const snapshot = this.getSnapshot();
     const exportedAt = toIsoLocal(now());
-    const projectById = new Map(snapshot.projects.map((project) => [project.id, project]));
-    const grouped = /* @__PURE__ */ new Map();
-    snapshot.tasks.slice().sort(compareSeriesTasks).forEach((task) => {
-      const key = task.projectId ?? UNASSIGNED_PROJECT_LABEL;
-      grouped.set(key, [...grouped.get(key) ?? [], task]);
-    });
-    const lines = [
-      "# \u9879\u76EE\u7BA1\u7406\u5B8C\u6574\u8BB0\u5F55\u5BFC\u51FA",
+    const transferPackage = buildFullTransferPackage(snapshot, exportedAt);
+    const encoded = wrapBase64(encodeBase64Text(JSON.stringify(transferPackage)));
+    return [
+      "# \u9879\u76EE\u7BA1\u7406\u5B8C\u6574\u8FC1\u79FB\u5305",
+      "",
+      "\u8FD9\u4EFD Markdown \u7528\u4E8E\u8DE8\u8BBE\u5907\u5B8C\u6574\u8FC1\u79FB\u3002\u628A\u5168\u6587\u590D\u5236\u5230\u53E6\u4E00\u53F0\u8BBE\u5907\u7684\u300C\u5FEB\u901F\u8BB0\u5F55 - \u521B\u5EFA\u4EFB\u52A1\u300D\u5E76\u63D0\u4EA4\uFF0C\u4F1A\u66FF\u6362\u76EE\u6807\u8BBE\u5907\u5F53\u524D\u9879\u76EE\u7BA1\u7406\u6570\u636E\u3002",
       "",
       `\u5BFC\u51FA\u65F6\u95F4\uFF1A${exportedAt}`,
       `\u9879\u76EE\u6570\uFF1A${snapshot.projects.length}`,
+      `\u8FDB\u5EA6\u9875\u6570\uFF1A${snapshot.progressPages.length}`,
       `\u4EFB\u52A1\u7CFB\u5217\u6570\uFF1A${snapshot.tasks.length}`,
       `\u4EFB\u52A1\u53D1\u751F\u6B21\u6570\uFF1A${snapshot.occurrences.length}`,
+      `\u7B14\u8BB0\u7D22\u5F15\u6570\uFF1A${snapshot.noteTaskIndex.length}`,
+      `\u5199\u5165\u5386\u53F2\u6570\uFF1A${snapshot.writeHistory.length}`,
       "",
-      "## \u53EF\u8BFB\u6458\u8981"
-    ];
-    [...grouped.entries()].forEach(([projectKey, tasks]) => {
-      const projectName = projectKey === UNASSIGNED_PROJECT_LABEL ? UNASSIGNED_PROJECT_LABEL : projectById.get(projectKey)?.name ?? UNASSIGNED_PROJECT_LABEL;
-      lines.push("", `### ${projectName}`);
-      tasks.forEach((task) => {
-        lines.push(renderTaskSeriesForExport(task));
-        if (task.kind === "composite") {
-          task.subtasks.forEach((subtask) => {
-            lines.push(renderSubtaskForExport(subtask));
-          });
-        }
-      });
-    });
-    const payload = {
-      format: "pm-project-management-full-export",
-      version: this.config.version,
-      exportedAt,
-      includes: ["projects", "progressPages", "tasks", "occurrences", "table", "board", "gantt", "mindmap", "sources", "notes", "writeHistory"],
-      data: snapshot
-    };
-    lines.push(
-      "",
-      "## \u5B8C\u6574 JSON \u6570\u636E",
-      "",
-      "<!-- pm:full-export:start -->",
-      "```pm-project-management-json",
-      JSON.stringify(payload, null, 2),
+      FULL_TRANSFER_START,
+      `\`\`\`${FULL_TRANSFER_CODE_BLOCK}`,
+      encoded,
       "```",
-      "<!-- pm:full-export:end -->"
-    );
-    return lines.join("\n").trim();
+      FULL_TRANSFER_END
+    ].join("\n").trim();
+  }
+  previewFullTransferPackage(transfer, blockedByProjectScope) {
+    const preview = createEmptyTaskImportPreview();
+    if (blockedByProjectScope) {
+      preview.issues.push({
+        line: 1,
+        raw: "",
+        blocking: true,
+        message: "\u5B8C\u6574\u8FC1\u79FB\u5305\u53EA\u80FD\u5728\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u4E2D\u5BFC\u5165\uFF0C\u4E0D\u80FD\u5BFC\u5165\u5230\u5355\u4E2A\u9879\u76EE"
+      });
+      return preview;
+    }
+    if (!transfer.package) {
+      preview.issues.push({
+        line: 1,
+        raw: "",
+        blocking: true,
+        message: transfer.message ?? "\u5B8C\u6574\u8FC1\u79FB\u5305\u89E3\u6790\u5931\u8D25"
+      });
+      return preview;
+    }
+    try {
+      const next = buildDataStateFromTransferPackage(transfer.package, this.config);
+      const taskCount = [...next.tasks.values()].reduce((sum, tasks) => sum + tasks.length, 0);
+      preview.transferPackage = {
+        schema: transfer.package.schema,
+        exportedAt: transfer.package.exportedAt,
+        projectCount: next.projects.length,
+        taskCount,
+        progressPageCount: next.progressPages.length,
+        noteTaskIndexCount: next.noteTaskIndex.length,
+        writeHistoryCount: next.writeHistory.length,
+        restoreMode: "replace-all"
+      };
+      preview.summary.total = taskCount;
+      preview.summary.composite = [...next.tasks.values()].flat().filter((task) => task.kind === "composite").length;
+      preview.summary.completed = [...next.tasks.values()].flat().filter(isTaskFullyCompleted).length;
+    } catch (error) {
+      preview.issues.push({
+        line: 1,
+        raw: "",
+        blocking: true,
+        message: error instanceof Error ? error.message : "\u5B8C\u6574\u8FC1\u79FB\u5305\u6570\u636E\u6821\u9A8C\u5931\u8D25"
+      });
+    }
+    return preview;
+  }
+  async restoreFullTransferPackage(transferPackage) {
+    const next = buildDataStateFromTransferPackage(transferPackage, this.config);
+    const previousConfig = structuredClone(this.config);
+    const previousState = this.captureDataState();
+    try {
+      this.config = next.config;
+      this.projects = next.projects;
+      this.progressPages = next.progressPages;
+      this.tasks = next.tasks;
+      this.noteTaskIndex = next.noteTaskIndex;
+      this.writeHistory = next.writeHistory;
+      await this.ensureDataFolder();
+      await this.flushAll();
+      await this.reloadCurrentFolderData();
+      this.trigger("changed");
+      return this.getAllTasks();
+    } catch (error) {
+      this.config = previousConfig;
+      this.restoreDataState(previousState);
+      throw error;
+    }
   }
   async exportMarkdownGuide() {
     this.assertWritable();
@@ -1276,13 +1333,33 @@ var ProjectManagementStore = class extends import_obsidian.Events {
   }
   buildTaskImportPreview(tasks, issues) {
     const newProjectNames = /* @__PURE__ */ new Set();
-    const previewTasks = tasks.map((entry) => {
+    const previewTasks = [];
+    tasks.forEach((entry) => {
       const projectResolution = this.resolveImportProject(entry);
       const matched = this.findTaskByImportIdentity(entry.input.title, projectResolution.projectId, entry.input.date);
+      const isCompletionInput = entry.input.completed === true;
+      if (!matched && !entry.createReady) {
+        issues.push({
+          line: entry.line,
+          raw: entry.raw,
+          blocking: true,
+          message: isCompletionInput ? `\u6CA1\u6709\u627E\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u300C${entry.input.title}\u300D\uFF0C\u6781\u7B80\u5B8C\u6210\u8F93\u5165\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1` : "\u521B\u5EFA\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B\u5B8C\u6574\u65E5\u671F\u548C\u65F6\u95F4\uFF0C\u4F8B\u5982 @2026-05-25 09:00-09:30"
+        });
+        return;
+      }
+      if (matched && !isCompletionInput && !entry.createReady) {
+        issues.push({
+          line: entry.line,
+          raw: entry.raw,
+          blocking: true,
+          message: "\u6781\u7B80\u672A\u5B8C\u6210\u884C\u4E0D\u4F1A\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B\u5B8C\u6574\u65E5\u671F\u548C\u65F6\u95F4"
+        });
+        return;
+      }
       if (projectResolution.newProjectName) {
         newProjectNames.add(projectResolution.newProjectName);
       }
-      return {
+      previewTasks.push({
         line: entry.line,
         raw: entry.raw,
         input: {
@@ -1293,9 +1370,9 @@ var ProjectManagementStore = class extends import_obsidian.Events {
         projectName: projectResolution.projectName,
         matchedTaskId: matched?.id,
         matchedTaskTitle: matched?.title,
-        action: resolveTaskImportAction(Boolean(matched), entry.completionMode),
+        action: resolveTaskImportAction(Boolean(matched), entry.completionMode, isCompletionInput),
         completionMode: entry.completionMode
-      };
+      });
     });
     return {
       tasks: previewTasks,
@@ -1305,9 +1382,9 @@ var ProjectManagementStore = class extends import_obsidian.Events {
         completed: previewTasks.filter((task) => task.input.completed).length,
         composite: previewTasks.filter((task) => task.input.kind === "composite").length,
         createCount: previewTasks.filter((task) => task.action === "create").length,
-        overwriteCount: previewTasks.filter((task) => task.action !== "create").length,
-        completeTodayCount: previewTasks.filter((task) => task.action === "overwrite-and-complete-today").length,
-        completeSeriesCount: previewTasks.filter((task) => task.action === "overwrite-and-complete-series").length,
+        overwriteCount: previewTasks.filter((task) => task.action === "overwrite").length,
+        completeTodayCount: previewTasks.filter((task) => task.action === "complete-today").length,
+        completeSeriesCount: previewTasks.filter((task) => task.action === "complete-series").length,
         newProjectNames: [...newProjectNames]
       }
     };
@@ -1364,19 +1441,19 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     };
     const existing = this.findTaskByImportIdentity(input.title, projectId, input.date);
     if (existing) {
+      if (entry.action === "complete-today") {
+        await this.updateTaskOccurrenceCompletion(existing.id, input.date, true);
+        return this.getTask(existing.id) ?? existing;
+      }
+      if (entry.action === "complete-series") {
+        await this.completeTaskSeries(existing.id, input.date);
+        return this.getTask(existing.id) ?? existing;
+      }
       const normalizedPatch = {
         ...input,
         completed: false
       };
       const updated = await this.updateTask(existing.id, normalizedPatch, "series", { autoResolveConflicts: true });
-      if (entry.completionMode === "today" && input.completed) {
-        await this.updateTaskOccurrenceCompletion(updated.id, input.date, true);
-        return this.getTask(updated.id) ?? updated;
-      }
-      if (entry.completionMode === "series" && input.completed) {
-        await this.completeTaskSeries(updated.id, input.date);
-        return this.getTask(updated.id) ?? updated;
-      }
       return updated;
     }
     const created = await this.createTask(
@@ -2189,6 +2266,232 @@ function isTaskSubtaskRecord(value) {
 function isOccurrenceStateRecord(value) {
   return isRecord(value) && typeof value.date === "string";
 }
+function createEmptyTaskImportPreview() {
+  return {
+    tasks: [],
+    issues: [],
+    summary: {
+      total: 0,
+      completed: 0,
+      composite: 0,
+      createCount: 0,
+      overwriteCount: 0,
+      completeTodayCount: 0,
+      completeSeriesCount: 0,
+      newProjectNames: []
+    }
+  };
+}
+function buildFullTransferPackage(snapshot, exportedAt) {
+  return {
+    schema: FULL_TRANSFER_SCHEMA,
+    exportedAt,
+    config: structuredClone(snapshot.config),
+    projects: snapshot.projects.map((project) => ({ ...project })),
+    progressPages: snapshot.progressPages.map((page) => ({ ...page, columnOrder: [...page.columnOrder] })),
+    tasks: snapshot.tasks.map(cloneTask),
+    noteTaskIndex: snapshot.noteTaskIndex.map((entry) => ({ ...entry, taskIds: [...entry.taskIds] })),
+    writeHistory: snapshot.writeHistory.map((record) => ({ ...record, taskIds: [...record.taskIds] }))
+  };
+}
+function parseFullTransferPackage(text) {
+  const startIndex = text.indexOf(FULL_TRANSFER_START);
+  if (startIndex < 0) {
+    return { found: false };
+  }
+  const endIndex = text.indexOf(FULL_TRANSFER_END, startIndex + FULL_TRANSFER_START.length);
+  if (endIndex < 0) {
+    return { found: true, message: "\u5B8C\u6574\u8FC1\u79FB\u5305\u7F3A\u5C11\u7ED3\u675F\u6807\u8BB0" };
+  }
+  const block = text.slice(startIndex + FULL_TRANSFER_START.length, endIndex);
+  const fence = new RegExp(`\`\`\`${FULL_TRANSFER_CODE_BLOCK}\\s*([\\s\\S]*?)\\s*\`\`\``).exec(block);
+  if (!fence) {
+    return { found: true, message: "\u5B8C\u6574\u8FC1\u79FB\u5305\u7F3A\u5C11\u6570\u636E\u5757" };
+  }
+  try {
+    const decoded = decodeBase64Text(fence[1].replace(/\s+/g, ""));
+    const parsed = JSON.parse(decoded);
+    if (!isFullTransferPackage(parsed)) {
+      return { found: true, message: "\u5B8C\u6574\u8FC1\u79FB\u5305\u7ED3\u6784\u4E0D\u7B26\u5408\u5F53\u524D\u63D2\u4EF6\u683C\u5F0F" };
+    }
+    return { found: true, package: parsed };
+  } catch (error) {
+    return {
+      found: true,
+      message: error instanceof Error ? `\u5B8C\u6574\u8FC1\u79FB\u5305\u89E3\u6790\u5931\u8D25\uFF1A${error.message}` : "\u5B8C\u6574\u8FC1\u79FB\u5305\u89E3\u6790\u5931\u8D25"
+    };
+  }
+}
+function isFullTransferPackage(value) {
+  return isRecord(value) && value.schema === FULL_TRANSFER_SCHEMA && typeof value.exportedAt === "string" && isPartialPluginConfig(value.config) && Array.isArray(value.projects) && value.projects.every(isProjectRecord) && Array.isArray(value.progressPages) && value.progressPages.every(isProgressPageRecord) && Array.isArray(value.tasks) && value.tasks.every(isStoredTaskRecord) && Array.isArray(value.noteTaskIndex) && value.noteTaskIndex.every(isNoteTaskIndexEntryRecord) && Array.isArray(value.writeHistory) && value.writeHistory.every(isWriteHistoryRecord);
+}
+function isProjectRecord(value) {
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.status === "string";
+}
+function isProgressPageRecord(value) {
+  return isRecord(value) && typeof value.id === "string" && typeof value.projectId === "string" && typeof value.name === "string" && Array.isArray(value.columnOrder) && value.columnOrder.every((item) => typeof item === "string");
+}
+function isNoteTaskIndexEntryRecord(value) {
+  return isRecord(value) && typeof value.path === "string" && typeof value.mtime === "number" && typeof value.hash === "string" && Array.isArray(value.taskIds) && value.taskIds.every((item) => typeof item === "string") && typeof value.parsedAt === "string";
+}
+function isWriteHistoryRecord(value) {
+  return isRecord(value) && typeof value.id === "string" && typeof value.type === "string" && typeof value.summary === "string" && Array.isArray(value.taskIds) && value.taskIds.every((item) => typeof item === "string") && typeof value.createdAt === "string";
+}
+function buildDataStateFromTransferPackage(transferPackage, currentConfig) {
+  const config = {
+    ...DEFAULT_CONFIG,
+    ...transferPackage.config,
+    dataFolder: sanitizeFolder(currentConfig.dataFolder)
+  };
+  const projects = transferPackage.projects.map(normalizeImportedProject);
+  const progressPages = transferPackage.progressPages.map(normalizeImportedProgressPage);
+  const taskList = transferPackage.tasks.map(normalizeImportedTask).sort(compareSeriesTasks);
+  const next = {
+    config,
+    projects,
+    progressPages,
+    tasks: groupTasksByMonth(taskList),
+    noteTaskIndex: transferPackage.noteTaskIndex.map((entry) => ({
+      path: entry.path,
+      mtime: entry.mtime,
+      hash: entry.hash,
+      taskIds: [...entry.taskIds],
+      parsedAt: entry.parsedAt
+    })),
+    writeHistory: transferPackage.writeHistory.map((record) => ({
+      ...record,
+      taskIds: [...record.taskIds]
+    }))
+  };
+  assertRestoredDataStateValid(next);
+  return next;
+}
+function normalizeImportedProject(project) {
+  const timestamp = toIsoLocal(now());
+  return {
+    id: project.id,
+    name: project.name.trim() || "\u672A\u547D\u540D\u9879\u76EE",
+    description: project.description?.trim() || "",
+    color: project.color?.trim() || "",
+    status: normalizeProjectStatus(project.status),
+    createdAt: project.createdAt || timestamp,
+    updatedAt: project.updatedAt || project.createdAt || timestamp
+  };
+}
+function normalizeImportedProgressPage(page) {
+  const timestamp = toIsoLocal(now());
+  return {
+    id: page.id,
+    projectId: page.projectId,
+    name: page.name.trim() || "\u672A\u547D\u540D\u9879\u76EE",
+    columnOrder: [...page.columnOrder],
+    createdAt: page.createdAt || timestamp,
+    updatedAt: page.updatedAt || page.createdAt || timestamp
+  };
+}
+function normalizeImportedTask(task) {
+  const normalized = normalizeStoredTask(task);
+  const occurrenceDates = [...new Set(normalized.occurrenceDates)].sort(compareDateKeys);
+  if (occurrenceDates.length === 0) {
+    throw new Error(`\u4EFB\u52A1\u300C${normalized.title}\u300D\u7F3A\u5C11\u53D1\u751F\u65E5\u671F`);
+  }
+  return {
+    ...normalized,
+    date: occurrenceDates[0],
+    occurrenceDates,
+    occurrenceStates: normalized.occurrenceStates.filter((state) => occurrenceDates.includes(state.date)),
+    occurrenceOverrides: normalized.occurrenceOverrides.filter((override) => occurrenceDates.includes(override.date)),
+    mindmapComments: normalized.mindmapComments.map((comment) => ({ ...comment, taskId: normalized.id }))
+  };
+}
+function normalizeProjectStatus(status) {
+  if (status === "paused" || status === "completed" || status === "archived") {
+    return status;
+  }
+  return "active";
+}
+function groupTasksByMonth(tasks) {
+  const grouped = /* @__PURE__ */ new Map();
+  tasks.forEach((task) => {
+    const month = toMonthKeyFromTask(task);
+    grouped.set(month, [...grouped.get(month) ?? [], task]);
+  });
+  grouped.forEach((items, month) => grouped.set(month, items.slice().sort(compareSeriesTasks)));
+  return grouped;
+}
+function assertRestoredDataStateValid(state) {
+  assertUniqueIds(state.projects.map((project) => project.id), "\u9879\u76EE");
+  assertUniqueIds(state.progressPages.map((page) => page.id), "\u8FDB\u5EA6\u9875");
+  const taskList = [...state.tasks.values()].flat();
+  assertUniqueIds(taskList.map((task) => task.id), "\u4EFB\u52A1");
+  const projectIds = new Set(state.projects.map((project) => project.id));
+  state.progressPages.forEach((page) => {
+    if (!projectIds.has(page.projectId)) {
+      throw new Error(`\u8FDB\u5EA6\u9875\u300C${page.name}\u300D\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u9879\u76EE`);
+    }
+  });
+  const taskIds = new Set(taskList.map((task) => task.id));
+  taskList.forEach((task) => {
+    if (task.projectId && !projectIds.has(task.projectId)) {
+      throw new Error(`\u4EFB\u52A1\u300C${task.title}\u300D\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u9879\u76EE`);
+    }
+    task.viewState.gantt.dependencyIds.forEach((dependencyId) => {
+      if (!taskIds.has(dependencyId)) {
+        throw new Error(`\u4EFB\u52A1\u300C${task.title}\u300D\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u7518\u7279\u4F9D\u8D56`);
+      }
+    });
+    assertValidTaskMindmapParent(task, taskList);
+    assertCompositeDefinitionValid(task);
+    task.mindmapComments.forEach((comment) => {
+      if (comment.taskId !== task.id) {
+        throw new Error(`\u4EFB\u52A1\u300C${task.title}\u300D\u5B58\u5728\u5F52\u5C5E\u5F02\u5E38\u7684\u601D\u7EF4\u5BFC\u56FE\u8BC4\u8BED`);
+      }
+      assertValidCommentParent(task.mindmapComments, comment.id, comment.parentCommentId ?? null);
+    });
+  });
+  taskList.forEach((task) => {
+    const parentId = task.viewState.mindmap.parentTaskId ?? null;
+    if (!parentId) {
+      return;
+    }
+    const parent = taskList.find((item) => item.id === parentId);
+    if (parent?.kind === "composite") {
+      assertChildTaskWithinComposite(task, parent);
+    }
+  });
+}
+function assertUniqueIds(ids, label) {
+  const seen = /* @__PURE__ */ new Set();
+  ids.forEach((id) => {
+    if (!id) {
+      throw new Error(`${label}\u5B58\u5728\u7A7A ID`);
+    }
+    if (seen.has(id)) {
+      throw new Error(`${label}\u5B58\u5728\u91CD\u590D ID\uFF1A${id}`);
+    }
+    seen.add(id);
+  });
+}
+function encodeBase64Text(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  const chunkSize = 32768;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+function decodeBase64Text(value) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new TextDecoder().decode(bytes);
+}
+function wrapBase64(value) {
+  return value.match(/.{1,96}/g)?.join("\n") ?? "";
+}
 function cloneTask(task) {
   return {
     ...task,
@@ -2896,7 +3199,8 @@ function parseFormattedTaskText(text, options) {
           raw,
           input: parsed.input,
           projectName: parsed.projectName,
-          completionMode: parsed.completionMode
+          completionMode: parsed.completionMode,
+          createReady: parsed.createReady
         };
       } catch (error) {
         issues.push({ line: index + 1, message: error instanceof Error ? error.message : "\u4EFB\u52A1\u89E3\u6790\u5931\u8D25", raw });
@@ -2965,35 +3269,24 @@ function parseTaskLine(rawTitle, context) {
       completed: context.completed
     },
     projectName: context.projectName,
-    completionMode: context.completed ? finishMatch?.[1] ?? "today" : "pending"
+    completionMode: context.completed ? finishMatch?.[1] ?? "today" : "pending",
+    createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
   };
 }
-function resolveTaskImportAction(matched, completionMode) {
+function resolveTaskImportAction(matched, completionMode, completed) {
   if (!matched) {
     return "create";
   }
-  if (completionMode === "series") {
-    return "overwrite-and-complete-series";
+  if (completed && completionMode === "series") {
+    return "complete-series";
   }
-  if (completionMode === "today") {
-    return "overwrite-and-complete-today";
+  if (completed && completionMode === "today") {
+    return "complete-today";
   }
   return "overwrite";
 }
 function normalizeImportIdentity(value) {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("zh-Hans-CN");
-}
-function renderTaskOccurrenceForExport(task, mode) {
-  const shouldComplete = mode === "current" ? task.completed : true;
-  const parts = buildFormattedTaskParts({
-    ...task,
-    occurrenceDates: task.recurrence === "custom" ? [task.date] : void 0
-  });
-  const completionMode = resolveExportCompletionMode(task, mode);
-  if (shouldComplete && completionMode !== "pending") {
-    parts.push(`finish:${completionMode}`);
-  }
-  return `- [${shouldComplete ? "x" : " "}] ${parts.join(" ")}`.trim();
 }
 function renderTaskSeriesForExport(task) {
   const completed = isTaskFullyCompleted(task);
@@ -3029,15 +3322,6 @@ function buildFormattedTaskParts(task) {
     parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
   }
   return parts;
-}
-function resolveExportCompletionMode(task, mode) {
-  if (mode === "complete-series" && task.recurrence !== "once") {
-    return "series";
-  }
-  if ((mode === "complete-today" || mode === "current" && task.completed) && task.recurrence !== "once") {
-    return "today";
-  }
-  return "pending";
 }
 function extractProjectTaskBlocks(text) {
   const blocks = [...text.matchAll(/<!--\s*pm:start\s*-->([\s\S]*?)<!--\s*pm:end\s*-->/g)].map((match) => match[1].trim());
@@ -3396,10 +3680,11 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
       hintHeader.createEl("strong", { text: "\u4EFB\u52A1\u5BFC\u5165\u89C4\u5219" });
       hintHeader.createDiv({ cls: "pm-muted", text: "\u8FD9\u5957\u8BED\u6CD5\u4E0E\u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u3001\u4ECA\u65E5\u4EFB\u52A1\u5BFC\u51FA\u5B8C\u5168\u4E92\u901A\u3002" });
       [
+        "\u652F\u6301\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u5B8C\u6574\u8FC1\u79FB\u5305\uFF1B\u8BC6\u522B\u540E\u4F1A\u6309\u8FC1\u79FB\u5305\u6062\u590D\u5168\u91CF\u9879\u76EE\u7BA1\u7406\u6570\u636E\u3002",
         "\u652F\u6301\u666E\u901A\u4EFB\u52A1\u4E0E\u7EC4\u5408\u4EFB\u52A1\uFF1B\u7EC4\u5408\u4EFB\u52A1\u53EF\u5199 kind:composite\uFF0C\u4E5F\u53EF\u76F4\u63A5\u5728\u4E0B\u4E00\u884C\u7F29\u8FDB\u5199\u5B50\u4EFB\u52A1\u3002",
         "\u652F\u6301\u5355\u6B21\u3001\u6BCF\u65E5\u3001\u6BCF\u5468\u6B64\u65F6\uFF1Arepeat:once / daily / weekly\uFF1B\u9700\u8981\u9650\u5236\u6B21\u6570\u53EF\u7EE7\u7EED\u5199 count:4 \u6216 until:2026-06-30\u3002",
-        "\u53EF\u7528 #\u9879\u76EE\uFF1A\u65B0\u9879\u76EE\u540D \u81EA\u52A8\u5EFA\u9879\u76EE\uFF1B\u540C\u9879\u76EE\u4E0B\u82E5\u4EFB\u52A1\u540D\u91CD\u590D\u4F1A\u8986\u76D6\u65E7\u4EFB\u52A1\uFF0C\u65F6\u95F4\u51B2\u7A81\u4F1A\u81EA\u52A8\u6539\u6210\u540C\u65E5 1 \u5206\u949F\u7A7A\u6863\u5360\u4F4D\u3002",
-        "\u52FE\u9009 - [x] \u9ED8\u8BA4\u53EA\u5B8C\u6210\u5F53\u5929\uFF1Brepeat \u4EFB\u52A1\u52A0 finish:series \u53EF\u63D0\u524D\u7ED3\u675F\u6574\u4E2A\u7CFB\u5217\u3002"
+        "\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u5199\u5B8C\u6574\u65E5\u671F\u548C\u65F6\u95F4\u6BB5\uFF0C\u4F8B\u5982 @2026-05-25 09:00-09:30\u3002",
+        "\u6781\u7B80 - [x] \u6807\u9898 \u53EA\u4F1A\u5339\u914D\u5E76\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\uFF1B\u627E\u4E0D\u5230\u65F6\u4F1A\u62A5\u9519\uFF0C\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
     }
     const editorCard = container.createDiv({ cls: "pm-editor-card" });
@@ -3630,6 +3915,24 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
       const preview = this.plugin.store.previewFormattedTasks(textarea.value, {
         defaultDate: toDateKey(now())
       });
+      if (preview.transferPackage) {
+        const summaryGrid2 = body.createDiv({ cls: "pm-import-summary-grid" });
+        [
+          ["\u6062\u590D\u6A21\u5F0F", "\u66FF\u6362\u5168\u90E8"],
+          ["\u9879\u76EE / \u8FDB\u5EA6\u9875", `${preview.transferPackage.projectCount} / ${preview.transferPackage.progressPageCount}`],
+          ["\u4EFB\u52A1\u7CFB\u5217", String(preview.transferPackage.taskCount)],
+          ["\u5386\u53F2 / \u7D22\u5F15", `${preview.transferPackage.writeHistoryCount} / ${preview.transferPackage.noteTaskIndexCount}`]
+        ].forEach(([label, value]) => {
+          const card = summaryGrid2.createDiv({ cls: "pm-import-summary-card" });
+          card.createDiv({ cls: "pm-muted", text: label });
+          card.createEl("strong", { text: value });
+        });
+        body.createDiv({
+          cls: "pm-import-project-hint",
+          text: `\u68C0\u6D4B\u5230\u5B8C\u6574\u8FC1\u79FB\u5305\uFF0C\u5BFC\u51FA\u65F6\u95F4 ${preview.transferPackage.exportedAt}\u3002\u63D0\u4EA4\u540E\u4F1A\u66FF\u6362\u5F53\u524D\u9879\u76EE\u7BA1\u7406\u6570\u636E\u3002`
+        });
+        return;
+      }
       const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
       [
         ["\u4EFB\u52A1\u603B\u6570", String(preview.summary.total)],
@@ -3664,7 +3967,7 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
       if (preview.issues.length > 0) {
         const issueList = body.createEl("ul", { cls: "pm-import-issues" });
         preview.issues.slice(0, 6).forEach((issue) => {
-          issueList.createEl("li", { text: `\u7B2C ${issue.line} \u884C\uFF1A${issue.message}` });
+          issueList.createEl("li", { text: `\u7B2C ${issue.line} \u884C\uFF1A${issue.message}${issue.blocking ? "\uFF08\u963B\u6B62\u5BFC\u5165\uFF09" : ""}` });
         });
       }
     };
@@ -3728,6 +4031,7 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
         },
         historySummary: "\u4ECE\u5FEB\u901F\u8BB0\u5F55\u521B\u5EFA\u4EFB\u52A1"
       });
+      this.plugin.settings = this.plugin.store.getConfig();
       return;
     }
     if (this.target === "task-note") {
@@ -3981,7 +4285,7 @@ function editorHint(target, mode) {
     return mode === "inside" ? "\u5F53\u524D\u4F1A\u628A\u5185\u5BB9\u5E76\u5165\u6240\u9009\u8282\u70B9\u6B63\u6587\u3002" : "\u5F53\u524D\u4F1A\u628A\u6BCF\u4E00\u884C\u89E3\u6790\u6210\u4E00\u4E2A\u65B0\u7684\u8BC4\u8BED\u8282\u70B9\u3002";
   }
   if (target === "quick-task") {
-    return "\u652F\u6301\u666E\u901A / \u7EC4\u5408\u3001\u5355\u6B21 / \u6BCF\u65E5 / \u6BCF\u5468\u4EFB\u52A1\uFF1B\u6309 Ctrl+Enter \u53EF\u76F4\u63A5\u63D0\u4EA4\u3002";
+    return "\u5B8C\u6574\u8F93\u5165\u7528\u4E8E\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u6781\u7B80\u52FE\u9009\u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u3002";
   }
   return "\u7F16\u8F91\u533A\u5DF2\u5305\u88F9\u6210\u72EC\u7ACB\u5361\u7247\uFF0C\u4FBF\u4E8E\u4E13\u6CE8\u8F93\u5165\u3002";
 }
@@ -4103,11 +4407,11 @@ function recurrenceText(recurrence) {
   return "\u5355\u6B21";
 }
 function importActionText(action) {
-  if (action === "overwrite-and-complete-series") {
-    return "\u8986\u76D6\u5E76\u7ED3\u675F\u6574\u4E2A\u7CFB\u5217";
+  if (action === "complete-series") {
+    return "\u5B8C\u6210\u5E76\u7ED3\u675F\u6574\u4E2A\u7CFB\u5217";
   }
-  if (action === "overwrite-and-complete-today") {
-    return "\u8986\u76D6\u5E76\u5B8C\u6210\u5F53\u5929";
+  if (action === "complete-today") {
+    return "\u5B8C\u6210\u5F53\u5929";
   }
   if (action === "overwrite") {
     return "\u8986\u76D6\u5DF2\u6709\u4EFB\u52A1";
@@ -4175,7 +4479,7 @@ var BulkImportModal = class extends import_obsidian7.Modal {
     const projectName = this.options.projectId ? this.options.store.getProject(this.options.projectId)?.name ?? "\u5F53\u524D\u9879\u76EE" : "";
     contentEl.createDiv({
       cls: "pm-import-guide",
-      text: this.options.projectId ? `\u5F53\u524D\u5904\u4E8E\u9879\u76EE\u5BFC\u5165\u6A21\u5F0F\uFF1A\u672A\u663E\u5F0F\u5207\u6362\u9879\u76EE\u65F6\uFF0C\u4EFB\u52A1\u4F1A\u6309\u201C${projectName}\u201D\u5904\u7406\u3002\u652F\u6301\u666E\u901A/\u7EC4\u5408\u3001\u5355\u6B21/\u6BCF\u65E5/\u6BCF\u5468\u4EFB\u52A1\uFF1B\u540C\u540D\u4EFB\u52A1\u4F1A\u8986\u76D6\uFF0C\u65F6\u95F4\u51B2\u7A81\u4F1A\u81EA\u52A8\u6539\u6210\u540C\u65E5 1 \u5206\u949F\u7A7A\u6863\u5360\u4F4D\u3002` : "\u652F\u6301 #\u9879\u76EE\uFF1A\u65B0\u9879\u76EE\u540D \u81EA\u52A8\u5EFA\u9879\u76EE\uFF0C\u4E5F\u652F\u6301\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002\u53EF\u5BFC\u5165\u666E\u901A/\u7EC4\u5408\u3001\u5355\u6B21/\u6BCF\u65E5/\u6BCF\u5468\u4EFB\u52A1\uFF1B\u540C\u540D\u4EFB\u52A1\u4F1A\u8986\u76D6\uFF0C\u65F6\u95F4\u51B2\u7A81\u4F1A\u81EA\u52A8\u6539\u6210\u540C\u65E5 1 \u5206\u949F\u7A7A\u6863\u5360\u4F4D\u3002"
+      text: this.options.projectId ? `\u5F53\u524D\u5904\u4E8E\u9879\u76EE\u5BFC\u5165\u6A21\u5F0F\uFF1A\u672A\u663E\u5F0F\u5207\u6362\u9879\u76EE\u65F6\uFF0C\u4EFB\u52A1\u4F1A\u6309\u201C${projectName}\u201D\u5904\u7406\u3002\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B @\u65E5\u671F \u65F6\u95F4\u6BB5\uFF1B\u6781\u7B80 - [x] \u6807\u9898 \u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u3002` : "\u652F\u6301 #\u9879\u76EE\uFF1A\u65B0\u9879\u76EE\u540D \u81EA\u52A8\u5EFA\u9879\u76EE\uFF0C\u4E5F\u652F\u6301\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B @\u65E5\u671F \u65F6\u95F4\u6BB5\uFF1B\u6781\u7B80 - [x] \u6807\u9898 \u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u3002"
     });
     const state = {
       text: "",
@@ -4206,6 +4510,24 @@ var BulkImportModal = class extends import_obsidian7.Modal {
         cls: "pm-muted",
         text: `\u89E3\u6790 ${preview.summary.total} \u6761\uFF0C\u95EE\u9898 ${preview.issues.length} \u6761`
       });
+      if (preview.transferPackage) {
+        const summaryGrid2 = previewEl.createDiv({ cls: "pm-import-summary-grid" });
+        [
+          ["\u6062\u590D\u6A21\u5F0F", "\u66FF\u6362\u5168\u90E8"],
+          ["\u9879\u76EE / \u8FDB\u5EA6\u9875", `${preview.transferPackage.projectCount} / ${preview.transferPackage.progressPageCount}`],
+          ["\u4EFB\u52A1\u7CFB\u5217", String(preview.transferPackage.taskCount)],
+          ["\u5386\u53F2 / \u7D22\u5F15", `${preview.transferPackage.writeHistoryCount} / ${preview.transferPackage.noteTaskIndexCount}`]
+        ].forEach(([label, value]) => {
+          const card = summaryGrid2.createDiv({ cls: "pm-import-summary-card" });
+          card.createDiv({ cls: "pm-muted", text: label });
+          card.createEl("strong", { text: value });
+        });
+        previewEl.createDiv({
+          cls: "pm-import-project-hint",
+          text: `\u68C0\u6D4B\u5230\u5B8C\u6574\u8FC1\u79FB\u5305\uFF0C\u5BFC\u51FA\u65F6\u95F4 ${preview.transferPackage.exportedAt}\u3002\u63D0\u4EA4\u540E\u4F1A\u66FF\u6362\u5F53\u524D\u9879\u76EE\u7BA1\u7406\u6570\u636E\u3002`
+        });
+        return;
+      }
       const summaryGrid = previewEl.createDiv({ cls: "pm-import-summary-grid" });
       [
         ["\u65B0\u589E\u4EFB\u52A1", String(preview.summary.createCount)],
@@ -4243,7 +4565,7 @@ var BulkImportModal = class extends import_obsidian7.Modal {
       if (preview.issues.length > 0) {
         const issueList = previewEl.createEl("ul", { cls: "pm-import-issues" });
         preview.issues.slice(0, 8).forEach((issue) => {
-          issueList.createEl("li", { text: `\u7B2C ${issue.line} \u884C\uFF1A${issue.message}` });
+          issueList.createEl("li", { text: `\u7B2C ${issue.line} \u884C\uFF1A${issue.message}${issue.blocking ? "\uFF08\u963B\u6B62\u5BFC\u5165\uFF09" : ""}` });
         });
       }
     };
@@ -4265,11 +4587,11 @@ var BulkImportModal = class extends import_obsidian7.Modal {
   }
 };
 function importActionText2(action) {
-  if (action === "overwrite-and-complete-series") {
-    return "\u8986\u76D6\u5E76\u63D0\u524D\u7ED3\u675F";
+  if (action === "complete-series") {
+    return "\u5B8C\u6210\u5E76\u7ED3\u675F\u7CFB\u5217";
   }
-  if (action === "overwrite-and-complete-today") {
-    return "\u8986\u76D6\u5E76\u5B8C\u6210\u4ECA\u65E5";
+  if (action === "complete-today") {
+    return "\u5B8C\u6210\u4ECA\u65E5";
   }
   if (action === "overwrite") {
     return "\u8986\u76D6";
@@ -4382,23 +4704,43 @@ var TaskModal = class extends import_obsidian9.Modal {
         state.description = value;
       })
     );
+    let dateInput = null;
+    let startTimeInput = null;
+    let endTimeInput = null;
+    const setDateValue = (value) => {
+      state.date = value;
+      dateInput?.setValue(value);
+    };
+    const setStartTimeValue = (value) => {
+      state.startTime = value || void 0;
+      startTimeInput?.setValue(value ?? "");
+    };
+    const setEndTimeValue = (value) => {
+      state.endTime = value || void 0;
+      endTimeInput?.setValue(value ?? "");
+    };
     const scheduleGrid = scheduleSection.createDiv({ cls: "pm-task-field-grid" });
-    new import_obsidian9.Setting(scheduleGrid).setName("\u65E5\u671F").addText(
-      (text) => text.setPlaceholder("YYYY-MM-DD").setValue(state.date).onChange((value) => {
+    new import_obsidian9.Setting(scheduleGrid).setName("\u65E5\u671F").addText((text) => {
+      dateInput = text;
+      return text.setPlaceholder("YYYY-MM-DD").setValue(state.date).onChange((value) => {
         state.date = value;
-      })
-    );
-    new import_obsidian9.Setting(scheduleGrid).setName("\u5F00\u59CB\u65F6\u95F4").addText(
-      (text) => text.setPlaceholder("07:00").setValue(state.startTime ?? "").onChange((value) => {
+      });
+    });
+    new import_obsidian9.Setting(scheduleGrid).setName("\u5F00\u59CB\u65F6\u95F4").addText((text) => {
+      startTimeInput = text;
+      return text.setPlaceholder("07:00").setValue(state.startTime ?? "").onChange((value) => {
         state.startTime = value || void 0;
-      })
-    );
-    new import_obsidian9.Setting(scheduleGrid).setName("\u7ED3\u675F\u65F6\u95F4").addText(
-      (text) => text.setPlaceholder("07:30").setValue(state.endTime ?? "").onChange((value) => {
+      });
+    });
+    new import_obsidian9.Setting(scheduleGrid).setName("\u7ED3\u675F\u65F6\u95F4").addText((text) => {
+      endTimeInput = text;
+      return text.setPlaceholder("07:30").setValue(state.endTime ?? "").onChange((value) => {
         state.endTime = value || void 0;
-      })
-    );
+      });
+    });
     let projectDropdown = null;
+    let renderParentField = () => void 0;
+    let clearParentIfDisallowed = () => void 0;
     const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
     new import_obsidian9.Setting(relationGrid).setName("\u6240\u5C5E\u9879\u76EE").addDropdown((dropdown) => {
       projectDropdown = dropdown;
@@ -4407,19 +4749,49 @@ var TaskModal = class extends import_obsidian9.Modal {
       dropdown.setValue(state.projectId ?? "");
       dropdown.onChange((value) => {
         state.projectId = value || void 0;
+        clearParentIfDisallowed();
+        renderParentField();
       });
     });
     const compositeParents = this.options.compositeParents ?? [];
-    const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
-    const parentOptions = compositeParents.filter((task) => task.id !== this.options.existingTask?.id);
-    if (currentParentId && !parentOptions.some((task) => task.id === currentParentId)) {
-      const currentParent = compositeParents.find((task) => task.id === currentParentId);
-      if (currentParent) {
-        parentOptions.push(currentParent);
+    const parentField = relationSection.createDiv({ cls: "pm-task-parent-field" });
+    const getSelectableParents = () => compositeParents.filter((task) => task.id !== this.options.existingTask?.id).filter((task) => !state.projectId || task.projectId === state.projectId);
+    const applyParentSchedule = (parent) => {
+      const nextDate = parent.occurrenceDates.includes(state.date) ? state.date : parent.date;
+      setDateValue(nextDate);
+      if (!parent.startTime || !parent.endTime) {
+        return;
       }
-    }
-    if (parentOptions.length > 0) {
-      new import_obsidian9.Setting(relationSection).setName("\u6302\u5165\u7EC4\u5408\u4EFB\u52A1").setDesc("\u9009\u62E9\u540E\uFF0C\u8FD9\u6761\u4EFB\u52A1\u4F1A\u4F5C\u4E3A\u8BE5\u7EC4\u5408\u4EFB\u52A1\u7684\u5B50\u4EFB\u52A1\uFF0C\u5E76\u4FDD\u7559\u81EA\u5DF1\u7684\u91CD\u590D\u89C4\u5219").addDropdown((dropdown) => {
+      const parentStart = parseTimeToMinutes(parent.startTime);
+      const parentEnd = parseTimeToMinutes(parent.endTime);
+      if (parentStart === null || parentEnd === null || parentStart >= parentEnd) {
+        return;
+      }
+      setStartTimeValue(parent.startTime);
+      setEndTimeValue(parentEnd - parentStart <= 1 ? parent.endTime : addMinutes(parent.startTime, 1));
+    };
+    clearParentIfDisallowed = () => {
+      const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+      if (!currentParentId) {
+        return;
+      }
+      if (!getSelectableParents().some((task) => task.id === currentParentId)) {
+        state.viewState = withMindmapParent(state.viewState, null);
+      }
+    };
+    renderParentField = () => {
+      parentField.empty();
+      clearParentIfDisallowed();
+      const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+      const parentOptions = getSelectableParents();
+      if (parentOptions.length === 0) {
+        parentField.createDiv({
+          cls: "pm-muted pm-task-parent-note",
+          text: state.projectId ? "\u5F53\u524D\u9879\u76EE\u4E0B\u6682\u65E0\u53EF\u6302\u5165\u7684\u7EC4\u5408\u4EFB\u52A1\u3002" : "\u6682\u65E0\u53EF\u6302\u5165\u7684\u7EC4\u5408\u4EFB\u52A1\u3002"
+        });
+        return;
+      }
+      new import_obsidian9.Setting(parentField).setName("\u6302\u5165\u7EC4\u5408\u4EFB\u52A1").setDesc("\u9009\u62E9\u540E\uFF0C\u8FD9\u6761\u4EFB\u52A1\u4F1A\u4F5C\u4E3A\u8BE5\u7EC4\u5408\u4EFB\u52A1\u7684\u5B50\u4EFB\u52A1\uFF0C\u5E76\u4FDD\u7559\u81EA\u5DF1\u7684\u91CD\u590D\u89C4\u5219").addDropdown((dropdown) => {
         dropdown.addOption("", "\u4E0D\u6302\u5165\u7EC4\u5408\u4EFB\u52A1");
         parentOptions.forEach((parent) => {
           const projectName = this.options.projects.find((project) => project.id === parent.projectId)?.name ?? "\u672A\u5F52\u5C5E\u9879\u76EE";
@@ -4430,13 +4802,16 @@ var TaskModal = class extends import_obsidian9.Modal {
           const parentTaskId = value || null;
           state.viewState = withMindmapParent(state.viewState, parentTaskId);
           const parent = parentTaskId ? parentOptions.find((task) => task.id === parentTaskId) : void 0;
-          if (parent?.projectId) {
+          if (parent) {
             state.projectId = parent.projectId;
-            projectDropdown?.setValue(parent.projectId);
+            projectDropdown?.setValue(parent.projectId ?? "");
+            applyParentSchedule(parent);
+            renderParentField();
           }
         });
       });
-    }
+    };
+    renderParentField();
     new import_obsidian9.Setting(relationGrid).setName("\u72B6\u6001").addDropdown((dropdown) => {
       const labels = {
         todo: "\u5F85\u529E",
@@ -4762,10 +5137,6 @@ var OverviewView = class extends BaseProjectView {
     const primaryTabs = heroActions.createDiv({ cls: "pm-tab-bar" });
     this.createPrimaryTab(primaryTabs, this.plugin.settings.overviewTab1Name, "activity");
     this.createPrimaryTab(primaryTabs, this.plugin.settings.overviewTab2Name, "projects");
-    heroActions.createEl("button", { text: "\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
-      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsMarkdown());
-      new import_obsidian11.Notice("\u5DF2\u590D\u5236\u5B8C\u6574\u4EFB\u52A1\u8BB0\u5F55 Markdown");
-    });
     if (this.activePrimaryTab === "activity") {
       this.renderActivityTab(container, snapshot.occurrences, snapshot.projects, snapshot.tasks);
     } else {
@@ -4943,6 +5314,7 @@ var OverviewView = class extends BaseProjectView {
     const weekEnd = toDateKey(weekDates[6]);
     const weekTasks = tasks.filter((task) => compareDateKeys(task.date, weekStart) >= 0 && compareDateKeys(task.date, weekEnd) <= 0);
     const timelineRange = buildWeekTimelineRange(weekTasks);
+    const baseTimelineHeight = (timelineRange.endHour - timelineRange.startHour) * WEEK_TIMELINE_HOUR_HEIGHT;
     const boardShell = container.createDiv({ cls: "pm-week-timeline-shell" });
     boardShell.style.setProperty("--pm-week-hour-height", `${WEEK_TIMELINE_HOUR_HEIGHT}px`);
     boardShell.style.setProperty("--pm-week-hour-count", String(timelineRange.endHour - timelineRange.startHour));
@@ -4981,7 +5353,7 @@ var OverviewView = class extends BaseProjectView {
       const dayTasks = buildCompositeDisplayOccurrences(tasks.filter((task) => task.date === key), seriesTasks);
       if (dayTasks.length === 0) {
         const emptyLane = column.createDiv({ cls: "pm-week-day-timeline" });
-        emptyLane.style.height = `${(timelineRange.endHour - timelineRange.startHour) * WEEK_TIMELINE_HOUR_HEIGHT}px`;
+        emptyLane.style.height = `${baseTimelineHeight}px`;
         emptyLane.createDiv({ cls: "pm-empty pm-week-day-empty", text: "\u6682\u65E0\u4EFB\u52A1" });
         return;
       }
@@ -4991,16 +5363,16 @@ var OverviewView = class extends BaseProjectView {
         untimed.forEach((item) => this.renderWeekTaskCard(untimedList, item.occurrence, item.childOccurrences));
       }
       const lane = column.createDiv({ cls: "pm-week-day-timeline" });
-      lane.style.height = `${(timelineRange.endHour - timelineRange.startHour) * WEEK_TIMELINE_HOUR_HEIGHT}px`;
-      dayTasks.filter((item) => getOccurrenceTimelinePosition(item.occurrence, timelineRange)).forEach((item) => {
-        const position = getOccurrenceTimelinePosition(item.occurrence, timelineRange);
-        if (!position) {
-          return;
-        }
-        const card = this.renderWeekTaskCard(lane, item.occurrence, item.childOccurrences);
+      const timelineLayouts = layoutWeekTimelineItems(dayTasks, timelineRange);
+      const dayTimelineHeight = Math.max(baseTimelineHeight, ...timelineLayouts.map((layout) => layout.position.top + layout.position.height + WEEK_TIMELINE_CARD_GAP));
+      lane.style.height = `${dayTimelineHeight}px`;
+      timelineLayouts.forEach((layout) => {
+        const card = this.renderWeekTaskCard(lane, layout.item.occurrence, layout.item.childOccurrences);
         card.addClass("is-positioned");
-        card.style.top = `${position.top}px`;
-        card.style.height = `${position.height}px`;
+        card.style.top = `${layout.position.top}px`;
+        card.style.height = `${layout.position.height}px`;
+        card.style.setProperty("--pm-week-lane-left", String(layout.leftRatio));
+        card.style.setProperty("--pm-week-lane-width", String(layout.widthRatio));
       });
     });
   }
@@ -5097,12 +5469,41 @@ var OverviewView = class extends BaseProjectView {
       });
     });
   }
+  renderChildTaskSummary(container, childTasks, variant) {
+    if (childTasks.length === 0) {
+      return;
+    }
+    const summary = container.createDiv({ cls: `pm-child-task-summary is-${variant}` });
+    summary.createDiv({ cls: "pm-muted pm-child-task-summary-title", text: `\u7EC4\u5408\u5B50\u4EFB\u52A1 ${childTasks.length} \u9879` });
+    const list = summary.createDiv({ cls: "pm-child-task-list" });
+    childTasks.slice(0, 6).forEach((child) => {
+      const item = list.createEl("button", { cls: `pm-child-task-pill is-${child.status}` });
+      item.title = child.title;
+      item.createSpan({ cls: "pm-child-task-name", text: child.title });
+      item.createSpan({
+        cls: "pm-child-task-meta",
+        text: `${statusLabel(child.status)} \xB7 ${child.startTime && child.endTime ? `${child.startTime}-${child.endTime}` : "\u672A\u6392\u671F"}`
+      });
+      item.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.openEditTaskModal(child);
+      });
+    });
+    if (childTasks.length > 6) {
+      summary.createDiv({ cls: "pm-muted", text: `\u53E6\u6709 ${childTasks.length - 6} \u9879\u672A\u5C55\u5F00` });
+    }
+  }
   renderProjectsTab(container, pages, projects, allTasks) {
     const header = container.createDiv({ cls: "pm-page-header" });
     const headerCopy = header.createDiv();
     headerCopy.createEl("h3", { text: "\u9879\u76EE\u8FDB\u5EA6" });
     headerCopy.createDiv({ cls: "pm-muted", text: "\u56F4\u7ED5\u5355\u4E2A\u9879\u76EE\u7EDF\u4E00\u67E5\u770B\u8868\u683C\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u4E0E\u601D\u7EF4\u5BFC\u56FE\u3002" });
-    header.createEl("button", { text: "\u65B0\u589E\u9879\u76EE", cls: "pm-button pm-button-primary" }).addEventListener("click", () => {
+    const headerActions = header.createDiv({ cls: "pm-inline-actions" });
+    headerActions.createEl("button", { text: "\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
+      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsMarkdown());
+      new import_obsidian11.Notice("\u5DF2\u590D\u5236\u5168\u90E8\u8BB0\u5F55 Markdown");
+    });
+    headerActions.createEl("button", { text: "\u65B0\u589E\u9879\u76EE", cls: "pm-button pm-button-primary" }).addEventListener("click", () => {
       new ProjectModal(this.app, {
         title: "\u65B0\u589E\u9879\u76EE",
         initial: {
@@ -5166,7 +5567,9 @@ var OverviewView = class extends BaseProjectView {
       container.createDiv({ cls: "pm-empty", text: "\u9879\u76EE\u4E0D\u5B58\u5728\u3002" });
       return;
     }
-    const tasks = allTasks.filter((task) => task.projectId === project.id).sort(compareSeriesTasks2);
+    const projectTasks = allTasks.filter((task) => task.projectId === project.id).sort(compareSeriesTasks2);
+    const hierarchy = buildProjectTaskHierarchy(projectTasks);
+    const tasks = hierarchy.topLevelTasks;
     const occurrences = this.plugin.store.getOccurrencesForProject(project.id);
     const progress = this.plugin.store.getProjectProgress(project.id);
     const completedCount = occurrences.filter((task) => task.completed).length;
@@ -5182,7 +5585,7 @@ var OverviewView = class extends BaseProjectView {
     summaryLeft.createDiv({ cls: "pm-muted", text: `\u5B8C\u6210\u7387 ${progress}%` });
     const summaryRight = summaryCard.createDiv({ cls: "pm-project-summary-metrics" });
     [
-      { label: "\u9879\u76EE\u4EFB\u52A1", value: String(tasks.length) },
+      { label: "\u9876\u5C42\u4EFB\u52A1", value: String(tasks.length) },
       { label: "\u603B\u6B21\u6570", value: String(occurrences.length) },
       { label: "\u5DF2\u5B8C\u6210", value: String(completedCount) },
       { label: "\u5B8C\u6210\u7387", value: `${progress}%` }
@@ -5218,14 +5621,6 @@ var OverviewView = class extends BaseProjectView {
         new import_obsidian11.Notice(error instanceof Error ? error.message : "\u5BFC\u51FA\u5931\u8D25");
       }
     });
-    projectActions.createEl("button", { text: "\u4ECA\u65E5\u81EA\u52A8\u6392\u7A0B", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
-      try {
-        const result = await this.plugin.store.autoArrangeDate(toDateKey(now()));
-        new import_obsidian11.Notice(result.moved.length > 0 ? `\u5DF2\u79FB\u52A8 ${result.moved.length} \u4E2A\u4EFB\u52A1` : "\u4ECA\u65E5\u4EFB\u52A1\u65E0\u9700\u8C03\u6574");
-      } catch (error) {
-        new import_obsidian11.Notice(error instanceof Error ? error.message : "\u81EA\u52A8\u6392\u7A0B\u5931\u8D25");
-      }
-    });
     projectActions.createEl("button", { text: "+ \u65B0\u589E\u4EFB\u52A1", cls: "pm-button pm-button-primary" }).addEventListener("click", () => {
       this.openCreateTaskModal("\u65B0\u589E\u9879\u76EE\u4EFB\u52A1", projects, {
         title: "",
@@ -5257,21 +5652,25 @@ var OverviewView = class extends BaseProjectView {
         this.render();
       });
     });
-    if (tasks.length === 0) {
+    if (projectTasks.length === 0) {
       body.createDiv({ cls: "pm-empty", text: "\u6682\u65E0\u4EFB\u52A1" });
       return;
     }
+    if (tasks.length === 0 && this.activeProjectView !== "mindmap") {
+      body.createDiv({ cls: "pm-empty", text: "\u6682\u65E0\u9876\u5C42\u4EFB\u52A1\uFF0C\u5DF2\u6302\u5165\u7EC4\u5408\u4EFB\u52A1\u7684\u5B50\u4EFB\u52A1\u4F1A\u6536\u7EB3\u5728\u7236\u4EFB\u52A1\u4E0B\u3002" });
+      return;
+    }
     if (this.activeProjectView === "table") {
-      this.renderProjectTable(body, tasks);
+      this.renderProjectTable(body, tasks, hierarchy.childrenByParent);
     } else if (this.activeProjectView === "board") {
-      this.renderProjectBoard(body, project, tasks);
+      this.renderProjectBoard(body, project, tasks, hierarchy.childrenByParent);
     } else if (this.activeProjectView === "gantt") {
-      this.renderProjectGantt(body, project, tasks);
+      this.renderProjectGantt(body, project, tasks, hierarchy.childrenByParent);
     } else {
-      this.renderProjectMindmap(body, project, tasks);
+      this.renderProjectMindmap(body, project, projectTasks);
     }
   }
-  renderProjectTable(container, tasks) {
+  renderProjectTable(container, tasks, childrenByParent) {
     const totalPages = Math.max(1, Math.ceil(tasks.length / this.projectTablePageSize));
     this.projectTablePage = Math.min(this.projectTablePage, totalPages);
     const pageTasks = tasks.slice((this.projectTablePage - 1) * this.projectTablePageSize, this.projectTablePage * this.projectTablePageSize);
@@ -5282,10 +5681,12 @@ var OverviewView = class extends BaseProjectView {
     ["\u4EFB\u52A1\u540D\u79F0", "\u72B6\u6001", "\u4F18\u5148\u7EA7", "\u6807\u7B7E", "\u91CD\u590D", "\u8BA1\u5212", "\u5B8C\u6210", "\u63CF\u8FF0", "\u64CD\u4F5C"].forEach((label) => headRow.createEl("th", { text: label }));
     const bodyEl = table.createEl("tbody");
     pageTasks.forEach((task) => {
+      const childTasks = childrenByParent.get(task.id) ?? [];
       const row = bodyEl.createEl("tr");
       const titleCell = row.createEl("td");
       titleCell.createEl("strong", { text: task.title });
       titleCell.createDiv({ cls: "pm-muted", text: `${task.date} \xB7 ${task.startTime && task.endTime ? `${task.startTime}-${task.endTime}` : "\u672A\u6392\u671F"}` });
+      this.renderChildTaskSummary(titleCell, childTasks, "table");
       const statusCell = row.createEl("td");
       appendBadge(statusCell, statusLabel(task.status), `status-${task.status}`);
       const priorityCell = row.createEl("td");
@@ -5302,8 +5703,8 @@ var OverviewView = class extends BaseProjectView {
       scheduleCell.createDiv({ text: task.occurrenceDates.length > 1 ? `${task.occurrenceDates[0]} -> ${task.occurrenceDates[task.occurrenceDates.length - 1]}` : task.date });
       scheduleCell.createDiv({ cls: "pm-muted", text: task.startTime && task.endTime ? `${task.startTime}-${task.endTime}` : "\u672A\u6392\u671F" });
       const completionCell = row.createEl("td");
-      const progress = Math.round(seriesProgress(task) * 100);
-      completionCell.createDiv({ text: completionSummary(task) });
+      const progress = Math.round(seriesProgressWithChildren(task, childTasks) * 100);
+      completionCell.createDiv({ text: completionSummaryWithChildren(task, childTasks) });
       completionCell.createDiv({ cls: "pm-progress-bar pm-progress-bar-compact" }).createDiv({
         cls: "pm-progress-bar-fill",
         attr: { style: `width: ${progress}%` }
@@ -5332,7 +5733,7 @@ var OverviewView = class extends BaseProjectView {
       this.render();
     });
   }
-  renderProjectBoard(container, project, tasks) {
+  renderProjectBoard(container, project, tasks, childrenByParent) {
     const board = container.createDiv({ cls: "pm-project-board" });
     const columns = [
       ["todo", "\u5F85\u529E"],
@@ -5381,6 +5782,7 @@ var OverviewView = class extends BaseProjectView {
       });
       const list = column.createDiv({ cls: "pm-board-list" });
       items.forEach((task) => {
+        const childTasks = childrenByParent.get(task.id) ?? [];
         const card = list.createDiv({ cls: `pm-board-card is-${task.status}` });
         card.draggable = true;
         card.addEventListener("dragstart", (event) => {
@@ -5403,8 +5805,9 @@ var OverviewView = class extends BaseProjectView {
           appendBadge(badges, task.viewState.gantt.dependencyIds.length > 0 ? "\u4F9D\u8D56\u672A\u5B8C\u6210" : "\u7B49\u5F85\u5904\u7406", "status-blocked");
         }
         card.createDiv({ cls: "pm-board-schedule", text: task.occurrenceDates.length > 1 ? `${task.occurrenceDates[0].slice(5)} -> ${task.occurrenceDates[task.occurrenceDates.length - 1].slice(5)}` : task.date.slice(5) });
-        card.createDiv({ cls: "pm-board-completion", text: completionSummary(task).replace(" \xB7 ", " | ") });
-        const progress = Math.round(seriesProgress(task) * 100);
+        card.createDiv({ cls: "pm-board-completion", text: completionSummaryWithChildren(task, childTasks).replace(" \xB7 ", " | ") });
+        this.renderChildTaskSummary(card, childTasks, "board");
+        const progress = Math.round(seriesProgressWithChildren(task, childTasks) * 100);
         card.createDiv({ cls: "pm-progress-bar pm-progress-bar-compact" }).createDiv({
           cls: "pm-progress-bar-fill",
           attr: { style: `width: ${progress}%` }
@@ -5425,13 +5828,14 @@ var OverviewView = class extends BaseProjectView {
         });
       });
     });
-    const overdueCount = tasks.filter((task) => !isTaskSeriesCompleted(task) && compareDateKeys(defaultCompletionDate(task), toDateKey(now())) < 0).length;
+    const overdueCount = tasks.filter((task) => !isTaskSeriesCompletedWithChildren(task, childrenByParent.get(task.id) ?? []) && compareDateKeys(defaultCompletionDateWithChildren(task, childrenByParent.get(task.id) ?? []), toDateKey(now())) < 0).length;
     const stats = container.createDiv({ cls: "pm-board-stats" });
+    const completedTopLevelCount = tasks.filter((task) => isTaskSeriesCompletedWithChildren(task, childrenByParent.get(task.id) ?? [])).length;
     [
       { label: "\u603B\u4EFB\u52A1", value: String(tasks.length) },
       { label: "\u8FDB\u884C\u4E2D", value: String(tasks.filter((task) => task.status === "doing").length) },
-      { label: "\u5DF2\u5B8C\u6210", value: String(tasks.filter((task) => isTaskSeriesCompleted(task)).length) },
-      { label: "\u5B8C\u6210\u7387", value: `${Math.round(tasks.filter((task) => isTaskSeriesCompleted(task)).length / Math.max(1, tasks.length) * 100)}%` },
+      { label: "\u5DF2\u5B8C\u6210", value: String(completedTopLevelCount) },
+      { label: "\u5B8C\u6210\u7387", value: `${Math.round(completedTopLevelCount / Math.max(1, tasks.length) * 100)}%` },
       { label: "\u903E\u671F", value: String(overdueCount) }
     ].forEach((item) => {
       const stat = stats.createDiv({ cls: "pm-board-stat" });
@@ -5439,13 +5843,17 @@ var OverviewView = class extends BaseProjectView {
       stat.createEl("strong", { text: item.value });
     });
   }
-  renderProjectGantt(container, project, tasks) {
-    const items = tasks.map((task) => ({
-      task,
-      startDate: task.occurrenceDates[0] ?? task.date,
-      endDate: defaultCompletionDate(task),
-      progress: Math.round(seriesProgress(task) * 100)
-    })).sort(
+  renderProjectGantt(container, project, tasks, childrenByParent) {
+    const items = tasks.map((task) => {
+      const childTasks = childrenByParent.get(task.id) ?? [];
+      return {
+        task,
+        childTasks,
+        startDate: task.occurrenceDates[0] ?? task.date,
+        endDate: defaultCompletionDateWithChildren(task, childTasks),
+        progress: Math.round(seriesProgressWithChildren(task, childTasks) * 100)
+      };
+    }).sort(
       (a, b) => a.task.viewState.gantt.rowOrder - b.task.viewState.gantt.rowOrder || a.startDate.localeCompare(b.startDate) || compareSeriesTasks2(a.task, b.task)
     );
     const card = container.createDiv({ cls: "pm-gantt-card tm-gantt-card" });
@@ -5605,6 +6013,7 @@ var OverviewView = class extends BaseProjectView {
       meta.createSpan({ cls: `pm-gantt-meta-item is-priority ${priorityTone(item.task.priority)}`, text: priorityLabel(item.task.priority) });
       meta.createSpan({ cls: "pm-gantt-meta-separator", text: "\xB7" });
       meta.createSpan({ cls: "pm-gantt-meta-item", text: formatGanttPlan(item.startDate, item.endDate, item.task.startTime, item.task.endTime) });
+      this.renderChildTaskSummary(taskCell, item.childTasks, "gantt");
       const row = rows.createDiv({ cls: "pm-gantt-bar-row tm-gantt-bar-row" });
       geometry.minorCells.forEach((cell) => {
         const gridCell = row.createDiv({
@@ -6530,6 +6939,33 @@ var GANTT_MIN_ZOOM = 0.4;
 var GANTT_MAX_ZOOM = 2;
 var GANTT_ZOOM_STEP = 0.1;
 var WEEK_TIMELINE_HOUR_HEIGHT = 72;
+var WEEK_TIMELINE_CARD_GAP = 6;
+function buildProjectTaskHierarchy(tasks) {
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const hiddenTaskIds = /* @__PURE__ */ new Set();
+  const childrenByParent = /* @__PURE__ */ new Map();
+  tasks.forEach((task) => {
+    const parentId = getCompositeParentTaskId(task, taskById);
+    if (!parentId) {
+      return;
+    }
+    hiddenTaskIds.add(task.id);
+    childrenByParent.set(parentId, [...childrenByParent.get(parentId) ?? [], task]);
+  });
+  childrenByParent.forEach((children, parentId) => childrenByParent.set(parentId, children.slice().sort(compareSeriesTasks2)));
+  return {
+    topLevelTasks: tasks.filter((task) => !hiddenTaskIds.has(task.id)).sort(compareSeriesTasks2),
+    childrenByParent
+  };
+}
+function getCompositeParentTaskId(task, taskById) {
+  const parentId = task.viewState.mindmap.parentTaskId ?? null;
+  if (!parentId) {
+    return null;
+  }
+  const parent = taskById.get(parentId);
+  return parent?.kind === "composite" ? parent.id : null;
+}
 function buildMindmapPath(parent, node) {
   const startX = parent.x + parent.width;
   const startY = parent.y + parent.height / 2;
@@ -6579,7 +7015,7 @@ function priorityTone(priority) {
 }
 function buildGanttDataSignature(projectId, items) {
   return `${projectId}:${items.map(
-    (item) => `${item.task.id}:${item.task.revision}:${item.startDate}:${item.endDate}:${item.task.status}:${item.task.priority ?? ""}:${item.task.viewState.gantt.locked ? 1 : 0}:${item.task.viewState.gantt.milestone ? 1 : 0}`
+    (item) => `${item.task.id}:${item.task.revision}:${item.childTasks.map((child) => `${child.id}.${child.revision}`).join(",")}:${item.startDate}:${item.endDate}:${item.task.status}:${item.task.priority ?? ""}:${item.task.viewState.gantt.locked ? 1 : 0}:${item.task.viewState.gantt.milestone ? 1 : 0}`
   ).join("|")}`;
 }
 function fitGanttTimeline(items, viewportWidth) {
@@ -6963,6 +7399,67 @@ function getOccurrenceTimelinePosition(task, range) {
     height: Math.max(44, height)
   };
 }
+function layoutWeekTimelineItems(items, range) {
+  const seeds = items.map((item) => {
+    const start = parseTimeToMinutes(item.occurrence.startTime);
+    const end = parseTimeToMinutes(item.occurrence.endTime);
+    const position = getOccurrenceTimelinePosition(item.occurrence, range);
+    return start !== null && end !== null && position ? { item, start, end, position } : null;
+  }).filter((item) => Boolean(item)).sort((left, right) => left.start - right.start || left.end - right.end || compareWeekTasks(left.item.occurrence, right.item.occurrence));
+  const clusters = [];
+  let current = [];
+  let clusterEnd = -1;
+  seeds.forEach((seed) => {
+    if (current.length === 0 || seed.start < clusterEnd) {
+      current.push(seed);
+      clusterEnd = Math.max(clusterEnd, seed.end);
+      return;
+    }
+    clusters.push(current);
+    current = [seed];
+    clusterEnd = seed.end;
+  });
+  if (current.length > 0) {
+    clusters.push(current);
+  }
+  const layouts = [];
+  let previousClusterBottom = -WEEK_TIMELINE_CARD_GAP;
+  clusters.forEach((cluster) => {
+    const laneEnds = [];
+    const assigned = cluster.map((seed) => {
+      const laneIndex = findAvailableLane(laneEnds, seed.start);
+      laneEnds[laneIndex] = seed.end;
+      return { ...seed, laneIndex };
+    });
+    const laneCount = Math.max(1, laneEnds.length);
+    const clusterRawTop = Math.min(...assigned.map((seed) => seed.position.top));
+    const clusterOffset = Math.max(0, previousClusterBottom + WEEK_TIMELINE_CARD_GAP - clusterRawTop);
+    const laneVisualBottoms = Array.from({ length: laneCount }, () => -WEEK_TIMELINE_CARD_GAP);
+    let clusterVisualBottom = previousClusterBottom;
+    assigned.forEach((seed) => {
+      const rawTop = seed.position.top + clusterOffset;
+      const top = Math.max(rawTop, laneVisualBottoms[seed.laneIndex] + WEEK_TIMELINE_CARD_GAP);
+      const position = {
+        ...seed.position,
+        top
+      };
+      laneVisualBottoms[seed.laneIndex] = top + position.height;
+      clusterVisualBottom = Math.max(clusterVisualBottom, top + position.height);
+      layouts.push({
+        item: seed.item,
+        position,
+        leftRatio: seed.laneIndex / laneCount,
+        widthRatio: 1 / laneCount
+      });
+    });
+    previousClusterBottom = clusterVisualBottom;
+  });
+  return layouts;
+}
+function findAvailableLane(laneEnds, start) {
+  const laneIndex = laneEnds.findIndex((end) => end <= start);
+  return laneIndex >= 0 ? laneIndex : laneEnds.length;
+}
 function buildCompositeDisplayOccurrences(occurrences, seriesTasks) {
   const taskById = new Map(seriesTasks.map((task) => [task.id, task]));
   const childrenByParent = /* @__PURE__ */ new Map();
@@ -7109,17 +7606,44 @@ function valueToChartY(value, max) {
 function defaultCompletionDate(task) {
   return task.recurrenceUntil ?? task.occurrenceDates[task.occurrenceDates.length - 1] ?? task.date;
 }
-function completionSummary(task) {
-  const totalSteps = task.kind === "composite" ? task.occurrenceDates.length * task.subtasks.length : task.occurrenceDates.length;
-  const completedSteps = task.kind === "composite" ? task.occurrenceStates.reduce((sum, state) => sum + (state.completedSubtaskIds?.length ?? 0), 0) : task.occurrenceStates.length;
-  const ratio = totalSteps === 0 ? 0 : Math.round(completedSteps / totalSteps * 100);
-  const label = task.kind === "composite" ? "\u5B50\u4EFB\u52A1" : "\u6B21";
-  return `${completedSteps}/${totalSteps} ${label} \xB7 ${ratio}%`;
+function defaultCompletionDateWithChildren(task, childTasks) {
+  return [task, ...childTasks].map(defaultCompletionDate).reduce((latest, date) => compareDateKeys(date, latest) > 0 ? date : latest, defaultCompletionDate(task));
 }
-function seriesProgress(task) {
-  const totalSteps = task.kind === "composite" ? task.occurrenceDates.length * task.subtasks.length : task.occurrenceDates.length;
-  const completedSteps = task.kind === "composite" ? task.occurrenceStates.reduce((sum, state) => sum + (state.completedSubtaskIds?.length ?? 0), 0) : task.occurrenceStates.length;
-  return totalSteps === 0 ? 0 : completedSteps / totalSteps;
+function completionSummaryWithChildren(task, childTasks) {
+  const progress = aggregateTaskProgress(task, childTasks);
+  const ratio = progress.total === 0 ? 0 : Math.round(progress.completed / progress.total * 100);
+  return `${progress.completed}/${progress.total} \u6B65 \xB7 ${ratio}%`;
+}
+function seriesProgressWithChildren(task, childTasks) {
+  const progress = aggregateTaskProgress(task, childTasks);
+  return progress.total === 0 ? 0 : progress.completed / progress.total;
+}
+function isTaskSeriesCompletedWithChildren(task, childTasks) {
+  const progress = aggregateTaskProgress(task, childTasks);
+  return progress.total > 0 && progress.completed === progress.total;
+}
+function aggregateTaskProgress(task, childTasks) {
+  return [task, ...childTasks].reduce(
+    (summary, item) => {
+      const progress = taskProgressSteps(item);
+      summary.total += progress.total;
+      summary.completed += progress.completed;
+      return summary;
+    },
+    { total: 0, completed: 0 }
+  );
+}
+function taskProgressSteps(task) {
+  if (task.kind === "composite") {
+    return {
+      total: task.occurrenceDates.length * task.subtasks.length,
+      completed: task.occurrenceStates.reduce((sum, state) => sum + (state.completedSubtaskIds?.length ?? 0), 0)
+    };
+  }
+  return {
+    total: task.occurrenceDates.length,
+    completed: task.occurrenceStates.length
+  };
 }
 function isTaskSeriesCompleted(task) {
   if (task.occurrenceDates.length === 0) {
@@ -7173,11 +7697,6 @@ var TodayTasksView = class extends BaseProjectView {
     const actions = header.createDiv({ cls: "pm-inline-actions" });
     const exportButton = actions.createEl("button", { text: "\u5BFC\u51FA\u4ECA\u65E5\u4EFB\u52A1", cls: "pm-button pm-button-secondary" });
     exportButton.addEventListener("click", async () => this.copyIncompleteTasks(rawIncomplete));
-    const exportAllButton = actions.createEl("button", { text: "\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55", cls: "pm-button pm-button-secondary" });
-    exportAllButton.addEventListener("click", async () => {
-      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsMarkdown());
-      new import_obsidian12.Notice("\u5DF2\u590D\u5236\u5B8C\u6574\u4EFB\u52A1\u8BB0\u5F55 Markdown");
-    });
     const addButton = actions.createEl("button", { text: "+ \u65B0\u589E\u4EFB\u52A1", cls: "pm-button pm-button-primary" });
     addButton.addEventListener("click", () => {
       const suggested = this.plugin.store.getSuggestedTaskWindow(today);
@@ -7227,14 +7746,14 @@ var TodayTasksView = class extends BaseProjectView {
     (0, import_obsidian12.setIcon)(icon, "sparkles");
     const copy = tipCard.createDiv();
     copy.createEl("strong", { text: "\u5C0F\u8D34\u58EB" });
-    copy.createDiv({ cls: "pm-muted", text: "\u5BFC\u51FA\u6309\u94AE\u4F1A\u76F4\u63A5\u590D\u5236\u4ECA\u5929\u4ECD\u672A\u5B8C\u6210\u7684\u4EFB\u52A1\uFF0C\u6587\u672C\u53EF\u76F4\u63A5\u7C98\u56DE\u5FEB\u901F\u8BB0\u5F55\u6216\u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u3002" });
+    copy.createDiv({ cls: "pm-muted", text: "\u5BFC\u51FA\u6309\u94AE\u4F1A\u590D\u5236\u6781\u7B80\u4ECA\u65E5\u6E05\u5355\uFF1B\u628A\u67D0\u4E00\u884C\u6539\u6210\u5DF2\u5B8C\u6210\u540E\u7C98\u56DE\u5FEB\u901F\u8BB0\u5F55\uFF0C\u4F1A\u53EA\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002" });
   }
   async copyIncompleteTasks(tasks) {
     if (tasks.length === 0) {
       new import_obsidian12.Notice("\u4ECA\u5929\u6CA1\u6709\u672A\u5B8C\u6210\u4EFB\u52A1\u53EF\u5BFC\u51FA");
       return;
     }
-    const text = this.plugin.store.exportTasksAsFormattedText(tasks, "current");
+    const text = this.plugin.store.exportTasksAsMinimalCompletionText(tasks);
     await copyTextToClipboard(text);
     new import_obsidian12.Notice("\u5DF2\u590D\u5236\u4ECA\u65E5\u672A\u5B8C\u6210\u4EFB\u52A1");
   }

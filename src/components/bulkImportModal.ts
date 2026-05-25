@@ -25,8 +25,8 @@ export class BulkImportModal extends Modal {
     contentEl.createDiv({
       cls: "pm-import-guide",
       text: this.options.projectId
-        ? `当前处于项目导入模式：未显式切换项目时，任务会按“${projectName}”处理。支持普通/组合、单次/每日/每周任务；同名任务会覆盖，时间冲突会自动改成同日 1 分钟空档占位。`
-        : "支持 #项目：新项目名 自动建项目，也支持未归属任务。可导入普通/组合、单次/每日/每周任务；同名任务会覆盖，时间冲突会自动改成同日 1 分钟空档占位。"
+        ? `当前处于项目导入模式：未显式切换项目时，任务会按“${projectName}”处理。创建或覆盖任务必须提供 @日期 时间段；极简 - [x] 标题 只用于完成今日已有任务。`
+        : "支持 #项目：新项目名 自动建项目，也支持未归属任务。创建或覆盖任务必须提供 @日期 时间段；极简 - [x] 标题 只用于完成今日已有任务。"
     });
 
     const state = {
@@ -64,6 +64,24 @@ export class BulkImportModal extends Modal {
         cls: "pm-muted",
         text: `解析 ${preview.summary.total} 条，问题 ${preview.issues.length} 条`
       });
+      if (preview.transferPackage) {
+        const summaryGrid = previewEl.createDiv({ cls: "pm-import-summary-grid" });
+        [
+          ["恢复模式", "替换全部"],
+          ["项目 / 进度页", `${preview.transferPackage.projectCount} / ${preview.transferPackage.progressPageCount}`],
+          ["任务系列", String(preview.transferPackage.taskCount)],
+          ["历史 / 索引", `${preview.transferPackage.writeHistoryCount} / ${preview.transferPackage.noteTaskIndexCount}`]
+        ].forEach(([label, value]) => {
+          const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
+          card.createDiv({ cls: "pm-muted", text: label });
+          card.createEl("strong", { text: value });
+        });
+        previewEl.createDiv({
+          cls: "pm-import-project-hint",
+          text: `检测到完整迁移包，导出时间 ${preview.transferPackage.exportedAt}。提交后会替换当前项目管理数据。`
+        });
+        return;
+      }
       const summaryGrid = previewEl.createDiv({ cls: "pm-import-summary-grid" });
       [
         ["新增任务", String(preview.summary.createCount)],
@@ -101,7 +119,7 @@ export class BulkImportModal extends Modal {
       if (preview.issues.length > 0) {
         const issueList = previewEl.createEl("ul", { cls: "pm-import-issues" });
         preview.issues.slice(0, 8).forEach((issue) => {
-          issueList.createEl("li", { text: `第 ${issue.line} 行：${issue.message}` });
+          issueList.createEl("li", { text: `第 ${issue.line} 行：${issue.message}${issue.blocking ? "（阻止导入）" : ""}` });
         });
       }
     };
@@ -127,12 +145,12 @@ export class BulkImportModal extends Modal {
   }
 }
 
-function importActionText(action: "create" | "overwrite" | "overwrite-and-complete-today" | "overwrite-and-complete-series"): string {
-  if (action === "overwrite-and-complete-series") {
-    return "覆盖并提前结束";
+function importActionText(action: "create" | "overwrite" | "complete-today" | "complete-series"): string {
+  if (action === "complete-series") {
+    return "完成并结束系列";
   }
-  if (action === "overwrite-and-complete-today") {
-    return "覆盖并完成今日";
+  if (action === "complete-today") {
+    return "完成今日";
   }
   if (action === "overwrite") {
     return "覆盖";
