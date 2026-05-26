@@ -25,8 +25,8 @@ export class BulkImportModal extends Modal {
     contentEl.createDiv({
       cls: "pm-import-guide",
       text: this.options.projectId
-        ? `当前处于项目导入模式：未显式切换项目时，任务会按“${projectName}”处理。创建或覆盖任务必须提供 @日期 时间段；极简 - [x] 标题 只用于完成今日已有任务。`
-        : "支持 #项目：新项目名 自动建项目，也支持未归属任务。创建或覆盖任务必须提供 @日期 时间段；极简 - [x] 标题 只用于完成今日已有任务。"
+        ? `当前处于项目导入模式：未显式切换项目时，任务会按“${projectName}”处理。也可粘贴“导出全部记录”的数据迁移 JSON。`
+        : "支持 #项目：新项目名 自动建项目，也支持未归属任务；也可粘贴“导出全部记录”的数据迁移 JSON。"
     });
 
     const state = {
@@ -46,7 +46,7 @@ export class BulkImportModal extends Modal {
     const input = contentEl.createEl("textarea", {
       cls: "pm-bulk-import-input",
       placeholder:
-        "#项目：插件体验示例\n- [ ] 开发任务解析器 kind:composite @2026-05-18 09:00-10:30 #parser !high status:doing\n  - 解析标题\n  - 解析日期\n- [ ] 每日回顾输入流程 kind:simple @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n- [x] 每周复盘导入流程 kind:simple @2026-05-18 20:30-21:00 #review status:done repeat:weekly count:4 finish:series"
+        "#项目：插件体验示例\n+ 组合：开发任务解析器 @2026-05-18 09:00-10:30 #parser !high status:doing\n  - 解析标题\n  - 解析日期\n+ 任务：每日回顾输入流程 @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n+ 任务：每周复盘导入流程 @2026-05-18 20:30-21:00 #review status:todo repeat:weekly count:4"
     });
     input.addEventListener("input", () => {
       state.text = input.value;
@@ -65,14 +65,25 @@ export class BulkImportModal extends Modal {
         text: `解析 ${preview.summary.total} 条，问题 ${preview.issues.length} 条`
       });
       const summaryGrid = previewEl.createDiv({ cls: "pm-import-summary-grid" });
-      [
-        ["新增任务", String(preview.summary.createCount)],
-        ["覆盖任务", String(preview.summary.overwriteCount)],
-        ["完成今日", String(preview.summary.completeTodayCount)],
-        ["提前结束", String(preview.summary.completeSeriesCount)],
-        ["组合任务", String(preview.summary.composite)],
-        ["已勾选完成", String(preview.summary.completed)]
-      ].forEach(([label, value]) => {
+      const summaryItems =
+        preview.sourceFormat === "data-migration" && preview.dataMigration
+          ? [
+              ["记录类型", "数据迁移 JSON"],
+              ["项目", String(preview.dataMigration.projects)],
+              ["项目页", String(preview.dataMigration.progressPages)],
+              ["任务 / 实例", `${preview.dataMigration.tasks} / ${preview.dataMigration.occurrences}`],
+              ["导图关系", String(preview.dataMigration.mindmapLinks)],
+              ["新增 / 覆盖", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
+            ]
+          : [
+              ["新增任务", String(preview.summary.createCount)],
+              ["覆盖任务", String(preview.summary.overwriteCount)],
+              ["完成今日", String(preview.summary.completeTodayCount)],
+              ["提前结束", String(preview.summary.completeSeriesCount)],
+              ["组合任务", String(preview.summary.composite)],
+              ["已勾选完成", String(preview.summary.completed)]
+            ];
+      summaryItems.forEach(([label, value]) => {
         const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
         card.createDiv({ cls: "pm-muted", text: label });
         card.createEl("strong", { text: value });

@@ -123,16 +123,16 @@ export class QuickDialogView extends BaseProjectView {
     if (this.target === "quick-task") {
       const importHint = container.createDiv({ cls: "pm-input-card" });
       const hintHeader = importHint.createDiv({ cls: "pm-input-card-header" });
-      hintHeader.createEl("strong", { text: "任务导入规则" });
-      hintHeader.createDiv({ cls: "pm-muted", text: "这套语法与项目页批量导入、今日任务导出完全互通。" });
+      hintHeader.createEl("strong", { text: "创建任务格式" });
+      hintHeader.createDiv({ cls: "pm-muted", text: "数据迁移 JSON、今日完成极简 Markdown、新任务计划复杂 Markdown 会自动分流。" });
       [
-        "支持粘贴“导出全部记录”的明文任务清单；提交后会按普通任务语法创建或覆盖任务。",
-        "支持普通任务与组合任务；组合任务可写 kind:composite，也可直接在下一行缩进写子任务。",
+        "支持粘贴“导出全部记录”的数据迁移 JSON；提交后会恢复项目、项目页、任务视图状态和导图关系。",
+        "新任务计划使用 + 任务：或 + 组合：开头，必须写完整日期和时间段。",
+        "今日完成只使用极简 - [x] 标题；找不到今日已有任务会报错，不会创建新任务。",
+        "组合计划可直接在下一行缩进写轻量子任务。",
         "任务行下缩进 > 描述 可写入任务描述，多行描述会按换行合并。",
         "支持单次、每日、每周此时：repeat:once / daily / weekly；需要限制次数可继续写 count:4 或 until:2026-06-30。",
-        "支持 done:2026-05-25,2026-05-26 标记已完成发生日期，便于迁移重复任务进度。",
-        "创建或覆盖任务必须写完整日期和时间段，例如 @2026-05-25 09:00-09:30。",
-        "极简 - [x] 标题 只会匹配并完成今日已有任务；找不到时会报错，不会创建新任务。"
+        "支持 done:2026-05-25,2026-05-26 标记已完成发生日期，用于计划文本中的局部完成记录。"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
     }
 
@@ -380,7 +380,7 @@ export class QuickDialogView extends BaseProjectView {
     const previewCard = container.createDiv({ cls: "pm-input-card pm-dialog-task-preview" });
     const header = previewCard.createDiv({ cls: "pm-input-card-header" });
     header.createEl("strong", { text: "实时任务预览" });
-    header.createDiv({ cls: "pm-muted", text: "和项目页批量导入、今日任务导出使用同一套解析规则。" });
+    header.createDiv({ cls: "pm-muted", text: "支持数据迁移 JSON、今日完成极简 Markdown 和新任务计划复杂 Markdown。" });
     const body = previewCard.createDiv({ cls: "pm-dialog-task-preview-body" });
 
     const renderPreview = (): void => {
@@ -389,12 +389,21 @@ export class QuickDialogView extends BaseProjectView {
         defaultDate: toDateKey(now())
       });
       const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
-      [
-        ["任务总数", String(preview.summary.total)],
-        ["普通 / 组合", `${preview.tasks.filter((task) => task.input.kind !== "composite").length} / ${preview.summary.composite}`],
-        ["单次 / 每日 / 每周", `${preview.tasks.filter((task) => task.input.recurrence === "once").length} / ${preview.tasks.filter((task) => task.input.recurrence === "daily").length} / ${preview.tasks.filter((task) => task.input.recurrence === "weekly").length}`],
-        ["新增 / 覆盖", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
-      ].forEach(([label, value]) => {
+      const summaryItems =
+        preview.sourceFormat === "data-migration" && preview.dataMigration
+          ? [
+              ["记录类型", "数据迁移 JSON"],
+              ["项目 / 任务", `${preview.dataMigration.projects} / ${preview.dataMigration.tasks}`],
+              ["实例 / 导图关系", `${preview.dataMigration.occurrences} / ${preview.dataMigration.mindmapLinks}`],
+              ["新增 / 覆盖", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
+            ]
+          : [
+              ["任务总数", String(preview.summary.total)],
+              ["普通 / 组合", `${preview.tasks.filter((task) => task.input.kind !== "composite").length} / ${preview.summary.composite}`],
+              ["单次 / 每日 / 每周", `${preview.tasks.filter((task) => task.input.recurrence === "once").length} / ${preview.tasks.filter((task) => task.input.recurrence === "daily").length} / ${preview.tasks.filter((task) => task.input.recurrence === "weekly").length}`],
+              ["新增 / 覆盖", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
+            ];
+      summaryItems.forEach(([label, value]) => {
         const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
         card.createDiv({ cls: "pm-muted", text: label });
         card.createEl("strong", { text: value });
@@ -402,7 +411,7 @@ export class QuickDialogView extends BaseProjectView {
 
       const rows = body.createDiv({ cls: "pm-dialog-task-preview-list" });
       if (preview.tasks.length === 0) {
-        rows.createDiv({ cls: "pm-muted", text: "输入任务后，这里会显示任务类型、重复规则和导入动作。" });
+        rows.createDiv({ cls: "pm-muted", text: "输入数据迁移 JSON、今日完成或任务计划后，这里会显示导入动作。" });
       } else {
         preview.tasks.slice(0, 8).forEach((task) => {
           const row = rows.createDiv({ cls: "pm-dialog-task-preview-item" });
@@ -456,12 +465,12 @@ export class QuickDialogView extends BaseProjectView {
     if (this.target === "quick-task") {
       return [
         "#项目：新的学习计划",
-        "- [ ] 普通任务 kind:simple @2026-05-18 09:00-10:00 #tag !high status:doing",
-        "- [ ] 组合任务 kind:composite @2026-05-18 14:00-15:00 #plan !medium status:todo",
+        "+ 任务：普通任务 @2026-05-18 09:00-10:00 #tag !high status:doing",
+        "+ 组合：组合任务 @2026-05-18 14:00-15:00 #plan !medium status:todo",
         "  - 子任务一",
         "  - 子任务二",
-        "- [ ] 每日复习 @2026-05-18 20:00-20:30 #review repeat:daily count:5",
-        "- [x] 每周回顾 @2026-05-18 21:00-21:30 #review status:done repeat:weekly count:4 finish:series"
+        "+ 任务：每日复习 @2026-05-18 20:00-20:30 #review repeat:daily count:5",
+        "+ 任务：每周回顾 @2026-05-18 21:00-21:30 #review status:todo repeat:weekly count:4"
       ].join("\n");
     }
     if (this.target === "mindmap") {
@@ -790,7 +799,7 @@ function editorHint(target: DialogTarget, mode: MindmapInsertMode): string {
     return mode === "inside" ? "当前会把内容并入所选节点正文。" : "当前会把每一行解析成一个新的评语节点。";
   }
   if (target === "quick-task") {
-    return "完整输入用于创建或覆盖任务；极简勾选只用于完成今日已有任务。";
+    return "数据迁移 JSON 用于恢复数据；+ 任务 / + 组合用于计划；极简勾选只用于完成今日已有任务。";
   }
   return "编辑区已包裹成独立卡片，便于专注输入。";
 }
@@ -801,27 +810,27 @@ function buildQuickTaskShortcuts(): QuickTaskShortcut[] {
     {
       label: "普通任务",
       hint: "插入普通任务模板",
-      snippet: `- [ ] 普通任务 kind:simple @${today} 09:00-09:30 status:todo`
+      snippet: `+ 任务：普通任务 @${today} 09:00-09:30 status:todo`
     },
     {
       label: "组合任务",
       hint: "插入组合任务模板和两个子任务",
-      snippet: `- [ ] 组合任务 kind:composite @${today} 10:00-11:00 status:todo\n  - 子任务一\n  - 子任务二`
+      snippet: `+ 组合：组合任务 @${today} 10:00-11:00 status:todo\n  - 子任务一\n  - 子任务二`
     },
     {
       label: "单次",
       hint: "插入单次任务模板",
-      snippet: `- [ ] 单次任务 kind:simple @${today} 14:00-14:30 repeat:once status:todo`
+      snippet: `+ 任务：单次任务 @${today} 14:00-14:30 repeat:once status:todo`
     },
     {
       label: "每日",
       hint: "插入每日任务模板",
-      snippet: `- [ ] 每日任务 kind:simple @${today} 20:00-20:20 repeat:daily count:7 status:todo`
+      snippet: `+ 任务：每日任务 @${today} 20:00-20:20 repeat:daily count:7 status:todo`
     },
     {
       label: "每周此时",
       hint: "插入每周重复模板",
-      snippet: `- [ ] 每周任务 kind:simple @${today} 21:00-21:30 repeat:weekly count:4 status:todo`
+      snippet: `+ 任务：每周任务 @${today} 21:00-21:30 repeat:weekly count:4 status:todo`
     },
     {
       label: "未归属项目",

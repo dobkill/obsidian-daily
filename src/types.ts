@@ -294,6 +294,25 @@ export type TaskImportCompletionMode = "pending" | "today" | "series";
 
 export type TaskImportAction = "create" | "overwrite" | "complete-today" | "complete-series";
 
+export type TaskImportSourceFormat = "task-plan" | "data-migration";
+
+export type TaskImportDataMigrationSummary = {
+  version: number;
+  exportedAt?: string;
+  projects: number;
+  progressPages: number;
+  tasks: number;
+  occurrences: number;
+  compositeTasks: number;
+  mindmapLinks: number;
+  ganttDependencies: number;
+  mindmapComments: number;
+  taskNotes: number;
+  sourceLinks: number;
+  occurrenceStates: number;
+  occurrenceOverrides: number;
+};
+
 export type TaskImportPreviewTask = {
   line: number;
   raw: string;
@@ -307,8 +326,10 @@ export type TaskImportPreviewTask = {
 };
 
 export type TaskImportPreview = {
+  sourceFormat: TaskImportSourceFormat;
   tasks: TaskImportPreviewTask[];
   issues: TaskImportIssue[];
+  dataMigration?: TaskImportDataMigrationSummary;
   summary: {
     total: number;
     completed: number;

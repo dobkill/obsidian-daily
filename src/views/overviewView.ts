@@ -464,8 +464,8 @@ export class OverviewView extends BaseProjectView {
     headerCopy.createDiv({ cls: "pm-muted", text: "围绕单个项目统一查看表格、看板、甘特图与思维导图。" });
     const headerActions = header.createDiv({ cls: "pm-inline-actions" });
     headerActions.createEl("button", { text: "导出全部记录", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
-      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsMarkdown());
-      new Notice("已复制全部记录 Markdown");
+      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsDataMigrationJson());
+      new Notice("已复制数据迁移 JSON");
     });
     headerActions.createEl("button", { text: "新增项目", cls: "pm-button pm-button-primary" }).addEventListener("click", () => {
       new ProjectModal(this.app, {

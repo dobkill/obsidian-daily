@@ -15,6 +15,7 @@ import {
   TaskDeleteScope,
   TaskInput,
   TaskImportCompletionMode,
+  TaskImportDataMigrationSummary,
   TaskImportPreview,
   TaskImportPreviewTask,
   TaskKind,
@@ -35,6 +36,28 @@ import {
   WriteHistoryFile,
   WriteHistoryRecord
 } from "../types";
+import {
+  ParsedImportTask,
+  UNASSIGNED_PROJECT_LABEL,
+  extractProjectTaskBlocks,
+  parseFormattedTaskText,
+  renderDescriptionForExport,
+  renderSubtaskForExport,
+  renderTaskSeriesForExport
+} from "../importExport/formattedTasks";
+import {
+  DataMigrationPackage,
+  buildDataMigrationJson,
+  buildDataMigrationProjectPlan,
+  buildDataMigrationTaskPlan,
+  dataMigrationPackageToTasks,
+  findTaskByMigrationIdentity,
+  parseDataMigrationText,
+  remapDataMigrationProgressPages,
+  remapDataMigrationTask,
+  summarizeDataMigrationPackage,
+  taskToDataMigrationImportInput
+} from "../importExport/dataMigration";
 import { addDays, addMinutes, compareDateKeys, formatMinutesToTime, now, parseDateKey, parseTimeToMinutes, toDateKey, toIsoLocal } from "../utils/date";
 import { MARKDOWN_FORMAT_GUIDE } from "../utils/markdownGuide";
 
@@ -85,7 +108,6 @@ const NOTE_TASK_INDEX_FILE = "note-task-index.json";
 const WRITE_HISTORY_FILE = "write-history.json";
 const TASKS_DIR = "tasks";
 const MARKDOWN_GUIDE_FILE = "markdown-format-guide.md";
-const UNASSIGNED_PROJECT_LABEL = "未归属项目";
 export class ProjectManagementStore extends Events {
   private app: App;
   private config: PluginConfig;
@@ -703,6 +725,18 @@ export class ProjectManagementStore extends Events {
   }
 
   previewFormattedTasks(text: string, options: { projectId?: string; defaultDate?: string; source?: TaskSourceLink } = {}): TaskImportPreview {
+    const migration = parseDataMigrationText(text);
+    if (migration.kind === "invalid") {
+      return {
+        ...createEmptyTaskImportPreview(),
+        sourceFormat: "data-migration",
+        issues: migration.issues
+      };
+    }
+    if (migration.kind === "package") {
+      return this.buildDataMigrationImportPreview(migration.package);
+    }
+
     const parsed = parseFormattedTaskText(text, {
       projects: this.projects,
       projectId: options.projectId,
@@ -714,6 +748,15 @@ export class ProjectManagementStore extends Events {
 
   async importFormattedTasks(text: string, options: { projectId?: string; defaultDate?: string; source?: TaskSourceLink; historySummary?: string } = {}): Promise<Task[]> {
     this.assertWritable();
+    const migration = parseDataMigrationText(text);
+    if (migration.kind === "invalid") {
+      const issue = migration.issues[0];
+      throw new Error(issue ? `第 ${issue.line} 行：${issue.message}` : "数据迁移 JSON 解析失败");
+    }
+    if (migration.kind === "package") {
+      return this.importDataMigrationPackage(migration.package, options.historySummary);
+    }
+
     const preview = this.previewFormattedTasks(text, options);
     const blockingIssue = preview.issues.find((issue) => issue.blocking);
     if (blockingIssue) {
@@ -784,12 +827,13 @@ export class ProjectManagementStore extends Events {
     return lines.join("\n").trim();
   }
 
-  exportAllRecordsAsMarkdown(): string {
-    const tasks = this.getAllTasks().sort(compareSeriesTasks);
-    if (tasks.length === 0) {
-      return "";
-    }
-    return renderTaskListForImport(tasks, (projectId) => this.getProject(projectId)?.name);
+  exportAllRecordsAsDataMigrationJson(): string {
+    return buildDataMigrationJson({
+      projects: this.getProjects(),
+      progressPages: this.getProgressPages(),
+      tasks: this.getAllTasks().sort(compareSeriesTasks),
+      exportedAt: toIsoLocal(now())
+    });
   }
 
   async exportMarkdownGuide(): Promise<string> {
@@ -1243,6 +1287,7 @@ export class ProjectManagementStore extends Events {
     });
 
     return {
+      sourceFormat: "task-plan",
       tasks: previewTasks,
       issues,
       summary: {
@@ -1254,6 +1299,47 @@ export class ProjectManagementStore extends Events {
         completeTodayCount: previewTasks.filter((task) => task.action === "complete-today").length,
         completeSeriesCount: previewTasks.filter((task) => task.action === "complete-series").length,
         newProjectNames: [...newProjectNames]
+      }
+    };
+  }
+
+  private buildDataMigrationImportPreview(records: DataMigrationPackage): TaskImportPreview {
+    const importedTasks = dataMigrationPackageToTasks(records);
+    const projectPlan = buildDataMigrationProjectPlan(records.projects, this.projects);
+    const taskPlan = buildDataMigrationTaskPlan(importedTasks, this.getAllTasks(), projectPlan.projectIdBySourceId);
+    const dataMigration: TaskImportDataMigrationSummary = summarizeDataMigrationPackage(records);
+
+    const previewTasks = importedTasks.map((task) => {
+      const targetTaskId = taskPlan.taskIdBySourceId.get(task.id) ?? task.id;
+      const targetProjectId = task.projectId ? projectPlan.projectIdBySourceId.get(task.projectId) ?? task.projectId : undefined;
+      const matched = this.findTask(targetTaskId) ?? findTaskByMigrationIdentity(this.getAllTasks(), task.title, targetProjectId, task.date);
+      return {
+        line: 0,
+        raw: task.title,
+        input: taskToDataMigrationImportInput(task, targetProjectId),
+        projectId: targetProjectId,
+        projectName: targetProjectId ? this.getProject(targetProjectId)?.name ?? records.projects.find((project) => project.id === task.projectId)?.name : UNASSIGNED_PROJECT_LABEL,
+        matchedTaskId: matched?.id,
+        matchedTaskTitle: matched?.title,
+        action: matched ? "overwrite" : "create",
+        completionMode: "pending"
+      } satisfies TaskImportPreviewTask;
+    });
+
+    return {
+      sourceFormat: "data-migration",
+      tasks: previewTasks,
+      issues: [],
+      dataMigration,
+      summary: {
+        total: records.tasks.length,
+        completed: importedTasks.filter(isTaskFullyCompleted).length,
+        composite: dataMigration.compositeTasks,
+        createCount: taskPlan.createCount,
+        overwriteCount: taskPlan.overwriteCount,
+        completeTodayCount: 0,
+        completeSeriesCount: 0,
+        newProjectNames: projectPlan.newProjectNames
       }
     };
   }
@@ -1349,6 +1435,61 @@ export class ProjectManagementStore extends Events {
     }
     return created;
   }
+
+  private async importDataMigrationPackage(records: DataMigrationPackage, historySummary?: string): Promise<Task[]> {
+    this.assertWritable();
+    const importedTasks = dataMigrationPackageToTasks(records);
+    const projectPlan = buildDataMigrationProjectPlan(records.projects, this.projects);
+    const progressPages = remapDataMigrationProgressPages(records.progressPages, projectPlan.projectIdBySourceId, this.progressPages);
+    const taskPlan = buildDataMigrationTaskPlan(importedTasks, this.getAllTasks(), projectPlan.projectIdBySourceId);
+    const nextTasks = taskPlan.tasks.map((task) => normalizeStoredTask(remapDataMigrationTask(task, taskPlan.taskIdBySourceId, projectPlan.projectIdBySourceId)));
+    const replacedIds = new Set(taskPlan.replacedTaskIds);
+    const existingTasks = this.getAllTasks();
+    const existingAfterReplace = existingTasks.filter((task) => !replacedIds.has(task.id));
+    const allTasksAfterImport = [...existingAfterReplace, ...nextTasks];
+    nextTasks.forEach((task) => {
+      assertValidTaskMindmapParent(task, allTasksAfterImport.filter((candidate) => candidate.id !== task.id));
+    });
+    this.assertCompositeTaskConsistency(nextTasks, replacedIds);
+    this.assertNoConflicts(
+      nextTasks,
+      new Set(existingTasks.filter((task) => replacedIds.has(task.id)).flatMap((task) => [...occurrenceKeysForTask(task)]))
+    );
+
+    const importedProjectIds = new Set(projectPlan.projects.map((project) => project.id));
+    const importedPageIds = new Set(progressPages.map((page) => page.id));
+    const importedPageProjectIds = new Set(progressPages.map((page) => page.projectId));
+    this.projects = [
+      ...this.projects.filter((project) => !importedProjectIds.has(project.id)),
+      ...projectPlan.projects
+    ];
+    this.progressPages = [
+      ...this.progressPages.filter((page) => !importedPageIds.has(page.id) && !importedPageProjectIds.has(page.projectId)),
+      ...progressPages
+    ];
+    const removedTasks = this.replaceTasks([...replacedIds], nextTasks);
+    const affectedMonths = monthsForTasks([...removedTasks, ...nextTasks]);
+
+    await this.enqueueWrite(async () => {
+      await this.writeJson(this.pathFor(PROJECTS_FILE), { projects: this.projects } satisfies ProjectsFile);
+      await this.writeJson(this.pathFor(PROGRESS_FILE), { pages: this.progressPages } satisfies ProgressPagesFile);
+      for (const month of affectedMonths) {
+        await this.flushMonth(month);
+      }
+    });
+    await this.reloadCurrentFolderData();
+    const changed = nextTasks.map((task) => this.getTask(task.id) ?? task);
+    await this.recordWriteHistory({
+      type: "import",
+      summary:
+        historySummary ??
+        `导入数据迁移 JSON：项目 ${records.projects.length} 个，任务 ${records.tasks.length} 个，新增 ${taskPlan.createCount}，覆盖 ${taskPlan.overwriteCount}`,
+      taskIds: changed.map((task) => task.id)
+    });
+    this.trigger("changed");
+    return changed;
+  }
+
 
   private normalizeTaskInput(input: TaskInput): TaskInput {
     const title = input.title.trim();
@@ -2228,6 +2369,7 @@ function isOccurrenceStateRecord(value: unknown): value is TaskOccurrenceState {
 
 function createEmptyTaskImportPreview(): TaskImportPreview {
   return {
+    sourceFormat: "task-plan",
     tasks: [],
     issues: [],
     summary: {
@@ -3082,188 +3224,6 @@ function findFreeMinuteFrom(intervals: Array<{ start: number; end: number }>, st
   return null;
 }
 
-type ParsedImportTask = {
-  line: number;
-  raw: string;
-  input: TaskInput;
-  projectName?: string;
-  completionMode: TaskImportCompletionMode;
-  createReady: boolean;
-};
-
-function parseFormattedTaskText(
-  text: string,
-  options: {
-    projects: Project[];
-    projectId?: string;
-    defaultDate: string;
-    source?: TaskSourceLink;
-  }
-): { tasks: ParsedImportTask[]; issues: TaskImportPreview["issues"] } {
-  const tasks: ParsedImportTask[] = [];
-  const issues: TaskImportPreview["issues"] = [];
-  const lines = text.split(/\r?\n/);
-  let currentProjectId = options.projectId;
-  let currentProjectName = options.projectId ? options.projects.find((project) => project.id === options.projectId)?.name : undefined;
-  let currentTask: ParsedImportTask | null = null;
-
-  const flushCurrent = (): void => {
-    if (currentTask) {
-      tasks.push(currentTask);
-      currentTask = null;
-    }
-  };
-
-  lines.forEach((line, index) => {
-    const raw = line;
-    const projectMatch = /^\s*#项目[:：]\s*(.*?)\s*$/.exec(line);
-    if (projectMatch) {
-      flushCurrent();
-      if (options.projectId) {
-        currentProjectId = options.projectId;
-        currentProjectName = options.projects.find((project) => project.id === options.projectId)?.name;
-        return;
-      }
-      const projectName = projectMatch[1].trim() || UNASSIGNED_PROJECT_LABEL;
-      if (projectName === UNASSIGNED_PROJECT_LABEL) {
-        currentProjectId = undefined;
-        currentProjectName = UNASSIGNED_PROJECT_LABEL;
-        return;
-      }
-      const existingProject = options.projects.find((project) => project.name === projectName || project.id === projectName);
-      currentProjectId = existingProject?.id;
-      currentProjectName = existingProject?.name ?? projectName;
-      return;
-    }
-
-    const taskMatch = /^(\s*)-\s+\[( |x|X)\]\s+(.+)$/.exec(line);
-    if (taskMatch && taskMatch[1].length === 0) {
-      flushCurrent();
-      try {
-        const parsed = parseTaskLine(taskMatch[3], {
-          completed: taskMatch[2].toLowerCase() === "x",
-          projectId: currentProjectId,
-          projectName: currentProjectName,
-          defaultDate: options.defaultDate,
-          source: options.source
-        });
-        currentTask = {
-          line: index + 1,
-          raw,
-          input: parsed.input,
-          projectName: parsed.projectName,
-          completionMode: parsed.completionMode,
-          createReady: parsed.createReady
-        };
-      } catch (error) {
-        issues.push({ line: index + 1, message: error instanceof Error ? error.message : "任务解析失败", raw });
-      }
-      return;
-    }
-
-    const subtaskMatch = /^\s{2,}-\s+(.+)$/.exec(line);
-    if (subtaskMatch && currentTask) {
-      currentTask.input.kind = "composite";
-      const subtask = parseSubtaskLine(subtaskMatch[1]);
-      currentTask.input.subtasks = [
-        ...(currentTask.input.subtasks ?? []),
-        { ...subtask, order: currentTask.input.subtasks?.length ?? 0 }
-      ];
-      return;
-    }
-
-    const descriptionMatch = /^\s{2,}>\s?(.*)$/.exec(line);
-    if (descriptionMatch && currentTask) {
-      currentTask.input.description = [currentTask.input.description, descriptionMatch[1]].filter(Boolean).join("\n");
-      return;
-    }
-
-    if (line.trim()) {
-      issues.push({ line: index + 1, message: "无法识别的行", raw });
-    }
-  });
-  flushCurrent();
-  return { tasks, issues };
-}
-
-function parseSubtaskLine(raw: string): TaskSubtaskInput {
-  const match = /\s@(\d{2}:\d{2})-(\d{2}:\d{2})\s*$/.exec(raw);
-  const title = raw.replace(/\s@\d{2}:\d{2}-\d{2}:\d{2}\s*$/, "").trim();
-  return {
-    title,
-    startTime: match?.[1],
-    endTime: match?.[2]
-  };
-}
-
-function parseTaskLine(
-  rawTitle: string,
-  context: {
-    completed: boolean;
-    projectId?: string;
-    projectName?: string;
-    defaultDate: string;
-    source?: TaskSourceLink;
-  }
-): { input: TaskInput; projectName?: string; completionMode: TaskImportCompletionMode; createReady: boolean } {
-  let title = rawTitle.trim();
-  const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
-  const kindMatch = /\b(?:kind|type):(simple|composite)\b/.exec(title);
-  const repeatMatch = /\brepeat:(once|daily|weekly|custom)\b/.exec(title);
-  const countMatch = /\bcount:(\d+)\b/.exec(title);
-  const untilMatch = /\buntil:(\d{4}-\d{2}-\d{2})\b/.exec(title);
-  const datesMatch = /\bdates:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
-  const doneMatch = /\bdone:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
-  const statusMatch = /\bstatus:(todo|doing|blocked|done)\b/.exec(title);
-  const finishMatch = /\bfinish:(today|series)\b/.exec(title);
-  const priorityMatch = /!(low|medium|high|urgent)\b/.exec(title);
-  const tags = [...title.matchAll(/#([^\s#]+)/g)].map((match) => match[1]).filter((tag) => !tag.startsWith("项目"));
-  const customDates = datesMatch?.[1].split(",").filter(Boolean) ?? [];
-  const completedDates = doneMatch?.[1].split(",").filter(Boolean) ?? [];
-
-  title = title
-    .replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "")
-    .replace(/\b(?:kind|type):(simple|composite)\b/g, "")
-    .replace(/\brepeat:(once|daily|weekly|custom)\b/g, "")
-    .replace(/\bcount:\d+\b/g, "")
-    .replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "")
-    .replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "")
-    .replace(/\bdone:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "")
-    .replace(/\bstatus:(todo|doing|blocked|done)\b/g, "")
-    .replace(/\bfinish:(today|series)\b/g, "")
-    .replace(/!(low|medium|high|urgent)\b/g, "")
-    .replace(/#[^\s#]+/g, "")
-    .trim();
-
-  if (!title) {
-    throw new Error("任务标题不能为空");
-  }
-
-  return {
-    input: {
-      kind: (kindMatch?.[1] as TaskKind | undefined) ?? "simple",
-      title,
-      projectId: context.projectId,
-      date: dateMatch?.[1] ?? customDates[0] ?? context.defaultDate,
-      startTime: dateMatch?.[2],
-      endTime: dateMatch?.[3],
-      recurrence: (repeatMatch?.[1] as TaskRecurrence | undefined) ?? "once",
-      recurrenceCount: countMatch ? Number(countMatch[1]) : null,
-      recurrenceUntil: untilMatch?.[1] ?? null,
-      occurrenceDates: customDates.length > 0 ? customDates : undefined,
-      completedOccurrenceDates: completedDates.length > 0 ? completedDates : undefined,
-      status: (statusMatch?.[1] as TaskStatus | undefined) ?? (context.completed ? "done" : "todo"),
-      priority: priorityMatch?.[1] as TaskPriority | undefined,
-      tags,
-      sourceLinks: context.source ? [context.source] : [],
-      completed: context.completed && completedDates.length === 0
-    },
-    projectName: context.projectName,
-    completionMode: context.completed && completedDates.length === 0 ? ((finishMatch?.[1] as TaskImportCompletionMode | undefined) ?? "today") : "pending",
-    createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
-  };
-}
-
 function resolveTaskImportAction(matched: boolean, completionMode: TaskImportCompletionMode, completed: boolean): TaskImportPreviewTask["action"] {
   if (!matched) {
     return "create";
@@ -3279,107 +3239,6 @@ function resolveTaskImportAction(matched: boolean, completionMode: TaskImportCom
 
 function normalizeImportIdentity(value: string): string {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("zh-Hans-CN");
-}
-
-function renderTaskListForImport(tasks: Task[], projectNameForId: (projectId?: string) => string | undefined): string {
-  const grouped = new Map<string, Task[]>();
-  tasks.forEach((task) => {
-    const key = task.projectId ?? UNASSIGNED_PROJECT_LABEL;
-    grouped.set(key, [...(grouped.get(key) ?? []), task]);
-  });
-
-  const sections: string[] = [];
-  [...grouped.entries()].forEach(([projectKey, projectTasks], index) => {
-    if (index > 0) {
-      sections.push("");
-    }
-    sections.push(`#项目：${projectKey === UNASSIGNED_PROJECT_LABEL ? UNASSIGNED_PROJECT_LABEL : projectNameForId(projectKey) ?? UNASSIGNED_PROJECT_LABEL}`);
-    projectTasks.slice().sort(compareSeriesTasks).forEach((task) => {
-      sections.push(renderTaskSeriesForExport(task));
-      renderDescriptionForExport(task.description).forEach((line) => {
-        sections.push(line);
-      });
-      if (task.kind === "composite") {
-        task.subtasks.forEach((subtask) => {
-          sections.push(renderSubtaskForExport(subtask));
-        });
-      }
-    });
-  });
-
-  return sections.join("\n").trim();
-}
-
-function renderTaskSeriesForExport(task: Task): string {
-  const completedOccurrenceDates = getCompletedOccurrenceDates(task);
-  const completed = task.occurrenceDates.length > 0 && completedOccurrenceDates.length === task.occurrenceDates.length;
-  const parts = buildFormattedTaskParts({ ...task, completedOccurrenceDates });
-  return `- [${completed ? "x" : " "}] ${parts.join(" ")}`.trim();
-}
-
-function renderSubtaskForExport(subtask: TaskSubtask): string {
-  const time = subtask.startTime && subtask.endTime ? ` @${subtask.startTime}-${subtask.endTime}` : "";
-  return `  - ${subtask.title}${time}`;
-}
-
-function renderDescriptionForExport(description?: string): string[] {
-  const trimmed = description?.trim();
-  if (!trimmed) {
-    return [];
-  }
-  return trimmed.split(/\r?\n/).map((line) => `  > ${line}`);
-}
-
-type FormattedTaskSource = {
-  title: string;
-  kind: TaskKind;
-  date: string;
-  startTime?: string;
-  endTime?: string;
-  tags: string[];
-  priority?: TaskPriority;
-  status: TaskStatus;
-  recurrence: TaskRecurrence;
-  recurrenceCount?: number | null;
-  recurrenceUntil?: string | null;
-  occurrenceDates?: string[];
-  completedOccurrenceDates?: string[];
-};
-
-function buildFormattedTaskParts(task: FormattedTaskSource): string[] {
-  const parts = [task.title];
-  parts.push(`kind:${task.kind}`);
-  parts.push(`@${task.date}${task.startTime && task.endTime ? ` ${task.startTime}-${task.endTime}` : ""}`);
-  task.tags.forEach((tag) => parts.push(`#${tag}`));
-  if (task.priority) {
-    parts.push(`!${task.priority}`);
-  }
-  parts.push(`status:${task.status}`);
-  if (task.recurrence !== "once") {
-    parts.push(`repeat:${task.recurrence}`);
-  }
-  if (task.recurrenceCount) {
-    parts.push(`count:${task.recurrenceCount}`);
-  }
-  if (task.recurrenceUntil) {
-    parts.push(`until:${task.recurrenceUntil}`);
-  }
-  if (task.recurrence === "custom" && task.occurrenceDates?.length) {
-    parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
-  }
-  if (task.completedOccurrenceDates?.length) {
-    parts.push(`done:${[...new Set(task.completedOccurrenceDates)].sort(compareDateKeys).join(",")}`);
-  }
-  return parts;
-}
-
-function getCompletedOccurrenceDates(task: Task): string[] {
-  return task.occurrenceDates.filter((date) => getOccurrenceProgress(task, date).completed);
-}
-
-function extractProjectTaskBlocks(text: string): string {
-  const blocks = [...text.matchAll(/<!--\s*pm:start\s*-->([\s\S]*?)<!--\s*pm:end\s*-->/g)].map((match) => match[1].trim());
-  return blocks.length > 0 ? blocks.join("\n") : "";
 }
 
 function hashText(text: string): string {

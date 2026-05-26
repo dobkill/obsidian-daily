@@ -1,27 +1,115 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { DATA_MIGRATION_SCHEMA, DATA_MIGRATION_VERSION } from "./importExport/dataMigration";
 import type ProjectManagementPlugin from "./main";
 import { AppendHeaderConfig, PluginConfig } from "./types";
+import { copyTextToClipboard } from "./utils/clipboard";
 
-const IMPORT_SAMPLE_TEXT = [
+const DATA_MIGRATION_SAMPLE_TEXT = JSON.stringify(
+  {
+    schema: DATA_MIGRATION_SCHEMA,
+    version: DATA_MIGRATION_VERSION,
+    exportedAt: "2026-05-26T12:00:00+08:00",
+    projects: [
+      {
+        id: "project-english",
+        name: "英语四级冲刺",
+        description: "迁移 JSON 会保留项目元数据。",
+        color: "#3d8bfd",
+        status: "active",
+        createdAt: "2026-05-26T12:00:00+08:00",
+        updatedAt: "2026-05-26T12:00:00+08:00"
+      }
+    ],
+    progressPages: [
+      {
+        id: "page-english",
+        projectId: "project-english",
+        name: "英语四级冲刺",
+        columnOrder: ["title", "status", "priority", "tags", "recurrence", "schedule", "completion", "description", "actions"],
+        createdAt: "2026-05-26T12:00:00+08:00",
+        updatedAt: "2026-05-26T12:00:00+08:00"
+      }
+    ],
+    tasks: [
+      {
+        id: "task-vocab",
+        title: "每日背词",
+        projectId: "project-english",
+        date: "2026-05-26",
+        startTime: "07:00",
+        endTime: "07:30",
+        recurrence: "daily",
+        recurrenceCount: 1000,
+        occurrenceStates: [{ date: "2026-05-26", completedAt: "2026-05-26T07:31:00+08:00" }],
+        viewState: { board: { columnId: "todo", order: 10 }, gantt: { rowOrder: 10, dependencyIds: [], locked: false, milestone: false }, mindmap: { parentTaskId: null, childOrder: 10, expanded: true } },
+        createdAt: "2026-05-26T12:00:00+08:00",
+        updatedAt: "2026-05-26T12:00:00+08:00",
+        revision: 1
+      }
+    ]
+  },
+  null,
+  2
+);
+
+const TODAY_COMPLETION_SAMPLE_TEXT = [
   "#项目：英语四级冲刺",
-  "- [ ] 搭建复习看板 kind:simple @2026-05-18 09:00-10:30 #planning !high status:doing",
-  "- [ ] 拆解每日背词 kind:composite @2026-05-18 12:00-12:40 #vocab !medium status:todo",
-  "  - 复习昨天错词",
-  "  - 新增 30 个高频词",
-  "  - 记录易混词组",
-  "- [ ] 晚间听力打卡 kind:simple @2026-05-18 21:00-21:25 #listen !medium status:todo repeat:daily count:5",
-  "- [ ] 模考复盘 kind:simple @2026-05-19 19:30-21:00 #mock !medium status:todo repeat:weekly count:4",
-  "- [x] 提交报名材料 kind:simple @2026-05-17 18:00-18:30 #admin status:done",
-  "#项目：写作素材库",
-  "- [ ] 修订作文模板 kind:simple @2026-05-20 20:00-21:30 #writing !urgent status:blocked",
-  "- [ ] 每周摘抄整理 kind:composite @2026-05-21 21:00-22:00 #review status:doing repeat:weekly count:6",
-  "  - 归类开头句",
-  "  - 归类论证句",
-  "  - 归类结尾句",
-  "- [x] 周复盘总任务 kind:simple @2026-05-21 22:00-22:20 #review status:done repeat:weekly count:6 finish:series",
-  "#项目：",
-  "- [ ] 补一条未归属临时任务 kind:simple @2026-05-18 22:30-23:00 #adhoc status:todo"
+  "- [x] 每日背词",
+  "- [ ] 听力精听",
+  "",
+  "#项目：未归属项目",
+  "- [x] 购买答题卡"
 ].join("\n");
+
+const TASK_PLAN_SAMPLE_TEXT = [
+  "#项目：英语四级冲刺",
+  "+ 任务：搭建复习看板 @2026-05-27 09:00-10:30 #planning !high status:doing",
+  "+ 组合：拆解每日背词 @2026-05-27 12:00-12:40 #vocab !medium status:todo repeat:daily count:5",
+  "  - 复习昨天错词 @12:00-12:10",
+  "  - 新增 30 个高频词 @12:10-12:30",
+  "  > 每天完成后可在今日任务页勾选。",
+  "+ 任务：模考复盘 @2026-05-29 19:30-21:00 #mock status:todo repeat:weekly count:4"
+].join("\n");
+
+type FormatGuideSection = {
+  title: string;
+  desc: string;
+  points: string[];
+  sample: string;
+};
+
+const FORMAT_GUIDE_SECTIONS: FormatGuideSection[] = [
+  {
+    title: "数据迁移 JSON",
+    desc: "用于知识库迁移和完整恢复，由“导出全部记录”生成，也可直接粘贴到快速记录-创建任务。",
+    points: [
+      "保留项目、项目页、任务、看板、甘特图、思维导图、评语、任务笔记、完成状态和单次实例覆盖。",
+      "重复日期不逐日展开；每日 / 每周任务用 recurrence + count / until 表达，异常日期才写入 occurrencePlan。",
+      "必须保持 schema 与 version 不变。"
+    ],
+    sample: DATA_MIGRATION_SAMPLE_TEXT
+  },
+  {
+    title: "今日完成极简 Markdown",
+    desc: "用于把今日任务页导出的清单粘回快速记录，只改变今天已有任务的完成状态。",
+    points: [
+      "只支持 #项目 分组和 - [x] 标题 / - [ ] 标题。",
+      "不会创建新任务，也不会覆盖任务日期、时间、标签或重复规则。",
+      "找不到同项目、同标题、今天发生的任务时会阻止导入。"
+    ],
+    sample: TODAY_COMPLETION_SAMPLE_TEXT
+  },
+  {
+    title: "新任务计划复杂 Markdown",
+    desc: "用于制定新计划或覆盖已有任务，语法与今日完成格式明显分离。",
+    points: [
+      "任务行使用 + 任务：或 + 组合：开头，创建 / 覆盖必须提供 @YYYY-MM-DD HH:mm-HH:mm。",
+      "支持 #标签、!优先级、status、repeat、count、until、dates、done 和缩进描述。",
+      "组合任务可在下方缩进写轻量子任务。"
+    ],
+    sample: TASK_PLAN_SAMPLE_TEXT
+  }
+];
 
 export class ProjectManagementSettingTab extends PluginSettingTab {
   plugin: ProjectManagementPlugin;
@@ -37,69 +125,16 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h2", { text: "项目管理插件设置" });
     const doc = containerEl.createDiv({ cls: "pm-settings-doc" });
-    doc.createEl("h3", { text: "批量导入数据范例" });
+    doc.createEl("h3", { text: "快速记录三种创建格式" });
     doc.createDiv({
       cls: "pm-muted",
-      text: "这里的范例可直接编辑、实时观察导入效果，但不会保存；每次重新打开设置页都会恢复默认展示内容。"
+      text: "示例窗口可编辑、可滚动、可复制，但不会保存；每次重新打开设置页都会恢复默认内容。"
     });
-    const sampleInput = doc.createEl("textarea", { cls: "pm-settings-sample-input" });
-    sampleInput.value = IMPORT_SAMPLE_TEXT;
-    const insight = doc.createDiv({ cls: "pm-settings-preview" });
-    const renderSamplePreview = (): void => {
-      insight.empty();
-      const preview = this.plugin.store.previewFormattedTasks(sampleInput.value, {
-        defaultDate: "2026-05-18"
-      });
-      const statusCount = preview.tasks.reduce<Record<string, number>>((counts, task) => {
-        const key = task.input.status ?? "todo";
-        counts[key] = (counts[key] ?? 0) + 1;
-        return counts;
-      }, {});
-      const dates = preview.tasks.map((task) => task.input.date).sort();
-      const summary = insight.createDiv({ cls: "pm-settings-preview-grid" });
-      [
-        ["表格任务数", String(preview.summary.total)],
-        ["覆盖/新增", `${preview.summary.overwriteCount}/${preview.summary.createCount}`],
-        ["看板列分布", `待办 ${statusCount.todo ?? 0} · 进行中 ${statusCount.doing ?? 0} · 阻塞 ${statusCount.blocked ?? 0} · 已完成 ${statusCount.done ?? 0}`],
-        ["甘特跨度", dates.length > 0 ? `${dates[0]} -> ${dates[dates.length - 1]}` : "暂无"],
-        ["完成统计", `已勾选 ${preview.summary.completed}，组合任务 ${preview.summary.composite}`],
-        ["项目变化", preview.summary.newProjectNames.length > 0 ? `会新建 ${preview.summary.newProjectNames.join("、")}` : "全部项目已存在或未归属"]
-      ].forEach(([label, value]) => {
-        const card = summary.createDiv({ cls: "pm-settings-preview-card" });
-        card.createDiv({ cls: "pm-muted", text: label });
-        card.createEl("strong", { text: value });
-      });
-
-      const notes = insight.createDiv({ cls: "pm-settings-preview-notes" });
-      [
-        "表格视图会展示标题、状态、优先级、标签、重复规则与完成进度。",
-        "看板会按照 status:todo / doing / blocked / done 自动分列。",
-        "甘特图直接读取日期和时间范围；普通任务、组合任务、每日任务、每周任务都会按系列呈现。",
-        "思维导图的评语节点、任务挂载关系和依赖关系，导入后继续在项目进度页或快速记录页补充。"
-      ].forEach((item) => notes.createEl("div", { text: item, cls: "pm-settings-note-item" }));
-
-      if (preview.issues.length > 0) {
-        const issueList = insight.createEl("ul", { cls: "pm-import-issues" });
-        preview.issues.slice(0, 6).forEach((issue) => {
-          issueList.createEl("li", { text: `第 ${issue.line} 行：${issue.message}` });
-        });
-      }
-    };
-    sampleInput.addEventListener("input", renderSamplePreview);
-    doc.createEl("h3", { text: "导入后会呈现什么" });
-    const list = doc.createEl("ul");
-    [
-      "表格视图会展示标题、状态、优先级、标签、重复规则和组合任务进度。",
-      "看板视图会按 status:todo / doing / blocked / done 自动分列。",
-      "甘特图会直接读取日期和时间范围生成时间轴条带。",
-      "已完成统计会把 - [x] 任务直接计入完成数量与完成率，repeat 任务还支持 finish:series 提前结束整个系列。",
-      "思维导图会先生成任务节点；评语节点、任务父子关系和依赖关系在项目进度页或快速记录页继续补充。"
-    ].forEach((item) => list.createEl("li", { text: item }));
-    renderSamplePreview();
+    FORMAT_GUIDE_SECTIONS.forEach((section) => this.renderFormatGuideSection(doc, section));
 
     new Setting(containerEl)
       .setName("导出 Markdown 语法说明")
-      .setDesc("生成一份当前插件支持的 Markdown 任务语法说明，包含完整记录导出格式。")
+      .setDesc("生成一份当前插件支持的快速记录格式说明，包含数据迁移 JSON 与两类 Markdown。")
       .addButton((button) =>
         button.setButtonText("导出说明文件").setCta().onClick(async () => {
           const path = await this.plugin.store.exportMarkdownGuide();
@@ -263,6 +298,23 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
           await this.plugin.updateSettings({ showCompletedTasks: value });
         })
       );
+  }
+
+  private renderFormatGuideSection(containerEl: HTMLElement, section: FormatGuideSection): void {
+    const wrapper = containerEl.createDiv({ cls: "pm-settings-format-section" });
+    const header = wrapper.createDiv({ cls: "pm-settings-format-header" });
+    const copy = header.createDiv();
+    copy.createEl("h4", { text: section.title });
+    copy.createDiv({ cls: "pm-muted", text: section.desc });
+    const button = header.createEl("button", { text: "复制范例", cls: "pm-button pm-button-secondary" });
+    const textarea = wrapper.createEl("textarea", { cls: "pm-settings-format-textarea" });
+    textarea.value = section.sample;
+    button.addEventListener("click", async () => {
+      await copyTextToClipboard(textarea.value);
+      new Notice(`已复制${section.title}范例`);
+    });
+    const list = wrapper.createEl("ul", { cls: "pm-settings-format-points" });
+    section.points.forEach((point) => list.createEl("li", { text: point }));
   }
 
   private renderAppendHeaderSettings(

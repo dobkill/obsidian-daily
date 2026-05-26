@@ -123,88 +123,910 @@ function getLastTwelveMonthsDays(anchor = now()) {
   return result;
 }
 
+// src/importExport/formattedTasks.ts
+var UNASSIGNED_PROJECT_LABEL = "\u672A\u5F52\u5C5E\u9879\u76EE";
+function parseFormattedTaskText(text, options) {
+  const tasks = [];
+  const issues = [];
+  const lines = text.split(/\r?\n/);
+  let currentProjectId = options.projectId;
+  let currentProjectName = options.projectId ? options.projects.find((project) => project.id === options.projectId)?.name : void 0;
+  let currentTask = null;
+  const flushCurrent = () => {
+    if (currentTask) {
+      tasks.push(currentTask);
+      currentTask = null;
+    }
+  };
+  lines.forEach((line, index) => {
+    const raw = line;
+    const projectMatch = /^\s*#项目[:：]\s*(.*?)\s*$/.exec(line);
+    if (projectMatch) {
+      flushCurrent();
+      if (options.projectId) {
+        currentProjectId = options.projectId;
+        currentProjectName = options.projects.find((project) => project.id === options.projectId)?.name;
+        return;
+      }
+      const projectName = projectMatch[1].trim() || UNASSIGNED_PROJECT_LABEL;
+      if (projectName === UNASSIGNED_PROJECT_LABEL) {
+        currentProjectId = void 0;
+        currentProjectName = UNASSIGNED_PROJECT_LABEL;
+        return;
+      }
+      const existingProject = options.projects.find((project) => project.name === projectName || project.id === projectName);
+      currentProjectId = existingProject?.id;
+      currentProjectName = existingProject?.name ?? projectName;
+      return;
+    }
+    const plannedTaskMatch = /^(\s*)\+\s*(任务|task|组合|composite)[:：]\s+(.+)$/.exec(line);
+    if (plannedTaskMatch && plannedTaskMatch[1].length === 0) {
+      flushCurrent();
+      try {
+        const prefix = plannedTaskMatch[2].toLowerCase();
+        const parsed = parseTaskLine(plannedTaskMatch[3], {
+          completed: false,
+          forcedKind: prefix === "\u7EC4\u5408" || prefix === "composite" ? "composite" : "simple",
+          projectId: currentProjectId,
+          projectName: currentProjectName,
+          defaultDate: options.defaultDate,
+          source: options.source
+        });
+        currentTask = {
+          line: index + 1,
+          raw,
+          input: parsed.input,
+          projectName: parsed.projectName,
+          completionMode: parsed.completionMode,
+          createReady: parsed.createReady
+        };
+      } catch (error) {
+        issues.push({ line: index + 1, message: error instanceof Error ? error.message : "\u4EFB\u52A1\u89E3\u6790\u5931\u8D25", raw });
+      }
+      return;
+    }
+    const taskMatch = /^(\s*)-\s+\[( |x|X)\]\s+(.+)$/.exec(line);
+    if (taskMatch && taskMatch[1].length === 0) {
+      flushCurrent();
+      try {
+        const parsed = parseTaskLine(taskMatch[3], {
+          completed: taskMatch[2].toLowerCase() === "x",
+          projectId: currentProjectId,
+          projectName: currentProjectName,
+          defaultDate: options.defaultDate,
+          source: options.source
+        });
+        currentTask = {
+          line: index + 1,
+          raw,
+          input: parsed.input,
+          projectName: parsed.projectName,
+          completionMode: parsed.completionMode,
+          createReady: parsed.createReady
+        };
+      } catch (error) {
+        issues.push({ line: index + 1, message: error instanceof Error ? error.message : "\u4EFB\u52A1\u89E3\u6790\u5931\u8D25", raw });
+      }
+      return;
+    }
+    const subtaskMatch = /^\s{2,}-\s+(.+)$/.exec(line);
+    if (subtaskMatch && currentTask) {
+      currentTask.input.kind = "composite";
+      const subtask = parseSubtaskLine(subtaskMatch[1]);
+      currentTask.input.subtasks = [
+        ...currentTask.input.subtasks ?? [],
+        { ...subtask, order: currentTask.input.subtasks?.length ?? 0 }
+      ];
+      return;
+    }
+    const descriptionMatch = /^\s{2,}>\s?(.*)$/.exec(line);
+    if (descriptionMatch && currentTask) {
+      currentTask.input.description = [currentTask.input.description, descriptionMatch[1]].filter(Boolean).join("\n");
+      return;
+    }
+    if (line.trim()) {
+      issues.push({ line: index + 1, message: "\u65E0\u6CD5\u8BC6\u522B\u7684\u884C", raw });
+    }
+  });
+  flushCurrent();
+  return { tasks, issues };
+}
+function renderTaskSeriesForExport(task) {
+  const completedOccurrenceDates = getCompletedOccurrenceDates(task);
+  const parts = buildFormattedTaskParts({ ...task, completedOccurrenceDates }, { includeKind: false });
+  const prefix = task.kind === "composite" ? "\u7EC4\u5408" : "\u4EFB\u52A1";
+  return `+ ${prefix}\uFF1A${parts.join(" ")}`.trim();
+}
+function renderSubtaskForExport(subtask) {
+  const time = subtask.startTime && subtask.endTime ? ` @${subtask.startTime}-${subtask.endTime}` : "";
+  return `  - ${subtask.title}${time}`;
+}
+function renderDescriptionForExport(description) {
+  const trimmed = description?.trim();
+  if (!trimmed) {
+    return [];
+  }
+  return trimmed.split(/\r?\n/).map((line) => `  > ${line}`);
+}
+function extractProjectTaskBlocks(text) {
+  const blocks = [...text.matchAll(/<!--\s*pm:start\s*-->([\s\S]*?)<!--\s*pm:end\s*-->/g)].map((match) => match[1].trim());
+  return blocks.length > 0 ? blocks.join("\n") : "";
+}
+function parseSubtaskLine(raw) {
+  const match = /\s@(\d{2}:\d{2})-(\d{2}:\d{2})\s*$/.exec(raw);
+  const title = raw.replace(/\s@\d{2}:\d{2}-\d{2}:\d{2}\s*$/, "").trim();
+  return {
+    title,
+    startTime: match?.[1],
+    endTime: match?.[2]
+  };
+}
+function parseTaskLine(rawTitle, context) {
+  let title = rawTitle.trim();
+  const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
+  const kindMatch = /\b(?:kind|type):(simple|composite)\b/.exec(title);
+  const repeatMatch = /\brepeat:(once|daily|weekly|custom)\b/.exec(title);
+  const countMatch = /\bcount:(\d+)\b/.exec(title);
+  const untilMatch = /\buntil:(\d{4}-\d{2}-\d{2})\b/.exec(title);
+  const datesMatch = /\bdates:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
+  const doneMatch = /\bdone:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
+  const statusMatch = /\bstatus:(todo|doing|blocked|done)\b/.exec(title);
+  const finishMatch = /\bfinish:(today|series)\b/.exec(title);
+  const priorityMatch = /!(low|medium|high|urgent)\b/.exec(title);
+  const tags = [...title.matchAll(/#([^\s#]+)/g)].map((match) => match[1]).filter((tag) => !tag.startsWith("\u9879\u76EE"));
+  const customDates = datesMatch?.[1].split(",").filter(Boolean) ?? [];
+  const completedDates = doneMatch?.[1].split(",").filter(Boolean) ?? [];
+  title = title.replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "").replace(/\b(?:kind|type):(simple|composite)\b/g, "").replace(/\brepeat:(once|daily|weekly|custom)\b/g, "").replace(/\bcount:\d+\b/g, "").replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "").replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bdone:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bstatus:(todo|doing|blocked|done)\b/g, "").replace(/\bfinish:(today|series)\b/g, "").replace(/!(low|medium|high|urgent)\b/g, "").replace(/#[^\s#]+/g, "").trim();
+  if (!title) {
+    throw new Error("\u4EFB\u52A1\u6807\u9898\u4E0D\u80FD\u4E3A\u7A7A");
+  }
+  return {
+    input: {
+      kind: kindMatch?.[1] ?? context.forcedKind ?? "simple",
+      title,
+      projectId: context.projectId,
+      date: dateMatch?.[1] ?? customDates[0] ?? context.defaultDate,
+      startTime: dateMatch?.[2],
+      endTime: dateMatch?.[3],
+      recurrence: repeatMatch?.[1] ?? "once",
+      recurrenceCount: countMatch ? Number(countMatch[1]) : null,
+      recurrenceUntil: untilMatch?.[1] ?? null,
+      occurrenceDates: customDates.length > 0 ? customDates : void 0,
+      completedOccurrenceDates: completedDates.length > 0 ? completedDates : void 0,
+      status: statusMatch?.[1] ?? (context.completed ? "done" : "todo"),
+      priority: priorityMatch?.[1],
+      tags,
+      sourceLinks: context.source ? [context.source] : [],
+      completed: context.completed && completedDates.length === 0
+    },
+    projectName: context.projectName,
+    completionMode: context.completed && completedDates.length === 0 ? finishMatch?.[1] ?? "today" : "pending",
+    createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
+  };
+}
+function buildFormattedTaskParts(task, options = {}) {
+  const parts = [task.title];
+  if (options.includeKind !== false) {
+    parts.push(`kind:${task.kind}`);
+  }
+  parts.push(`@${task.date}${task.startTime && task.endTime ? ` ${task.startTime}-${task.endTime}` : ""}`);
+  task.tags.forEach((tag) => parts.push(`#${tag}`));
+  if (task.priority) {
+    parts.push(`!${task.priority}`);
+  }
+  parts.push(`status:${task.status}`);
+  if (task.recurrence !== "once") {
+    parts.push(`repeat:${task.recurrence}`);
+  }
+  if (task.recurrenceCount) {
+    parts.push(`count:${task.recurrenceCount}`);
+  }
+  if (task.recurrenceUntil) {
+    parts.push(`until:${task.recurrenceUntil}`);
+  }
+  if (task.recurrence === "custom" && task.occurrenceDates?.length) {
+    parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
+  }
+  if (task.completedOccurrenceDates?.length) {
+    parts.push(`done:${[...new Set(task.completedOccurrenceDates)].sort(compareDateKeys).join(",")}`);
+  }
+  return parts;
+}
+function getCompletedOccurrenceDates(task) {
+  return task.occurrenceDates.filter((date) => isOccurrenceCompleted(task, date));
+}
+function isOccurrenceCompleted(task, date) {
+  const state = task.occurrenceStates.find((item) => item.date === date);
+  if (task.kind === "simple") {
+    return Boolean(state);
+  }
+  if (task.subtasks.length === 0) {
+    return Boolean(state?.completedAt);
+  }
+  const completedIds = new Set(state?.completedSubtaskIds ?? []);
+  return task.subtasks.every((subtask) => completedIds.has(subtask.id));
+}
+
+// src/importExport/dataMigration.ts
+var DATA_MIGRATION_SCHEMA = "obsidian-project-management/data-migration";
+var DATA_MIGRATION_VERSION = 2;
+var DATA_MIGRATION_FENCE = "pm-data-migration-json";
+function buildDataMigrationJson(input) {
+  const payload = {
+    schema: DATA_MIGRATION_SCHEMA,
+    version: DATA_MIGRATION_VERSION,
+    exportedAt: input.exportedAt,
+    projects: input.projects,
+    progressPages: input.progressPages,
+    tasks: input.tasks.map(taskToDataMigrationRecord)
+  };
+  return JSON.stringify(payload, null, 2);
+}
+function parseDataMigrationText(text) {
+  const match = findDataMigrationJson(text);
+  if (!match) {
+    if (text.includes(DATA_MIGRATION_SCHEMA) || text.includes(DATA_MIGRATION_FENCE)) {
+      return {
+        kind: "invalid",
+        issues: [{ line: 1, raw: firstNonEmptyLine(text), message: "\u6570\u636E\u8FC1\u79FB JSON \u683C\u5F0F\u4E0D\u5B8C\u6574\u6216\u4EE3\u7801\u5757\u6807\u8BB0\u9519\u8BEF", blocking: true }]
+      };
+    }
+    return { kind: "none" };
+  }
+  try {
+    const parsed = JSON.parse(match.content);
+    if (!isDataMigrationPackage(parsed)) {
+      throw new Error("JSON \u7ED3\u6784\u4E0D\u7B26\u5408\u6570\u636E\u8FC1\u79FB\u683C\u5F0F");
+    }
+    if (parsed.schema !== DATA_MIGRATION_SCHEMA) {
+      throw new Error("\u6570\u636E\u8FC1\u79FB schema \u4E0D\u5339\u914D");
+    }
+    if (parsed.version !== DATA_MIGRATION_VERSION) {
+      throw new Error(`\u4E0D\u652F\u6301\u7684\u6570\u636E\u8FC1\u79FB\u7248\u672C\uFF1A${parsed.version}`);
+    }
+    return { kind: "package", package: parsed };
+  } catch (error) {
+    return {
+      kind: "invalid",
+      issues: [
+        {
+          line: match.line,
+          raw: firstNonEmptyLine(match.content),
+          message: error instanceof Error ? error.message : "\u6570\u636E\u8FC1\u79FB JSON \u89E3\u6790\u5931\u8D25",
+          blocking: true
+        }
+      ]
+    };
+  }
+}
+function summarizeDataMigrationPackage(records) {
+  const tasks = records.tasks.map(dataMigrationRecordToTask);
+  return {
+    version: records.version,
+    exportedAt: records.exportedAt,
+    projects: records.projects.length,
+    progressPages: records.progressPages.length,
+    tasks: records.tasks.length,
+    occurrences: tasks.reduce((count, task) => count + task.occurrenceDates.length, 0),
+    compositeTasks: tasks.filter((task) => task.kind === "composite").length,
+    mindmapLinks: tasks.filter((task) => Boolean(task.viewState?.mindmap?.parentTaskId)).length,
+    ganttDependencies: tasks.reduce((count, task) => count + (task.viewState?.gantt?.dependencyIds?.length ?? 0), 0),
+    mindmapComments: tasks.reduce((count, task) => count + task.mindmapComments.length, 0),
+    taskNotes: tasks.reduce((count, task) => count + task.notes.length, 0),
+    sourceLinks: tasks.reduce((count, task) => count + task.sourceLinks.length, 0),
+    occurrenceStates: tasks.reduce((count, task) => count + task.occurrenceStates.length, 0),
+    occurrenceOverrides: tasks.reduce((count, task) => count + task.occurrenceOverrides.length, 0)
+  };
+}
+function dataMigrationPackageToTasks(records) {
+  return records.tasks.map(dataMigrationRecordToTask);
+}
+function buildDataMigrationProjectPlan(projects, existingProjects) {
+  const projectIdBySourceId = /* @__PURE__ */ new Map();
+  const newProjectNames = [];
+  const projectByTargetId = /* @__PURE__ */ new Map();
+  projects.forEach((project) => {
+    const existing = existingProjects.find((candidate) => candidate.id === project.id) ?? existingProjects.find((candidate) => candidate.name === project.name);
+    const targetId = existing?.id ?? project.id;
+    projectIdBySourceId.set(project.id, targetId);
+    if (!existing) {
+      newProjectNames.push(project.name);
+    }
+    projectByTargetId.set(targetId, { ...project, id: targetId });
+  });
+  return {
+    projectIdBySourceId,
+    projects: [...projectByTargetId.values()],
+    newProjectNames
+  };
+}
+function buildDataMigrationTaskPlan(tasks, existingTasks, projectIdBySourceId) {
+  const taskIdBySourceId = /* @__PURE__ */ new Map();
+  const matchedTargetIds = /* @__PURE__ */ new Set();
+  const replacedTaskIds = [];
+  let createCount = 0;
+  let overwriteCount = 0;
+  tasks.forEach((task) => {
+    const projectId = task.projectId ? projectIdBySourceId.get(task.projectId) ?? task.projectId : void 0;
+    const existingById = existingTasks.find((candidate) => candidate.id === task.id);
+    const existingByIdentity = existingById ? void 0 : findTaskByMigrationIdentity(existingTasks, task.title, projectId, task.date);
+    const existing = existingById ?? existingByIdentity;
+    const targetId = existing && !matchedTargetIds.has(existing.id) ? existing.id : task.id;
+    taskIdBySourceId.set(task.id, targetId);
+    if (existing && targetId === existing.id) {
+      matchedTargetIds.add(existing.id);
+      replacedTaskIds.push(existing.id);
+      overwriteCount += 1;
+    } else {
+      createCount += 1;
+    }
+  });
+  return {
+    taskIdBySourceId,
+    tasks,
+    replacedTaskIds,
+    createCount,
+    overwriteCount
+  };
+}
+function findTaskByMigrationIdentity(tasks, title, projectId, date) {
+  return tasks.filter((task) => normalizeImportIdentity(task.title) === normalizeImportIdentity(title) && (task.projectId ?? void 0) === projectId).find((task) => task.occurrenceDates.includes(date));
+}
+function taskToDataMigrationImportInput(task, projectId) {
+  return {
+    kind: task.kind,
+    title: task.title,
+    description: task.description,
+    projectId,
+    status: task.status,
+    priority: task.priority,
+    tags: [...task.tags],
+    date: task.date,
+    startTime: task.startTime,
+    endTime: task.endTime,
+    recurrence: task.recurrence,
+    recurrenceCount: task.recurrenceCount ?? null,
+    recurrenceUntil: task.recurrenceUntil ?? null,
+    occurrenceDates: [...task.occurrenceDates],
+    completedOccurrenceDates: task.occurrenceStates.filter((state) => Boolean(state.completedAt)).map((state) => state.date),
+    occurrenceOverrides: task.occurrenceOverrides.map((override) => ({ ...override })),
+    subtasks: task.subtasks.map((subtask) => ({ ...subtask })),
+    viewState: cloneViewState(task.viewState),
+    sourceLinks: task.sourceLinks.map((source) => ({ ...source })),
+    notes: task.notes.map((note) => ({ ...note })),
+    mindmapComments: task.mindmapComments.map((comment) => ({ ...comment })),
+    completed: isTaskFullyCompleted(task)
+  };
+}
+function remapDataMigrationProgressPages(pages, projectIdBySourceId, existingPages) {
+  const pageByTargetId = /* @__PURE__ */ new Map();
+  pages.forEach((page) => {
+    const projectId = projectIdBySourceId.get(page.projectId) ?? page.projectId;
+    const existing = existingPages.find((candidate) => candidate.id === page.id) ?? existingPages.find((candidate) => candidate.projectId === projectId);
+    const id = existing?.id ?? page.id;
+    pageByTargetId.set(id, {
+      ...page,
+      id,
+      projectId,
+      columnOrder: [...page.columnOrder]
+    });
+  });
+  return [...pageByTargetId.values()];
+}
+function remapDataMigrationTask(task, taskIdBySourceId, projectIdBySourceId) {
+  const id = taskIdBySourceId.get(task.id) ?? task.id;
+  const projectId = task.projectId ? projectIdBySourceId.get(task.projectId) ?? task.projectId : void 0;
+  return {
+    ...task,
+    id,
+    projectId,
+    tags: [...task.tags],
+    subtasks: task.subtasks.map((subtask) => ({ ...subtask })),
+    occurrenceDates: [...task.occurrenceDates],
+    occurrenceStates: task.occurrenceStates.map((state) => ({
+      ...state,
+      completedSubtaskIds: [...state.completedSubtaskIds ?? []]
+    })),
+    occurrenceOverrides: task.occurrenceOverrides.map((override) => ({ ...override })),
+    viewState: remapDataMigrationViewState(task.viewState, taskIdBySourceId),
+    sourceLinks: task.sourceLinks.map((source) => ({ ...source })),
+    notes: task.notes.map((note) => ({ ...note })),
+    mindmapComments: task.mindmapComments.map((comment) => ({ ...comment, taskId: id }))
+  };
+}
+function taskToDataMigrationRecord(task) {
+  const status = task.status ?? "todo";
+  const recurrence = task.recurrence ?? "once";
+  const record = {
+    id: task.id,
+    title: task.title,
+    date: task.date,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    revision: task.revision
+  };
+  if (task.kind !== "simple") {
+    record.kind = task.kind;
+  }
+  if (task.description?.trim()) {
+    record.description = task.description;
+  }
+  if (task.projectId) {
+    record.projectId = task.projectId;
+  }
+  if (status !== "todo") {
+    record.status = status;
+  }
+  if (task.priority) {
+    record.priority = task.priority;
+  }
+  if (task.tags.length > 0) {
+    record.tags = [...task.tags];
+  }
+  if (task.startTime) {
+    record.startTime = task.startTime;
+  }
+  if (task.endTime) {
+    record.endTime = task.endTime;
+  }
+  if (recurrence !== "once") {
+    record.recurrence = recurrence;
+  }
+  if (task.recurrenceCount !== null && task.recurrenceCount !== void 0) {
+    record.recurrenceCount = task.recurrenceCount;
+  }
+  if (task.recurrenceUntil) {
+    record.recurrenceUntil = task.recurrenceUntil;
+  }
+  const occurrencePlan = buildOccurrencePlan(task);
+  if (occurrencePlan) {
+    record.occurrencePlan = occurrencePlan;
+  }
+  if (task.subtasks.length > 0) {
+    record.subtasks = task.subtasks.map((subtask) => ({ ...subtask }));
+  }
+  if (task.occurrenceStates.length > 0) {
+    record.occurrenceStates = task.occurrenceStates.map((state) => ({
+      ...state,
+      completedSubtaskIds: [...state.completedSubtaskIds ?? []]
+    }));
+  }
+  if (task.occurrenceOverrides.length > 0) {
+    record.occurrenceOverrides = task.occurrenceOverrides.map((override) => ({ ...override }));
+  }
+  if (!isDefaultViewState(task.viewState, status)) {
+    record.viewState = cloneViewState(task.viewState);
+  }
+  if (task.sourceLinks.length > 0) {
+    record.sourceLinks = task.sourceLinks.map((source) => ({ ...source }));
+  }
+  if (task.notes.length > 0) {
+    record.notes = task.notes.map((note) => ({ ...note }));
+  }
+  if (task.mindmapComments.length > 0) {
+    record.mindmapComments = task.mindmapComments.map((comment) => ({ ...comment }));
+  }
+  return record;
+}
+function dataMigrationRecordToTask(record) {
+  const status = normalizeTaskStatus(record.status);
+  const recurrence = normalizeTaskRecurrence(record.recurrence, record.occurrencePlan);
+  const occurrenceDates = buildOccurrenceDatesFromRecord(record, recurrence);
+  const date = occurrenceDates[0] ?? record.date;
+  return {
+    id: record.id,
+    kind: record.kind === "composite" ? "composite" : "simple",
+    title: record.title,
+    description: record.description ?? "",
+    projectId: record.projectId,
+    status,
+    priority: normalizeTaskPriority(record.priority),
+    tags: [...record.tags ?? []],
+    date,
+    startTime: record.startTime,
+    endTime: record.endTime,
+    recurrence,
+    recurrenceCount: record.recurrenceCount ?? null,
+    recurrenceUntil: record.recurrenceUntil ?? null,
+    subtasks: (record.subtasks ?? []).map((subtask, index) => ({ ...subtask, order: subtask.order ?? index })),
+    occurrenceDates,
+    occurrenceStates: (record.occurrenceStates ?? []).map((state) => ({
+      ...state,
+      completedSubtaskIds: [...state.completedSubtaskIds ?? []]
+    })),
+    occurrenceOverrides: (record.occurrenceOverrides ?? []).map((override) => ({ ...override })),
+    viewState: mergeViewState(record.viewState, status),
+    sourceLinks: (record.sourceLinks ?? []).map((source) => ({ ...source })),
+    notes: (record.notes ?? []).map((note) => ({ ...note })),
+    mindmapComments: (record.mindmapComments ?? []).map((comment) => ({ ...comment })),
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    revision: record.revision ?? 1
+  };
+}
+function buildOccurrencePlan(task) {
+  const actualDates = normalizeDateList(task.occurrenceDates);
+  if (task.recurrence === "custom") {
+    return {
+      source: "dates",
+      ...packDateSet(actualDates)
+    };
+  }
+  const generatedDates = generateRecurrenceDates({
+    date: task.date,
+    recurrence: task.recurrence,
+    recurrenceCount: task.recurrenceCount ?? null,
+    recurrenceUntil: task.recurrenceUntil ?? null
+  });
+  if (sameDateList(actualDates, generatedDates)) {
+    return void 0;
+  }
+  const actual = new Set(actualDates);
+  const generated = new Set(generatedDates);
+  const exclude = generatedDates.filter((date) => !actual.has(date));
+  const include = actualDates.filter((date) => !generated.has(date));
+  const plan = { source: "recurrence" };
+  if (exclude.length > 0) {
+    plan.exclude = packDateSet(exclude);
+  }
+  if (include.length > 0) {
+    plan.include = packDateSet(include);
+  }
+  return plan.exclude || plan.include ? plan : void 0;
+}
+function buildOccurrenceDatesFromRecord(record, recurrence) {
+  const plan = record.occurrencePlan;
+  if (plan?.source === "dates") {
+    return expandDateSet(plan);
+  }
+  const generated = generateRecurrenceDates({
+    date: record.date,
+    recurrence,
+    recurrenceCount: record.recurrenceCount ?? null,
+    recurrenceUntil: record.recurrenceUntil ?? null
+  });
+  if (plan?.source !== "recurrence") {
+    return generated;
+  }
+  const exclude = new Set(plan.exclude ? expandDateSet(plan.exclude) : []);
+  const include = plan.include ? expandDateSet(plan.include) : [];
+  return normalizeDateList([...generated.filter((date) => !exclude.has(date)), ...include]);
+}
+function generateRecurrenceDates(input) {
+  if (input.recurrence === "custom") {
+    return [input.date];
+  }
+  const countLimit = input.recurrenceCount ?? (input.recurrence === "once" ? 1 : 365);
+  const until = input.recurrenceUntil ?? null;
+  const dates = [];
+  let cursor = parseDateKey(input.date);
+  let createdCount = 0;
+  while (true) {
+    const dateKey = toDateKey(cursor);
+    if (until && compareDateKeys(dateKey, until) > 0) {
+      break;
+    }
+    if (input.recurrence !== "once" && input.recurrenceCount && createdCount >= input.recurrenceCount) {
+      break;
+    }
+    if (input.recurrence === "once" && createdCount >= 1) {
+      break;
+    }
+    dates.push(dateKey);
+    createdCount += 1;
+    if (input.recurrence === "once") {
+      break;
+    }
+    cursor = addDays(cursor, input.recurrence === "daily" ? 1 : 7);
+    if (createdCount >= countLimit && !input.recurrenceCount) {
+      break;
+    }
+  }
+  return dates.length > 0 ? dates : [input.date];
+}
+function packDateSet(dates) {
+  const normalized = normalizeDateList(dates);
+  const singles = [];
+  const ranges = [];
+  let index = 0;
+  while (index < normalized.length) {
+    const dailyRun = collectDateRun(normalized, index, 1);
+    if (dailyRun.length >= 3) {
+      ranges.push({ from: dailyRun[0], to: dailyRun[dailyRun.length - 1], every: "day" });
+      index += dailyRun.length;
+      continue;
+    }
+    const weeklyRun = collectDateRun(normalized, index, 7);
+    if (weeklyRun.length >= 3) {
+      ranges.push({ from: weeklyRun[0], to: weeklyRun[weeklyRun.length - 1], every: "week" });
+      index += weeklyRun.length;
+      continue;
+    }
+    singles.push(normalized[index]);
+    index += 1;
+  }
+  return {
+    ...singles.length > 0 ? { dates: singles } : {},
+    ...ranges.length > 0 ? { ranges } : {}
+  };
+}
+function collectDateRun(dates, startIndex, stepDays) {
+  const run = [dates[startIndex]];
+  let cursor = parseDateKey(dates[startIndex]);
+  for (let index = startIndex + 1; index < dates.length; index += 1) {
+    cursor = addDays(cursor, stepDays);
+    const expected = toDateKey(cursor);
+    if (dates[index] !== expected) {
+      break;
+    }
+    run.push(dates[index]);
+  }
+  return run;
+}
+function expandDateSet(set) {
+  const dates = [...set.dates ?? []];
+  (set.ranges ?? []).forEach((range) => {
+    let cursor = parseDateKey(range.from);
+    const step = range.every === "week" ? 7 : 1;
+    while (compareDateKeys(toDateKey(cursor), range.to) <= 0) {
+      dates.push(toDateKey(cursor));
+      cursor = addDays(cursor, step);
+    }
+  });
+  return normalizeDateList(dates);
+}
+function normalizeDateList(dates) {
+  return [...new Set(dates.filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)))].sort(compareDateKeys);
+}
+function sameDateList(left, right) {
+  return left.length === right.length && left.every((date, index) => date === right[index]);
+}
+function normalizeTaskRecurrence(value, occurrencePlan) {
+  if (value === "daily" || value === "weekly" || value === "custom") {
+    return value;
+  }
+  return occurrencePlan?.source === "dates" ? "custom" : "once";
+}
+function normalizeTaskStatus(value) {
+  return value === "doing" || value === "blocked" || value === "done" ? value : "todo";
+}
+function normalizeTaskPriority(value) {
+  if (value === "low" || value === "medium" || value === "high" || value === "urgent") {
+    return value;
+  }
+  return void 0;
+}
+function defaultTaskViewState(status) {
+  return {
+    board: {
+      columnId: status,
+      order: 0
+    },
+    gantt: {
+      rowOrder: 0,
+      dependencyIds: [],
+      locked: false,
+      milestone: false
+    },
+    mindmap: {
+      parentTaskId: null,
+      childOrder: 0,
+      expanded: true
+    }
+  };
+}
+function mergeViewState(patch, status) {
+  const base = defaultTaskViewState(status);
+  return {
+    board: {
+      columnId: patch?.board?.columnId ?? base.board.columnId,
+      order: patch?.board?.order ?? base.board.order
+    },
+    gantt: {
+      rowOrder: patch?.gantt?.rowOrder ?? base.gantt.rowOrder,
+      dependencyIds: [...patch?.gantt?.dependencyIds ?? base.gantt.dependencyIds],
+      locked: patch?.gantt?.locked ?? base.gantt.locked,
+      milestone: patch?.gantt?.milestone ?? base.gantt.milestone
+    },
+    mindmap: {
+      parentTaskId: patch?.mindmap?.parentTaskId === void 0 ? base.mindmap.parentTaskId : patch.mindmap.parentTaskId,
+      childOrder: patch?.mindmap?.childOrder ?? base.mindmap.childOrder,
+      expanded: patch?.mindmap?.expanded ?? base.mindmap.expanded,
+      x: patch?.mindmap?.x,
+      y: patch?.mindmap?.y
+    }
+  };
+}
+function isDefaultViewState(viewState, status) {
+  const base = defaultTaskViewState(status);
+  return viewState.board.columnId === base.board.columnId && viewState.board.order === base.board.order && viewState.gantt.rowOrder === base.gantt.rowOrder && viewState.gantt.dependencyIds.length === 0 && viewState.gantt.locked === base.gantt.locked && viewState.gantt.milestone === base.gantt.milestone && (viewState.mindmap.parentTaskId ?? null) === base.mindmap.parentTaskId && viewState.mindmap.childOrder === base.mindmap.childOrder && viewState.mindmap.expanded === base.mindmap.expanded && viewState.mindmap.x === void 0 && viewState.mindmap.y === void 0;
+}
+function cloneViewState(viewState) {
+  return {
+    board: { ...viewState.board },
+    gantt: {
+      ...viewState.gantt,
+      dependencyIds: [...viewState.gantt.dependencyIds]
+    },
+    mindmap: { ...viewState.mindmap }
+  };
+}
+function remapDataMigrationViewState(viewState, taskIdBySourceId) {
+  const parentTaskId = viewState.mindmap.parentTaskId ?? null;
+  return {
+    board: {
+      ...viewState.board
+    },
+    gantt: {
+      ...viewState.gantt,
+      dependencyIds: viewState.gantt.dependencyIds.map((id) => taskIdBySourceId.get(id) ?? id)
+    },
+    mindmap: {
+      ...viewState.mindmap,
+      parentTaskId: parentTaskId ? taskIdBySourceId.get(parentTaskId) ?? parentTaskId : parentTaskId
+    }
+  };
+}
+function isTaskFullyCompleted(task) {
+  return task.occurrenceDates.every((date) => isOccurrenceCompleted2(task, date));
+}
+function isOccurrenceCompleted2(task, date) {
+  const state = task.occurrenceStates.find((item) => item.date === date);
+  if (task.kind === "simple") {
+    return Boolean(state);
+  }
+  if (task.subtasks.length === 0) {
+    return Boolean(state?.completedAt);
+  }
+  const completedIds = new Set(state?.completedSubtaskIds ?? []);
+  return task.subtasks.every((subtask) => completedIds.has(subtask.id));
+}
+function normalizeImportIdentity(value) {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("zh-Hans-CN");
+}
+function findDataMigrationJson(text) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return { content: trimmed, line: 1 };
+  }
+  const fence = new RegExp("```\\s*" + DATA_MIGRATION_FENCE + "\\s*\\r?\\n([\\s\\S]*?)```", "i");
+  const match = fence.exec(text);
+  if (!match) {
+    return null;
+  }
+  const before = text.slice(0, match.index);
+  return {
+    content: match[1].trim(),
+    line: before.split(/\r?\n/).length
+  };
+}
+function firstNonEmptyLine(text) {
+  return text.split(/\r?\n/).find((line) => line.trim())?.trim() ?? "";
+}
+function isDataMigrationPackage(value) {
+  return isRecord(value) && value.schema === DATA_MIGRATION_SCHEMA && value.version === DATA_MIGRATION_VERSION && typeof value.exportedAt === "string" && Array.isArray(value.projects) && value.projects.every(isProjectRecord) && Array.isArray(value.progressPages) && value.progressPages.every(isProgressPageRecord) && Array.isArray(value.tasks) && value.tasks.every(isDataMigrationTaskRecord);
+}
+function isProjectRecord(value) {
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.status === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string";
+}
+function isProgressPageRecord(value) {
+  return isRecord(value) && typeof value.id === "string" && typeof value.projectId === "string" && typeof value.name === "string" && Array.isArray(value.columnOrder) && value.columnOrder.every((item) => typeof item === "string");
+}
+function isDataMigrationTaskRecord(value) {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return typeof value.id === "string" && typeof value.title === "string" && typeof value.date === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && (value.kind === void 0 || value.kind === "simple" || value.kind === "composite") && (value.status === void 0 || ["todo", "doing", "blocked", "done"].includes(String(value.status))) && (value.recurrence === void 0 || ["once", "daily", "weekly", "custom"].includes(String(value.recurrence))) && (value.tags === void 0 || Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === "string")) && (value.subtasks === void 0 || Array.isArray(value.subtasks) && value.subtasks.every(isTaskSubtaskRecord)) && (value.occurrenceStates === void 0 || Array.isArray(value.occurrenceStates) && value.occurrenceStates.every(isOccurrenceStateRecord)) && (value.occurrenceOverrides === void 0 || Array.isArray(value.occurrenceOverrides) && value.occurrenceOverrides.every(isOccurrenceOverrideRecord)) && (value.mindmapComments === void 0 || Array.isArray(value.mindmapComments) && value.mindmapComments.every(isMindmapCommentRecord)) && (value.sourceLinks === void 0 || Array.isArray(value.sourceLinks)) && (value.notes === void 0 || Array.isArray(value.notes)) && (value.viewState === void 0 || isRecord(value.viewState)) && (value.occurrencePlan === void 0 || isOccurrencePlanRecord(value.occurrencePlan));
+}
+function isTaskSubtaskRecord(value) {
+  return isRecord(value) && typeof value.id === "string" && typeof value.title === "string";
+}
+function isOccurrenceStateRecord(value) {
+  return isRecord(value) && typeof value.date === "string";
+}
+function isOccurrenceOverrideRecord(value) {
+  return isRecord(value) && typeof value.date === "string";
+}
+function isMindmapCommentRecord(value) {
+  return isRecord(value) && typeof value.id === "string" && typeof value.taskId === "string" && typeof value.content === "string";
+}
+function isOccurrencePlanRecord(value) {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (value.source === "dates") {
+    return isDateSetRecord(value);
+  }
+  if (value.source === "recurrence") {
+    return (value.exclude === void 0 || isDateSetRecord(value.exclude)) && (value.include === void 0 || isDateSetRecord(value.include));
+  }
+  return false;
+}
+function isDateSetRecord(value) {
+  return isRecord(value) && (value.dates === void 0 || Array.isArray(value.dates) && value.dates.every((date) => typeof date === "string")) && (value.ranges === void 0 || Array.isArray(value.ranges) && value.ranges.every(isDateRangeRecord));
+}
+function isDateRangeRecord(value) {
+  return isRecord(value) && typeof value.from === "string" && typeof value.to === "string" && (value.every === "day" || value.every === "week");
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 // src/utils/markdownGuide.ts
-var MARKDOWN_FORMAT_GUIDE = `# \u9879\u76EE\u7BA1\u7406\u63D2\u4EF6 Markdown \u8BED\u6CD5\u8BF4\u660E
+var MARKDOWN_FORMAT_GUIDE = `# \u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u8BF4\u660E
 
-\u672C\u8BF4\u660E\u5BF9\u5E94\u5F53\u524D\u63D2\u4EF6\u5B9E\u73B0\u3002\u5B8C\u6574\u4EFB\u52A1\u8F93\u5165\u7528\u4E8E\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u7684\u6781\u7B80\u6E05\u5355\u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002
+\u672C\u8BF4\u660E\u5BF9\u5E94\u5F53\u524D\u63D2\u4EF6\u5B9E\u73B0\u3002\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u53EA\u63A5\u6536\u4E09\u7C7B\u683C\u5F0F\uFF1A\u6570\u636E\u8FC1\u79FB JSON\u3001\u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\u3001\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\u3002
 
-## \u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1
+## \u6570\u636E\u8FC1\u79FB JSON
+
+\u6570\u636E\u8FC1\u79FB JSON \u7531\u201C\u9879\u76EE\u8FDB\u5EA6 - \u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u751F\u6210\uFF0C\u7528\u4E8E\u77E5\u8BC6\u5E93\u8FC1\u79FB\u548C\u5B8C\u6574\u6062\u590D\u3002
+
+\`\`\`json
+{
+  "schema": "obsidian-project-management/data-migration",
+  "version": 2,
+  "exportedAt": "2026-05-26T12:00:00+08:00",
+  "projects": [],
+  "progressPages": [],
+  "tasks": []
+}
+\`\`\`
+
+\u89C4\u5219\uFF1A
+
+- JSON \u53EF\u76F4\u63A5\u7C98\u8D34\u5230\u201C\u5FEB\u901F\u8BB0\u5F55 - \u521B\u5EFA\u4EFB\u52A1\u201D\u3002
+- \u6BCF\u65E5 / \u6BCF\u5468\u91CD\u590D\u4EFB\u52A1\u901A\u8FC7 \`recurrence\`\u3001\`recurrenceCount\`\u3001\`recurrenceUntil\` \u8868\u8FBE\uFF0C\u4E0D\u9010\u65E5\u5BFC\u51FA\u91CD\u590D\u65E5\u671F\u3002
+- \u4E0D\u89C4\u5219\u53D1\u751F\u65E5\u671F\u5199\u5165 \`occurrencePlan.include\` / \`occurrencePlan.exclude\`\uFF0C\u81EA\u5B9A\u4E49\u91CD\u590D\u5199\u5165 \`occurrencePlan.dates\` \u6216 \`occurrencePlan.ranges\`\u3002
+- \u4EFB\u52A1\u5B8C\u6210\u3001\u7EC4\u5408\u4EFB\u52A1\u90E8\u5206\u5B8C\u6210\u3001\u5355\u6B21\u5B9E\u4F8B\u8986\u76D6\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u3001\u601D\u7EF4\u5BFC\u56FE\u3001\u8BC4\u8BED\u3001\u4EFB\u52A1\u7B14\u8BB0\u548C\u6765\u6E90\u94FE\u63A5\u90FD\u4FDD\u5B58\u5728 JSON \u5185\u3002
+
+## \u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown
+
+\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u7684\u683C\u5F0F\u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002
 
 \`\`\`md
-#\u9879\u76EE\uFF1A\u63D2\u4EF6\u4F53\u9A8C\u793A\u4F8B
-- [ ] \u666E\u901A\u4EFB\u52A1 kind:simple @2026-05-25 09:00-09:30 #tag !high status:doing
-- [ ] \u7EC4\u5408\u4EFB\u52A1 kind:composite @2026-05-25 14:00-15:00 status:todo
-  - \u5B50\u4EFB\u52A1\u4E00 @14:10-14:30
-  - \u5B50\u4EFB\u52A1\u4E8C
+#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A
+- [x] \u6BCF\u65E5\u80CC\u8BCD
+- [ ] \u542C\u529B\u7CBE\u542C
 \`\`\`
+
+\u89C4\u5219\uFF1A
+
+- \`- [x] \u6807\u9898\` \u53EA\u5339\u914D\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u5E76\u5B8C\u6210\u5F53\u5929\u5B9E\u4F8B\u3002
+- \`- [ ] \u6807\u9898\` \u4E0D\u521B\u5EFA\u4EFB\u52A1\uFF0C\u4E5F\u4E0D\u8986\u76D6\u5B57\u6BB5\u3002
+- \u627E\u4E0D\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u65F6\u4F1A\u62A5\u9519\u3002
+
+## \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown
+
+\u65B0\u8BA1\u5212\u4F7F\u7528 \`+ \u4EFB\u52A1\uFF1A\` \u6216 \`+ \u7EC4\u5408\uFF1A\`\uFF0C\u4E0E\u4ECA\u65E5\u5B8C\u6210\u683C\u5F0F\u5206\u79BB\u3002
+
+\`\`\`md
+#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A
++ \u4EFB\u52A1\uFF1A\u642D\u5EFA\u590D\u4E60\u770B\u677F @2026-05-27 09:00-10:30 #planning !high status:doing
++ \u7EC4\u5408\uFF1A\u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD @2026-05-27 12:00-12:40 #vocab status:todo repeat:daily count:5
+  - \u590D\u4E60\u6628\u5929\u9519\u8BCD @12:00-12:10
+  - \u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD @12:10-12:30
+  > \u6BCF\u5929\u5B8C\u6210\u540E\u53EF\u5728\u4ECA\u65E5\u4EFB\u52A1\u9875\u52FE\u9009\u3002
+\`\`\`
+
+\u89C4\u5219\uFF1A
 
 - \u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B \`@YYYY-MM-DD HH:mm-HH:mm\`\u3002
-- \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5C5E\u8BE5\u9879\u76EE\uFF0C\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002
+- \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5165\u8BE5\u9879\u76EE\uFF1B\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002
 - \`#\u9879\u76EE\uFF1A\` \u6216 \`#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE\` \u8868\u793A\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002
-- \u540C\u9879\u76EE\u540C\u540D\u4E14\u540C\u65E5\u53EF\u5339\u914D\u7684\u6D3B\u52A8\u4EFB\u52A1\u4F1A\u88AB\u8986\u76D6\uFF1B\u5426\u5219\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002
-- \u4EFB\u52A1\u884C\u4E0B\u7F29\u8FDB \`> \u63CF\u8FF0\` \u53EF\u5199\u5165\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u591A\u884C\u63CF\u8FF0\u4F1A\u6309\u6362\u884C\u5408\u5E76\u3002
+- \u540C\u9879\u76EE\u540C\u540D\u4E14\u540C\u65E5\u53EF\u5339\u914D\u7684\u4EFB\u52A1\u4F1A\u88AB\u8986\u76D6\uFF1B\u5426\u5219\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002
 
-## \u4ECA\u65E5\u6781\u7B80\u5B8C\u6210
+## \u590D\u6742 Markdown \u53C2\u6570
 
-\`\`\`md
-#\u9879\u76EE\uFF1A\u5929\u529B
-- [x] \u5220\u9664\u6309\u94AE
-\`\`\`
-
-- \u6781\u7B80 \`- [x] \u6807\u9898\` \u53EA\u5339\u914D\u5E76\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002
-- \u627E\u4E0D\u5230\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u65F6\u4F1A\u62A5\u9519\uFF0C\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002
-- \u6781\u7B80 \`- [ ] \u6807\u9898\` \u4E0D\u4F1A\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u8981\u521B\u5EFA\u4EFB\u52A1\u5FC5\u987B\u4F7F\u7528\u5B8C\u6574\u8F93\u5165\u3002
-
-## \u652F\u6301\u53C2\u6570
-
-- \`kind:simple | composite\`\uFF1A\u666E\u901A\u4EFB\u52A1\u6216\u7EC4\u5408\u4EFB\u52A1\u3002
-- \`@YYYY-MM-DD HH:mm-HH:mm\`\uFF1A\u4EFB\u52A1\u65E5\u671F\u548C\u65F6\u95F4\u6BB5\u3002
-- \`#\u6807\u7B7E\`\uFF1A\u4EFB\u52A1\u6807\u7B7E\uFF0C\u53EF\u5199\u591A\u4E2A\u3002
+- \`#\u6807\u7B7E\`\uFF1A\u5199\u5165\u4EFB\u52A1\u6807\u7B7E\uFF0C\u53EF\u5199\u591A\u4E2A\u3002
 - \`!low | !medium | !high | !urgent\`\uFF1A\u4F18\u5148\u7EA7\u3002
 - \`status:todo | doing | blocked | done\`\uFF1A\u770B\u677F\u72B6\u6001\u3002
 - \`repeat:once | daily | weekly | custom\`\uFF1A\u91CD\u590D\u7C7B\u578B\u3002
 - \`count:N\`\uFF1A\u91CD\u590D\u6B21\u6570\u3002
 - \`until:YYYY-MM-DD\`\uFF1A\u91CD\u590D\u7ED3\u675F\u65E5\u671F\u3002
 - \`dates:YYYY-MM-DD,YYYY-MM-DD\`\uFF1A\u81EA\u5B9A\u4E49\u53D1\u751F\u65E5\u671F\u3002
-- \`done:YYYY-MM-DD,YYYY-MM-DD\`\uFF1A\u5DF2\u5B8C\u6210\u53D1\u751F\u65E5\u671F\uFF1B\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u4F1A\u7528\u5B83\u4FDD\u7559\u91CD\u590D\u4EFB\u52A1\u8FDB\u5EA6\u3002
-- \`finish:today | series\`\uFF1A\u4EC5\u5728\u5B8C\u6574 \`- [x]\` \u8F93\u5165\u65F6\u751F\u6548\u3002
+- \`done:YYYY-MM-DD,YYYY-MM-DD\`\uFF1A\u6807\u8BB0\u5DF2\u5B8C\u6210\u53D1\u751F\u65E5\u671F\u3002
 
-\u4EFB\u52A1\u63CF\u8FF0\u5199\u6CD5\uFF1A
-
-\`\`\`md
-- [ ] \u5E26\u63CF\u8FF0\u4EFB\u52A1 kind:simple @2026-05-25 09:00-09:30 status:todo
-  > \u7B2C\u4E00\u884C\u63CF\u8FF0
-  > \u7B2C\u4E8C\u884C\u63CF\u8FF0
-\`\`\`
-
-## \u7EC4\u5408\u4EFB\u52A1
-
-\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u5177\u5907\u5F00\u59CB\u4E0E\u7ED3\u675F\u65F6\u95F4\u3002\u8F7B\u91CF\u9879\u53EF\u53EA\u5199\u6807\u9898\uFF0C\u4E5F\u53EF\u5199\u81EA\u5DF1\u7684\u65F6\u95F4\u6BB5\uFF1B\u4E00\u65E6\u586B\u5199\u65F6\u95F4\uFF0C\u5FC5\u987B\u5B8C\u5168\u843D\u5728\u7EC4\u5408\u4EFB\u52A1\u65F6\u95F4\u8303\u56F4\u5185\u3002\u6302\u5165\u7EC4\u5408\u4EFB\u52A1\u7684\u771F\u5B9E\u4EFB\u52A1\u4E5F\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u5B9E\u4F8B\u7684\u65E5\u671F\u4E0E\u65F6\u95F4\u8303\u56F4\u5185\u3002
-
-\u8868\u683C\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u53EA\u5C55\u793A\u7EC4\u5408\u7236\u4EFB\u52A1\u4F5C\u4E3A\u9876\u5C42\u5143\u7D20\uFF1B\u771F\u5B9E\u5B50\u4EFB\u52A1\u4F1A\u6536\u7EB3\u5728\u7236\u4EFB\u52A1\u6458\u8981\u4E2D\u3002\u601D\u7EF4\u5BFC\u56FE\u7EE7\u7EED\u5C55\u793A\u5B8C\u6574\u7236\u5B50\u5C42\u7EA7\u3002
-
-## \u7B14\u8BB0\u540C\u6B65\u5757
-
-\u5168\u5E93\u626B\u63CF\u53EA\u8BFB\u53D6 \`pm:start\` \u4E0E \`pm:end\` \u4E4B\u95F4\u7684\u4EFB\u52A1\u5757\u3002
-
-\`\`\`md
-<!-- pm:start -->
-#\u9879\u76EE\uFF1A\u63D2\u4EF6\u4F53\u9A8C\u793A\u4F8B
-- [ ] \u5199\u89E3\u6790\u5668 kind:simple @2026-05-25 09:00-10:30 #plugin status:todo
-<!-- pm:end -->
-\`\`\`
-
-## \u5355\u6B21\u5B9E\u4F8B\u7F16\u8F91
-
-\u91CD\u590D\u4EFB\u52A1\u652F\u6301\u201C\u7F16\u8F91\u672C\u6B21\u201D\u3002\u5B83\u4F1A\u53EA\u8986\u76D6\u5F53\u524D\u65E5\u671F\u7684\u6807\u9898\u3001\u63CF\u8FF0\u548C\u65F6\u95F4\uFF0C\u4E0D\u5F71\u54CD\u672A\u6765\u53D1\u751F\uFF1B\u5982\u679C\u8981\u4FEE\u6539\u6574\u6761\u91CD\u590D\u4EFB\u52A1\uFF0C\u8BF7\u4F7F\u7528\u7CFB\u5217\u7F16\u8F91\u3002
-
-## \u5168\u90E8\u8BB0\u5F55\u5BFC\u51FA
-
-\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u4F4D\u4E8E\u4EFB\u52A1\u603B\u89C8\u7684\u9879\u76EE\u8FDB\u5EA6\u6807\u9898\u533A\u3002\u5BFC\u51FA\u7ED3\u679C\u662F\u660E\u6587 Markdown \u4EFB\u52A1\u6E05\u5355\uFF0C\u53EA\u5305\u542B \`#\u9879\u76EE\uFF1A...\`\u3001\u4EFB\u52A1 checklist \u548C\u7EC4\u5408\u4EFB\u52A1\u5B50\u9879\uFF0C\u4E0D\u518D\u5305\u542B base64\u3001\u538B\u7F29 JSON \u6216\u9690\u85CF\u8FC1\u79FB\u5305\u3002
-
-\u628A\u5BFC\u51FA\u5185\u5BB9\u7C98\u8D34\u5230\u53E6\u4E00\u53F0\u8BBE\u5907\u7684\u201C\u5FEB\u901F\u8BB0\u5F55 - \u521B\u5EFA\u4EFB\u52A1\u201D\u5E76\u63D0\u4EA4\uFF0C\u4F1A\u6309\u666E\u901A\u4EFB\u52A1\u5BFC\u5165\u89C4\u5219\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u4F1A\u6309 \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\` \u81EA\u52A8\u521B\u5EFA\u3002\u91CD\u590D\u4EFB\u52A1\u7684\u5B8C\u6210\u8FDB\u5EA6\u901A\u8FC7 \`done:\` \u660E\u6587\u65E5\u671F\u5217\u8868\u8868\u8FBE\uFF0C\u7528\u6237\u53EF\u4EE5\u5728\u5BFC\u5165\u524D\u76F4\u63A5\u7F16\u8F91\u4EFB\u52A1\u6807\u9898\u3001\u65E5\u671F\u3001\u65F6\u95F4\u3001\u6807\u7B7E\u3001\u91CD\u590D\u89C4\u5219\u6216\u5B8C\u6210\u65E5\u671F\u3002
-
-\u65E7\u7248\u5B8C\u6574\u8FC1\u79FB\u5305\u3001base64 \u6570\u636E\u5757\u548C\u201C\u66FF\u6362\u5168\u90E8\u201D\u6062\u590D\u6D41\u7A0B\u5DF2\u5E9F\u5F03\uFF1B\u5F53\u524D\u5BFC\u5165\u59CB\u7EC8\u8D70\u521B\u5EFA\u4EFB\u52A1\u8BED\u6CD5\uFF0C\u5E76\u7EE7\u7EED\u6267\u884C\u5B8C\u6574\u65E5\u671F\u65F6\u95F4\u3001\u7EC4\u5408\u4EFB\u52A1\u8FB9\u754C\u548C\u6781\u7B80\u5B8C\u6210\u89C4\u5219\u3002`;
+\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u6709\u5F00\u59CB\u4E0E\u7ED3\u675F\u65F6\u95F4\u3002\u8F7B\u91CF\u5B50\u4EFB\u52A1\u53EF\u53EA\u5199\u6807\u9898\uFF0C\u4E5F\u53EF\u5199 \`@HH:mm-HH:mm\`\uFF0C\u4E00\u65E6\u5199\u65F6\u95F4\u5C31\u5FC5\u987B\u843D\u5728\u7EC4\u5408\u4EFB\u52A1\u65F6\u95F4\u8303\u56F4\u5185\u3002`;
 
 // src/storage/store.ts
 var DEFAULT_CONFIG = {
@@ -253,7 +1075,6 @@ var NOTE_TASK_INDEX_FILE = "note-task-index.json";
 var WRITE_HISTORY_FILE = "write-history.json";
 var TASKS_DIR = "tasks";
 var MARKDOWN_GUIDE_FILE = "markdown-format-guide.md";
-var UNASSIGNED_PROJECT_LABEL = "\u672A\u5F52\u5C5E\u9879\u76EE";
 var ProjectManagementStore = class extends import_obsidian.Events {
   constructor(app, config) {
     super();
@@ -521,7 +1342,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       sourceLinks: patch.sourceLinks ?? original.sourceLinks,
       notes: patch.notes ?? original.notes,
       mindmapComments: patch.mindmapComments ?? original.mindmapComments,
-      completed: patch.completed ?? isTaskFullyCompleted(original)
+      completed: patch.completed ?? isTaskFullyCompleted2(original)
     });
     const built = this.buildSeriesTask(merged, original, patch.completed);
     const [next] = options.autoResolveConflicts ? this.autoResolveTaskConflicts([built], occurrenceKeysForTask(original)) : [built];
@@ -665,17 +1486,17 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     }
     const next = cloneTask(original);
     if (patch.status) {
-      next.status = normalizeTaskStatus(patch.status);
-      next.viewState = mergeViewState(next.viewState, { board: { ...next.viewState.board, columnId: next.status } }, next.status);
+      next.status = normalizeTaskStatus2(patch.status);
+      next.viewState = mergeViewState2(next.viewState, { board: { ...next.viewState.board, columnId: next.status } }, next.status);
     }
     if (patch.priority !== void 0) {
-      next.priority = normalizeTaskPriority(patch.priority);
+      next.priority = normalizeTaskPriority2(patch.priority);
     }
     if (patch.tags) {
       next.tags = normalizeTags(patch.tags);
     }
     if (patch.viewState) {
-      next.viewState = mergeViewState(next.viewState, patch.viewState, next.status);
+      next.viewState = mergeViewState2(next.viewState, patch.viewState, next.status);
     }
     if (patch.notes) {
       next.notes = normalizeTaskNotes(patch.notes);
@@ -790,6 +1611,17 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     await this.patchTask(taskId, { notes: [...task.notes, note] });
   }
   previewFormattedTasks(text, options = {}) {
+    const migration = parseDataMigrationText(text);
+    if (migration.kind === "invalid") {
+      return {
+        ...createEmptyTaskImportPreview(),
+        sourceFormat: "data-migration",
+        issues: migration.issues
+      };
+    }
+    if (migration.kind === "package") {
+      return this.buildDataMigrationImportPreview(migration.package);
+    }
     const parsed = parseFormattedTaskText(text, {
       projects: this.projects,
       projectId: options.projectId,
@@ -800,6 +1632,14 @@ var ProjectManagementStore = class extends import_obsidian.Events {
   }
   async importFormattedTasks(text, options = {}) {
     this.assertWritable();
+    const migration = parseDataMigrationText(text);
+    if (migration.kind === "invalid") {
+      const issue = migration.issues[0];
+      throw new Error(issue ? `\u7B2C ${issue.line} \u884C\uFF1A${issue.message}` : "\u6570\u636E\u8FC1\u79FB JSON \u89E3\u6790\u5931\u8D25");
+    }
+    if (migration.kind === "package") {
+      return this.importDataMigrationPackage(migration.package, options.historySummary);
+    }
     const preview = this.previewFormattedTasks(text, options);
     const blockingIssue = preview.issues.find((issue) => issue.blocking);
     if (blockingIssue) {
@@ -859,12 +1699,13 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     });
     return lines.join("\n").trim();
   }
-  exportAllRecordsAsMarkdown() {
-    const tasks = this.getAllTasks().sort(compareSeriesTasks);
-    if (tasks.length === 0) {
-      return "";
-    }
-    return renderTaskListForImport(tasks, (projectId) => this.getProject(projectId)?.name);
+  exportAllRecordsAsDataMigrationJson() {
+    return buildDataMigrationJson({
+      projects: this.getProjects(),
+      progressPages: this.getProgressPages(),
+      tasks: this.getAllTasks().sort(compareSeriesTasks),
+      exportedAt: toIsoLocal(now())
+    });
   }
   async exportMarkdownGuide() {
     this.assertWritable();
@@ -1063,7 +1904,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     const childrenToReparent = this.getAllTasks().filter((candidate) => (candidate.viewState.mindmap.parentTaskId ?? null) === taskId);
     const childMutations = childrenToReparent.map((child, index) => {
       const next = cloneTask(child);
-      next.viewState = mergeViewState(next.viewState, {
+      next.viewState = mergeViewState2(next.viewState, {
         mindmap: {
           ...next.viewState.mindmap,
           parentTaskId: task.viewState.mindmap.parentTaskId ?? null,
@@ -1287,6 +2128,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       });
     });
     return {
+      sourceFormat: "task-plan",
       tasks: previewTasks,
       issues,
       summary: {
@@ -1298,6 +2140,44 @@ var ProjectManagementStore = class extends import_obsidian.Events {
         completeTodayCount: previewTasks.filter((task) => task.action === "complete-today").length,
         completeSeriesCount: previewTasks.filter((task) => task.action === "complete-series").length,
         newProjectNames: [...newProjectNames]
+      }
+    };
+  }
+  buildDataMigrationImportPreview(records) {
+    const importedTasks = dataMigrationPackageToTasks(records);
+    const projectPlan = buildDataMigrationProjectPlan(records.projects, this.projects);
+    const taskPlan = buildDataMigrationTaskPlan(importedTasks, this.getAllTasks(), projectPlan.projectIdBySourceId);
+    const dataMigration = summarizeDataMigrationPackage(records);
+    const previewTasks = importedTasks.map((task) => {
+      const targetTaskId = taskPlan.taskIdBySourceId.get(task.id) ?? task.id;
+      const targetProjectId = task.projectId ? projectPlan.projectIdBySourceId.get(task.projectId) ?? task.projectId : void 0;
+      const matched = this.findTask(targetTaskId) ?? findTaskByMigrationIdentity(this.getAllTasks(), task.title, targetProjectId, task.date);
+      return {
+        line: 0,
+        raw: task.title,
+        input: taskToDataMigrationImportInput(task, targetProjectId),
+        projectId: targetProjectId,
+        projectName: targetProjectId ? this.getProject(targetProjectId)?.name ?? records.projects.find((project) => project.id === task.projectId)?.name : UNASSIGNED_PROJECT_LABEL,
+        matchedTaskId: matched?.id,
+        matchedTaskTitle: matched?.title,
+        action: matched ? "overwrite" : "create",
+        completionMode: "pending"
+      };
+    });
+    return {
+      sourceFormat: "data-migration",
+      tasks: previewTasks,
+      issues: [],
+      dataMigration,
+      summary: {
+        total: records.tasks.length,
+        completed: importedTasks.filter(isTaskFullyCompleted2).length,
+        composite: dataMigration.compositeTasks,
+        createCount: taskPlan.createCount,
+        overwriteCount: taskPlan.overwriteCount,
+        completeTodayCount: 0,
+        completeSeriesCount: 0,
+        newProjectNames: projectPlan.newProjectNames
       }
     };
   }
@@ -1325,7 +2205,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       return void 0;
     }
     const sameProject = this.getAllTasks().filter(
-      (task) => normalizeImportIdentity(task.title) === normalizeImportIdentity(title) && (task.projectId ?? void 0) === projectId
+      (task) => normalizeImportIdentity2(task.title) === normalizeImportIdentity2(title) && (task.projectId ?? void 0) === projectId
     );
     const sameDate = sameProject.find((task) => task.occurrenceDates.includes(date));
     if (sameDate) {
@@ -1387,6 +2267,55 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     }
     return created;
   }
+  async importDataMigrationPackage(records, historySummary) {
+    this.assertWritable();
+    const importedTasks = dataMigrationPackageToTasks(records);
+    const projectPlan = buildDataMigrationProjectPlan(records.projects, this.projects);
+    const progressPages = remapDataMigrationProgressPages(records.progressPages, projectPlan.projectIdBySourceId, this.progressPages);
+    const taskPlan = buildDataMigrationTaskPlan(importedTasks, this.getAllTasks(), projectPlan.projectIdBySourceId);
+    const nextTasks = taskPlan.tasks.map((task) => normalizeStoredTask(remapDataMigrationTask(task, taskPlan.taskIdBySourceId, projectPlan.projectIdBySourceId)));
+    const replacedIds = new Set(taskPlan.replacedTaskIds);
+    const existingTasks = this.getAllTasks();
+    const existingAfterReplace = existingTasks.filter((task) => !replacedIds.has(task.id));
+    const allTasksAfterImport = [...existingAfterReplace, ...nextTasks];
+    nextTasks.forEach((task) => {
+      assertValidTaskMindmapParent(task, allTasksAfterImport.filter((candidate) => candidate.id !== task.id));
+    });
+    this.assertCompositeTaskConsistency(nextTasks, replacedIds);
+    this.assertNoConflicts(
+      nextTasks,
+      new Set(existingTasks.filter((task) => replacedIds.has(task.id)).flatMap((task) => [...occurrenceKeysForTask(task)]))
+    );
+    const importedProjectIds = new Set(projectPlan.projects.map((project) => project.id));
+    const importedPageIds = new Set(progressPages.map((page) => page.id));
+    const importedPageProjectIds = new Set(progressPages.map((page) => page.projectId));
+    this.projects = [
+      ...this.projects.filter((project) => !importedProjectIds.has(project.id)),
+      ...projectPlan.projects
+    ];
+    this.progressPages = [
+      ...this.progressPages.filter((page) => !importedPageIds.has(page.id) && !importedPageProjectIds.has(page.projectId)),
+      ...progressPages
+    ];
+    const removedTasks = this.replaceTasks([...replacedIds], nextTasks);
+    const affectedMonths = monthsForTasks([...removedTasks, ...nextTasks]);
+    await this.enqueueWrite(async () => {
+      await this.writeJson(this.pathFor(PROJECTS_FILE), { projects: this.projects });
+      await this.writeJson(this.pathFor(PROGRESS_FILE), { pages: this.progressPages });
+      for (const month of affectedMonths) {
+        await this.flushMonth(month);
+      }
+    });
+    await this.reloadCurrentFolderData();
+    const changed = nextTasks.map((task) => this.getTask(task.id) ?? task);
+    await this.recordWriteHistory({
+      type: "import",
+      summary: historySummary ?? `\u5BFC\u5165\u6570\u636E\u8FC1\u79FB JSON\uFF1A\u9879\u76EE ${records.projects.length} \u4E2A\uFF0C\u4EFB\u52A1 ${records.tasks.length} \u4E2A\uFF0C\u65B0\u589E ${taskPlan.createCount}\uFF0C\u8986\u76D6 ${taskPlan.overwriteCount}`,
+      taskIds: changed.map((task) => task.id)
+    });
+    this.trigger("changed");
+    return changed;
+  }
   normalizeTaskInput(input) {
     const title = input.title.trim();
     if (!title) {
@@ -1427,8 +2356,8 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       title,
       description: input.description?.trim() || "",
       projectId: input.projectId || void 0,
-      status: normalizeTaskStatus(input.status),
-      priority: normalizeTaskPriority(input.priority),
+      status: normalizeTaskStatus2(input.status),
+      priority: normalizeTaskPriority2(input.priority),
       tags: normalizeTags(input.tags),
       date,
       startTime,
@@ -1479,7 +2408,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       occurrenceDates,
       occurrenceStates,
       occurrenceOverrides: (input.occurrenceOverrides ?? original?.occurrenceOverrides ?? []).filter((override) => occurrenceDates.includes(override.date)),
-      viewState: mergeViewState(original?.viewState, input.viewState, input.status ?? original?.status ?? "todo"),
+      viewState: mergeViewState2(original?.viewState, input.viewState, input.status ?? original?.status ?? "todo"),
       sourceLinks: input.sourceLinks ?? original?.sourceLinks ?? [],
       notes: input.notes ?? original?.notes ?? [],
       mindmapComments: normalizeMindmapComments(input.mindmapComments ?? original?.mindmapComments, id),
@@ -2091,7 +3020,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
 };
 function normalizeStoredTask(task) {
   const kind = task.kind ?? ((task.subtasks?.length ?? 0) > 0 ? "composite" : "simple");
-  const status = normalizeTaskStatus(task.status);
+  const status = normalizeTaskStatus2(task.status);
   const subtasks = (task.subtasks ?? []).map((item, index) => ({
     id: item.id,
     title: item.title,
@@ -2106,12 +3035,12 @@ function normalizeStoredTask(task) {
     ...task,
     kind,
     status,
-    priority: normalizeTaskPriority(task.priority),
+    priority: normalizeTaskPriority2(task.priority),
     tags: normalizeTags(task.tags),
     subtasks,
     occurrenceStates,
     occurrenceOverrides: normalizeOccurrenceOverrides(task.occurrenceOverrides),
-    viewState: mergeViewState(void 0, task.viewState, status),
+    viewState: mergeViewState2(void 0, task.viewState, status),
     sourceLinks: normalizeSourceLinks(task.sourceLinks),
     notes: normalizeTaskNotes(task.notes),
     mindmapComments: normalizeMindmapComments(task.mindmapComments, task.id),
@@ -2119,39 +3048,56 @@ function normalizeStoredTask(task) {
   };
 }
 function isPartialPluginConfig(value) {
-  return isRecord(value);
+  return isRecord2(value);
 }
 function isProjectsFile(value) {
-  return isRecord(value) && Array.isArray(value.projects) && value.projects.every(isRecord);
+  return isRecord2(value) && Array.isArray(value.projects) && value.projects.every(isRecord2);
 }
 function isProgressPagesFile(value) {
-  return isRecord(value) && Array.isArray(value.pages) && value.pages.every(isRecord);
+  return isRecord2(value) && Array.isArray(value.pages) && value.pages.every(isRecord2);
 }
 function isNoteTaskIndexFile(value) {
-  return isRecord(value) && Array.isArray(value.files) && value.files.every(isRecord);
+  return isRecord2(value) && Array.isArray(value.files) && value.files.every(isRecord2);
 }
 function isWriteHistoryFile(value) {
-  return isRecord(value) && Array.isArray(value.records) && value.records.every(isRecord);
+  return isRecord2(value) && Array.isArray(value.records) && value.records.every(isRecord2);
 }
 function isTasksFile(value) {
-  return isRecord(value) && typeof value.month === "string" && Array.isArray(value.tasks) && value.tasks.every(isStoredTaskRecord);
+  return isRecord2(value) && typeof value.month === "string" && Array.isArray(value.tasks) && value.tasks.every(isStoredTaskRecord);
 }
-function isRecord(value) {
+function isRecord2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isStoredTaskRecord(value) {
-  if (!isRecord(value)) {
+  if (!isRecord2(value)) {
     return false;
   }
   const subtasks = value.subtasks;
   const occurrenceStates = value.occurrenceStates;
-  return typeof value.id === "string" && typeof value.title === "string" && typeof value.date === "string" && typeof value.recurrence === "string" && Array.isArray(value.occurrenceDates) && value.occurrenceDates.every((date) => typeof date === "string") && (subtasks === void 0 || Array.isArray(subtasks) && subtasks.every(isTaskSubtaskRecord)) && (occurrenceStates === void 0 || Array.isArray(occurrenceStates) && occurrenceStates.every(isOccurrenceStateRecord));
+  return typeof value.id === "string" && typeof value.title === "string" && typeof value.date === "string" && typeof value.recurrence === "string" && Array.isArray(value.occurrenceDates) && value.occurrenceDates.every((date) => typeof date === "string") && (subtasks === void 0 || Array.isArray(subtasks) && subtasks.every(isTaskSubtaskRecord2)) && (occurrenceStates === void 0 || Array.isArray(occurrenceStates) && occurrenceStates.every(isOccurrenceStateRecord2));
 }
-function isTaskSubtaskRecord(value) {
-  return isRecord(value) && typeof value.id === "string" && typeof value.title === "string";
+function isTaskSubtaskRecord2(value) {
+  return isRecord2(value) && typeof value.id === "string" && typeof value.title === "string";
 }
-function isOccurrenceStateRecord(value) {
-  return isRecord(value) && typeof value.date === "string";
+function isOccurrenceStateRecord2(value) {
+  return isRecord2(value) && typeof value.date === "string";
+}
+function createEmptyTaskImportPreview() {
+  return {
+    sourceFormat: "task-plan",
+    tasks: [],
+    issues: [],
+    summary: {
+      total: 0,
+      completed: 0,
+      composite: 0,
+      createCount: 0,
+      overwriteCount: 0,
+      completeTodayCount: 0,
+      completeSeriesCount: 0,
+      newProjectNames: []
+    }
+  };
 }
 function cloneTask(task) {
   return {
@@ -2164,7 +3110,7 @@ function cloneTask(task) {
     })),
     occurrenceOverrides: task.occurrenceOverrides.map((item) => ({ ...item })),
     tags: [...task.tags],
-    viewState: cloneViewState(task.viewState),
+    viewState: cloneViewState2(task.viewState),
     sourceLinks: task.sourceLinks.map((item) => ({ ...item })),
     notes: task.notes.map((item) => ({ ...item })),
     mindmapComments: task.mindmapComments.map((item) => ({ ...item }))
@@ -2469,7 +3415,7 @@ function assertMutableOccurrenceDate(date) {
     throw new Error("\u4E0D\u80FD\u4FEE\u6539\u8FC7\u53BB\u65E5\u671F\u7684\u4EFB\u52A1\u8BB0\u5F55");
   }
 }
-function isTaskFullyCompleted(task) {
+function isTaskFullyCompleted2(task) {
   return task.occurrenceDates.length > 0 && task.occurrenceDates.every((date) => getOccurrenceProgress(task, date).completed);
 }
 function detectRecurrenceFromDates(dates) {
@@ -2509,10 +3455,10 @@ function normalizeDateOrUndefined(value) {
   }
   return trimmed;
 }
-function normalizeTaskStatus(value) {
+function normalizeTaskStatus2(value) {
   return value === "doing" || value === "blocked" || value === "done" ? value : "todo";
 }
-function normalizeTaskPriority(value) {
+function normalizeTaskPriority2(value) {
   if (value === "low" || value === "medium" || value === "high" || value === "urgent") {
     return value;
   }
@@ -2690,8 +3636,8 @@ function isCompositeAncestorOf(ancestorTaskId, childTaskId, taskById) {
   }
   return false;
 }
-function mergeViewState(current, patch, status) {
-  const base = current ?? defaultTaskViewState(status);
+function mergeViewState2(current, patch, status) {
+  const base = current ?? defaultTaskViewState2(status);
   return {
     board: {
       columnId: patch?.board?.columnId ?? base.board.columnId ?? status,
@@ -2712,7 +3658,7 @@ function mergeViewState(current, patch, status) {
     }
   };
 }
-function defaultTaskViewState(status) {
+function defaultTaskViewState2(status) {
   return {
     board: {
       columnId: status,
@@ -2731,7 +3677,7 @@ function defaultTaskViewState(status) {
     }
   };
 }
-function cloneViewState(viewState) {
+function cloneViewState2(viewState) {
   return {
     board: { ...viewState.board },
     gantt: {
@@ -2876,138 +3822,6 @@ function findFreeMinuteFrom(intervals, startAt, endExclusive = 24 * 60 - 1) {
   }
   return null;
 }
-function parseFormattedTaskText(text, options) {
-  const tasks = [];
-  const issues = [];
-  const lines = text.split(/\r?\n/);
-  let currentProjectId = options.projectId;
-  let currentProjectName = options.projectId ? options.projects.find((project) => project.id === options.projectId)?.name : void 0;
-  let currentTask = null;
-  const flushCurrent = () => {
-    if (currentTask) {
-      tasks.push(currentTask);
-      currentTask = null;
-    }
-  };
-  lines.forEach((line, index) => {
-    const raw = line;
-    const projectMatch = /^\s*#项目[:：]\s*(.*?)\s*$/.exec(line);
-    if (projectMatch) {
-      flushCurrent();
-      if (options.projectId) {
-        currentProjectId = options.projectId;
-        currentProjectName = options.projects.find((project) => project.id === options.projectId)?.name;
-        return;
-      }
-      const projectName = projectMatch[1].trim() || UNASSIGNED_PROJECT_LABEL;
-      if (projectName === UNASSIGNED_PROJECT_LABEL) {
-        currentProjectId = void 0;
-        currentProjectName = UNASSIGNED_PROJECT_LABEL;
-        return;
-      }
-      const existingProject = options.projects.find((project) => project.name === projectName || project.id === projectName);
-      currentProjectId = existingProject?.id;
-      currentProjectName = existingProject?.name ?? projectName;
-      return;
-    }
-    const taskMatch = /^(\s*)-\s+\[( |x|X)\]\s+(.+)$/.exec(line);
-    if (taskMatch && taskMatch[1].length === 0) {
-      flushCurrent();
-      try {
-        const parsed = parseTaskLine(taskMatch[3], {
-          completed: taskMatch[2].toLowerCase() === "x",
-          projectId: currentProjectId,
-          projectName: currentProjectName,
-          defaultDate: options.defaultDate,
-          source: options.source
-        });
-        currentTask = {
-          line: index + 1,
-          raw,
-          input: parsed.input,
-          projectName: parsed.projectName,
-          completionMode: parsed.completionMode,
-          createReady: parsed.createReady
-        };
-      } catch (error) {
-        issues.push({ line: index + 1, message: error instanceof Error ? error.message : "\u4EFB\u52A1\u89E3\u6790\u5931\u8D25", raw });
-      }
-      return;
-    }
-    const subtaskMatch = /^\s{2,}-\s+(.+)$/.exec(line);
-    if (subtaskMatch && currentTask) {
-      currentTask.input.kind = "composite";
-      const subtask = parseSubtaskLine(subtaskMatch[1]);
-      currentTask.input.subtasks = [
-        ...currentTask.input.subtasks ?? [],
-        { ...subtask, order: currentTask.input.subtasks?.length ?? 0 }
-      ];
-      return;
-    }
-    const descriptionMatch = /^\s{2,}>\s?(.*)$/.exec(line);
-    if (descriptionMatch && currentTask) {
-      currentTask.input.description = [currentTask.input.description, descriptionMatch[1]].filter(Boolean).join("\n");
-      return;
-    }
-    if (line.trim()) {
-      issues.push({ line: index + 1, message: "\u65E0\u6CD5\u8BC6\u522B\u7684\u884C", raw });
-    }
-  });
-  flushCurrent();
-  return { tasks, issues };
-}
-function parseSubtaskLine(raw) {
-  const match = /\s@(\d{2}:\d{2})-(\d{2}:\d{2})\s*$/.exec(raw);
-  const title = raw.replace(/\s@\d{2}:\d{2}-\d{2}:\d{2}\s*$/, "").trim();
-  return {
-    title,
-    startTime: match?.[1],
-    endTime: match?.[2]
-  };
-}
-function parseTaskLine(rawTitle, context) {
-  let title = rawTitle.trim();
-  const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
-  const kindMatch = /\b(?:kind|type):(simple|composite)\b/.exec(title);
-  const repeatMatch = /\brepeat:(once|daily|weekly|custom)\b/.exec(title);
-  const countMatch = /\bcount:(\d+)\b/.exec(title);
-  const untilMatch = /\buntil:(\d{4}-\d{2}-\d{2})\b/.exec(title);
-  const datesMatch = /\bdates:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
-  const doneMatch = /\bdone:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
-  const statusMatch = /\bstatus:(todo|doing|blocked|done)\b/.exec(title);
-  const finishMatch = /\bfinish:(today|series)\b/.exec(title);
-  const priorityMatch = /!(low|medium|high|urgent)\b/.exec(title);
-  const tags = [...title.matchAll(/#([^\s#]+)/g)].map((match) => match[1]).filter((tag) => !tag.startsWith("\u9879\u76EE"));
-  const customDates = datesMatch?.[1].split(",").filter(Boolean) ?? [];
-  const completedDates = doneMatch?.[1].split(",").filter(Boolean) ?? [];
-  title = title.replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "").replace(/\b(?:kind|type):(simple|composite)\b/g, "").replace(/\brepeat:(once|daily|weekly|custom)\b/g, "").replace(/\bcount:\d+\b/g, "").replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "").replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bdone:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bstatus:(todo|doing|blocked|done)\b/g, "").replace(/\bfinish:(today|series)\b/g, "").replace(/!(low|medium|high|urgent)\b/g, "").replace(/#[^\s#]+/g, "").trim();
-  if (!title) {
-    throw new Error("\u4EFB\u52A1\u6807\u9898\u4E0D\u80FD\u4E3A\u7A7A");
-  }
-  return {
-    input: {
-      kind: kindMatch?.[1] ?? "simple",
-      title,
-      projectId: context.projectId,
-      date: dateMatch?.[1] ?? customDates[0] ?? context.defaultDate,
-      startTime: dateMatch?.[2],
-      endTime: dateMatch?.[3],
-      recurrence: repeatMatch?.[1] ?? "once",
-      recurrenceCount: countMatch ? Number(countMatch[1]) : null,
-      recurrenceUntil: untilMatch?.[1] ?? null,
-      occurrenceDates: customDates.length > 0 ? customDates : void 0,
-      completedOccurrenceDates: completedDates.length > 0 ? completedDates : void 0,
-      status: statusMatch?.[1] ?? (context.completed ? "done" : "todo"),
-      priority: priorityMatch?.[1],
-      tags,
-      sourceLinks: context.source ? [context.source] : [],
-      completed: context.completed && completedDates.length === 0
-    },
-    projectName: context.projectName,
-    completionMode: context.completed && completedDates.length === 0 ? finishMatch?.[1] ?? "today" : "pending",
-    createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
-  };
-}
 function resolveTaskImportAction(matched, completionMode, completed) {
   if (!matched) {
     return "create";
@@ -3020,84 +3834,8 @@ function resolveTaskImportAction(matched, completionMode, completed) {
   }
   return "overwrite";
 }
-function normalizeImportIdentity(value) {
+function normalizeImportIdentity2(value) {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("zh-Hans-CN");
-}
-function renderTaskListForImport(tasks, projectNameForId) {
-  const grouped = /* @__PURE__ */ new Map();
-  tasks.forEach((task) => {
-    const key = task.projectId ?? UNASSIGNED_PROJECT_LABEL;
-    grouped.set(key, [...grouped.get(key) ?? [], task]);
-  });
-  const sections = [];
-  [...grouped.entries()].forEach(([projectKey, projectTasks], index) => {
-    if (index > 0) {
-      sections.push("");
-    }
-    sections.push(`#\u9879\u76EE\uFF1A${projectKey === UNASSIGNED_PROJECT_LABEL ? UNASSIGNED_PROJECT_LABEL : projectNameForId(projectKey) ?? UNASSIGNED_PROJECT_LABEL}`);
-    projectTasks.slice().sort(compareSeriesTasks).forEach((task) => {
-      sections.push(renderTaskSeriesForExport(task));
-      renderDescriptionForExport(task.description).forEach((line) => {
-        sections.push(line);
-      });
-      if (task.kind === "composite") {
-        task.subtasks.forEach((subtask) => {
-          sections.push(renderSubtaskForExport(subtask));
-        });
-      }
-    });
-  });
-  return sections.join("\n").trim();
-}
-function renderTaskSeriesForExport(task) {
-  const completedOccurrenceDates = getCompletedOccurrenceDates(task);
-  const completed = task.occurrenceDates.length > 0 && completedOccurrenceDates.length === task.occurrenceDates.length;
-  const parts = buildFormattedTaskParts({ ...task, completedOccurrenceDates });
-  return `- [${completed ? "x" : " "}] ${parts.join(" ")}`.trim();
-}
-function renderSubtaskForExport(subtask) {
-  const time = subtask.startTime && subtask.endTime ? ` @${subtask.startTime}-${subtask.endTime}` : "";
-  return `  - ${subtask.title}${time}`;
-}
-function renderDescriptionForExport(description) {
-  const trimmed = description?.trim();
-  if (!trimmed) {
-    return [];
-  }
-  return trimmed.split(/\r?\n/).map((line) => `  > ${line}`);
-}
-function buildFormattedTaskParts(task) {
-  const parts = [task.title];
-  parts.push(`kind:${task.kind}`);
-  parts.push(`@${task.date}${task.startTime && task.endTime ? ` ${task.startTime}-${task.endTime}` : ""}`);
-  task.tags.forEach((tag) => parts.push(`#${tag}`));
-  if (task.priority) {
-    parts.push(`!${task.priority}`);
-  }
-  parts.push(`status:${task.status}`);
-  if (task.recurrence !== "once") {
-    parts.push(`repeat:${task.recurrence}`);
-  }
-  if (task.recurrenceCount) {
-    parts.push(`count:${task.recurrenceCount}`);
-  }
-  if (task.recurrenceUntil) {
-    parts.push(`until:${task.recurrenceUntil}`);
-  }
-  if (task.recurrence === "custom" && task.occurrenceDates?.length) {
-    parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
-  }
-  if (task.completedOccurrenceDates?.length) {
-    parts.push(`done:${[...new Set(task.completedOccurrenceDates)].sort(compareDateKeys).join(",")}`);
-  }
-  return parts;
-}
-function getCompletedOccurrenceDates(task) {
-  return task.occurrenceDates.filter((date) => getOccurrenceProgress(task, date).completed);
-}
-function extractProjectTaskBlocks(text) {
-  const blocks = [...text.matchAll(/<!--\s*pm:start\s*-->([\s\S]*?)<!--\s*pm:end\s*-->/g)].map((match) => match[1].trim());
-  return blocks.length > 0 ? blocks.join("\n") : "";
 }
 function hashText(text) {
   let hash = 5381;
@@ -3113,26 +3851,124 @@ function randomColor() {
 
 // src/settings.ts
 var import_obsidian2 = require("obsidian");
-var IMPORT_SAMPLE_TEXT = [
+
+// src/utils/clipboard.ts
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("\u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u7CFB\u7EDF\u526A\u8D34\u677F\u6743\u9650");
+  }
+}
+
+// src/settings.ts
+var DATA_MIGRATION_SAMPLE_TEXT = JSON.stringify(
+  {
+    schema: DATA_MIGRATION_SCHEMA,
+    version: DATA_MIGRATION_VERSION,
+    exportedAt: "2026-05-26T12:00:00+08:00",
+    projects: [
+      {
+        id: "project-english",
+        name: "\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A",
+        description: "\u8FC1\u79FB JSON \u4F1A\u4FDD\u7559\u9879\u76EE\u5143\u6570\u636E\u3002",
+        color: "#3d8bfd",
+        status: "active",
+        createdAt: "2026-05-26T12:00:00+08:00",
+        updatedAt: "2026-05-26T12:00:00+08:00"
+      }
+    ],
+    progressPages: [
+      {
+        id: "page-english",
+        projectId: "project-english",
+        name: "\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A",
+        columnOrder: ["title", "status", "priority", "tags", "recurrence", "schedule", "completion", "description", "actions"],
+        createdAt: "2026-05-26T12:00:00+08:00",
+        updatedAt: "2026-05-26T12:00:00+08:00"
+      }
+    ],
+    tasks: [
+      {
+        id: "task-vocab",
+        title: "\u6BCF\u65E5\u80CC\u8BCD",
+        projectId: "project-english",
+        date: "2026-05-26",
+        startTime: "07:00",
+        endTime: "07:30",
+        recurrence: "daily",
+        recurrenceCount: 1e3,
+        occurrenceStates: [{ date: "2026-05-26", completedAt: "2026-05-26T07:31:00+08:00" }],
+        viewState: { board: { columnId: "todo", order: 10 }, gantt: { rowOrder: 10, dependencyIds: [], locked: false, milestone: false }, mindmap: { parentTaskId: null, childOrder: 10, expanded: true } },
+        createdAt: "2026-05-26T12:00:00+08:00",
+        updatedAt: "2026-05-26T12:00:00+08:00",
+        revision: 1
+      }
+    ]
+  },
+  null,
+  2
+);
+var TODAY_COMPLETION_SAMPLE_TEXT = [
   "#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A",
-  "- [ ] \u642D\u5EFA\u590D\u4E60\u770B\u677F kind:simple @2026-05-18 09:00-10:30 #planning !high status:doing",
-  "- [ ] \u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD kind:composite @2026-05-18 12:00-12:40 #vocab !medium status:todo",
-  "  - \u590D\u4E60\u6628\u5929\u9519\u8BCD",
-  "  - \u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD",
-  "  - \u8BB0\u5F55\u6613\u6DF7\u8BCD\u7EC4",
-  "- [ ] \u665A\u95F4\u542C\u529B\u6253\u5361 kind:simple @2026-05-18 21:00-21:25 #listen !medium status:todo repeat:daily count:5",
-  "- [ ] \u6A21\u8003\u590D\u76D8 kind:simple @2026-05-19 19:30-21:00 #mock !medium status:todo repeat:weekly count:4",
-  "- [x] \u63D0\u4EA4\u62A5\u540D\u6750\u6599 kind:simple @2026-05-17 18:00-18:30 #admin status:done",
-  "#\u9879\u76EE\uFF1A\u5199\u4F5C\u7D20\u6750\u5E93",
-  "- [ ] \u4FEE\u8BA2\u4F5C\u6587\u6A21\u677F kind:simple @2026-05-20 20:00-21:30 #writing !urgent status:blocked",
-  "- [ ] \u6BCF\u5468\u6458\u6284\u6574\u7406 kind:composite @2026-05-21 21:00-22:00 #review status:doing repeat:weekly count:6",
-  "  - \u5F52\u7C7B\u5F00\u5934\u53E5",
-  "  - \u5F52\u7C7B\u8BBA\u8BC1\u53E5",
-  "  - \u5F52\u7C7B\u7ED3\u5C3E\u53E5",
-  "- [x] \u5468\u590D\u76D8\u603B\u4EFB\u52A1 kind:simple @2026-05-21 22:00-22:20 #review status:done repeat:weekly count:6 finish:series",
-  "#\u9879\u76EE\uFF1A",
-  "- [ ] \u8865\u4E00\u6761\u672A\u5F52\u5C5E\u4E34\u65F6\u4EFB\u52A1 kind:simple @2026-05-18 22:30-23:00 #adhoc status:todo"
+  "- [x] \u6BCF\u65E5\u80CC\u8BCD",
+  "- [ ] \u542C\u529B\u7CBE\u542C",
+  "",
+  "#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE",
+  "- [x] \u8D2D\u4E70\u7B54\u9898\u5361"
 ].join("\n");
+var TASK_PLAN_SAMPLE_TEXT = [
+  "#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A",
+  "+ \u4EFB\u52A1\uFF1A\u642D\u5EFA\u590D\u4E60\u770B\u677F @2026-05-27 09:00-10:30 #planning !high status:doing",
+  "+ \u7EC4\u5408\uFF1A\u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD @2026-05-27 12:00-12:40 #vocab !medium status:todo repeat:daily count:5",
+  "  - \u590D\u4E60\u6628\u5929\u9519\u8BCD @12:00-12:10",
+  "  - \u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD @12:10-12:30",
+  "  > \u6BCF\u5929\u5B8C\u6210\u540E\u53EF\u5728\u4ECA\u65E5\u4EFB\u52A1\u9875\u52FE\u9009\u3002",
+  "+ \u4EFB\u52A1\uFF1A\u6A21\u8003\u590D\u76D8 @2026-05-29 19:30-21:00 #mock status:todo repeat:weekly count:4"
+].join("\n");
+var FORMAT_GUIDE_SECTIONS = [
+  {
+    title: "\u6570\u636E\u8FC1\u79FB JSON",
+    desc: "\u7528\u4E8E\u77E5\u8BC6\u5E93\u8FC1\u79FB\u548C\u5B8C\u6574\u6062\u590D\uFF0C\u7531\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u751F\u6210\uFF0C\u4E5F\u53EF\u76F4\u63A5\u7C98\u8D34\u5230\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u3002",
+    points: [
+      "\u4FDD\u7559\u9879\u76EE\u3001\u9879\u76EE\u9875\u3001\u4EFB\u52A1\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u3001\u601D\u7EF4\u5BFC\u56FE\u3001\u8BC4\u8BED\u3001\u4EFB\u52A1\u7B14\u8BB0\u3001\u5B8C\u6210\u72B6\u6001\u548C\u5355\u6B21\u5B9E\u4F8B\u8986\u76D6\u3002",
+      "\u91CD\u590D\u65E5\u671F\u4E0D\u9010\u65E5\u5C55\u5F00\uFF1B\u6BCF\u65E5 / \u6BCF\u5468\u4EFB\u52A1\u7528 recurrence + count / until \u8868\u8FBE\uFF0C\u5F02\u5E38\u65E5\u671F\u624D\u5199\u5165 occurrencePlan\u3002",
+      "\u5FC5\u987B\u4FDD\u6301 schema \u4E0E version \u4E0D\u53D8\u3002"
+    ],
+    sample: DATA_MIGRATION_SAMPLE_TEXT
+  },
+  {
+    title: "\u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown",
+    desc: "\u7528\u4E8E\u628A\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u7684\u6E05\u5355\u7C98\u56DE\u5FEB\u901F\u8BB0\u5F55\uFF0C\u53EA\u6539\u53D8\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u7684\u5B8C\u6210\u72B6\u6001\u3002",
+    points: [
+      "\u53EA\u652F\u6301 #\u9879\u76EE \u5206\u7EC4\u548C - [x] \u6807\u9898 / - [ ] \u6807\u9898\u3002",
+      "\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\uFF0C\u4E5F\u4E0D\u4F1A\u8986\u76D6\u4EFB\u52A1\u65E5\u671F\u3001\u65F6\u95F4\u3001\u6807\u7B7E\u6216\u91CD\u590D\u89C4\u5219\u3002",
+      "\u627E\u4E0D\u5230\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u65F6\u4F1A\u963B\u6B62\u5BFC\u5165\u3002"
+    ],
+    sample: TODAY_COMPLETION_SAMPLE_TEXT
+  },
+  {
+    title: "\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown",
+    desc: "\u7528\u4E8E\u5236\u5B9A\u65B0\u8BA1\u5212\u6216\u8986\u76D6\u5DF2\u6709\u4EFB\u52A1\uFF0C\u8BED\u6CD5\u4E0E\u4ECA\u65E5\u5B8C\u6210\u683C\u5F0F\u660E\u663E\u5206\u79BB\u3002",
+    points: [
+      "\u4EFB\u52A1\u884C\u4F7F\u7528 + \u4EFB\u52A1\uFF1A\u6216 + \u7EC4\u5408\uFF1A\u5F00\u5934\uFF0C\u521B\u5EFA / \u8986\u76D6\u5FC5\u987B\u63D0\u4F9B @YYYY-MM-DD HH:mm-HH:mm\u3002",
+      "\u652F\u6301 #\u6807\u7B7E\u3001!\u4F18\u5148\u7EA7\u3001status\u3001repeat\u3001count\u3001until\u3001dates\u3001done \u548C\u7F29\u8FDB\u63CF\u8FF0\u3002",
+      "\u7EC4\u5408\u4EFB\u52A1\u53EF\u5728\u4E0B\u65B9\u7F29\u8FDB\u5199\u8F7B\u91CF\u5B50\u4EFB\u52A1\u3002"
+    ],
+    sample: TASK_PLAN_SAMPLE_TEXT
+  }
+];
 var ProjectManagementSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -3143,64 +3979,13 @@ var ProjectManagementSettingTab = class extends import_obsidian2.PluginSettingTa
     containerEl.empty();
     containerEl.createEl("h2", { text: "\u9879\u76EE\u7BA1\u7406\u63D2\u4EF6\u8BBE\u7F6E" });
     const doc = containerEl.createDiv({ cls: "pm-settings-doc" });
-    doc.createEl("h3", { text: "\u6279\u91CF\u5BFC\u5165\u6570\u636E\u8303\u4F8B" });
+    doc.createEl("h3", { text: "\u5FEB\u901F\u8BB0\u5F55\u4E09\u79CD\u521B\u5EFA\u683C\u5F0F" });
     doc.createDiv({
       cls: "pm-muted",
-      text: "\u8FD9\u91CC\u7684\u8303\u4F8B\u53EF\u76F4\u63A5\u7F16\u8F91\u3001\u5B9E\u65F6\u89C2\u5BDF\u5BFC\u5165\u6548\u679C\uFF0C\u4F46\u4E0D\u4F1A\u4FDD\u5B58\uFF1B\u6BCF\u6B21\u91CD\u65B0\u6253\u5F00\u8BBE\u7F6E\u9875\u90FD\u4F1A\u6062\u590D\u9ED8\u8BA4\u5C55\u793A\u5185\u5BB9\u3002"
+      text: "\u793A\u4F8B\u7A97\u53E3\u53EF\u7F16\u8F91\u3001\u53EF\u6EDA\u52A8\u3001\u53EF\u590D\u5236\uFF0C\u4F46\u4E0D\u4F1A\u4FDD\u5B58\uFF1B\u6BCF\u6B21\u91CD\u65B0\u6253\u5F00\u8BBE\u7F6E\u9875\u90FD\u4F1A\u6062\u590D\u9ED8\u8BA4\u5185\u5BB9\u3002"
     });
-    const sampleInput = doc.createEl("textarea", { cls: "pm-settings-sample-input" });
-    sampleInput.value = IMPORT_SAMPLE_TEXT;
-    const insight = doc.createDiv({ cls: "pm-settings-preview" });
-    const renderSamplePreview = () => {
-      insight.empty();
-      const preview = this.plugin.store.previewFormattedTasks(sampleInput.value, {
-        defaultDate: "2026-05-18"
-      });
-      const statusCount = preview.tasks.reduce((counts, task) => {
-        const key = task.input.status ?? "todo";
-        counts[key] = (counts[key] ?? 0) + 1;
-        return counts;
-      }, {});
-      const dates = preview.tasks.map((task) => task.input.date).sort();
-      const summary = insight.createDiv({ cls: "pm-settings-preview-grid" });
-      [
-        ["\u8868\u683C\u4EFB\u52A1\u6570", String(preview.summary.total)],
-        ["\u8986\u76D6/\u65B0\u589E", `${preview.summary.overwriteCount}/${preview.summary.createCount}`],
-        ["\u770B\u677F\u5217\u5206\u5E03", `\u5F85\u529E ${statusCount.todo ?? 0} \xB7 \u8FDB\u884C\u4E2D ${statusCount.doing ?? 0} \xB7 \u963B\u585E ${statusCount.blocked ?? 0} \xB7 \u5DF2\u5B8C\u6210 ${statusCount.done ?? 0}`],
-        ["\u7518\u7279\u8DE8\u5EA6", dates.length > 0 ? `${dates[0]} -> ${dates[dates.length - 1]}` : "\u6682\u65E0"],
-        ["\u5B8C\u6210\u7EDF\u8BA1", `\u5DF2\u52FE\u9009 ${preview.summary.completed}\uFF0C\u7EC4\u5408\u4EFB\u52A1 ${preview.summary.composite}`],
-        ["\u9879\u76EE\u53D8\u5316", preview.summary.newProjectNames.length > 0 ? `\u4F1A\u65B0\u5EFA ${preview.summary.newProjectNames.join("\u3001")}` : "\u5168\u90E8\u9879\u76EE\u5DF2\u5B58\u5728\u6216\u672A\u5F52\u5C5E"]
-      ].forEach(([label, value]) => {
-        const card = summary.createDiv({ cls: "pm-settings-preview-card" });
-        card.createDiv({ cls: "pm-muted", text: label });
-        card.createEl("strong", { text: value });
-      });
-      const notes = insight.createDiv({ cls: "pm-settings-preview-notes" });
-      [
-        "\u8868\u683C\u89C6\u56FE\u4F1A\u5C55\u793A\u6807\u9898\u3001\u72B6\u6001\u3001\u4F18\u5148\u7EA7\u3001\u6807\u7B7E\u3001\u91CD\u590D\u89C4\u5219\u4E0E\u5B8C\u6210\u8FDB\u5EA6\u3002",
-        "\u770B\u677F\u4F1A\u6309\u7167 status:todo / doing / blocked / done \u81EA\u52A8\u5206\u5217\u3002",
-        "\u7518\u7279\u56FE\u76F4\u63A5\u8BFB\u53D6\u65E5\u671F\u548C\u65F6\u95F4\u8303\u56F4\uFF1B\u666E\u901A\u4EFB\u52A1\u3001\u7EC4\u5408\u4EFB\u52A1\u3001\u6BCF\u65E5\u4EFB\u52A1\u3001\u6BCF\u5468\u4EFB\u52A1\u90FD\u4F1A\u6309\u7CFB\u5217\u5448\u73B0\u3002",
-        "\u601D\u7EF4\u5BFC\u56FE\u7684\u8BC4\u8BED\u8282\u70B9\u3001\u4EFB\u52A1\u6302\u8F7D\u5173\u7CFB\u548C\u4F9D\u8D56\u5173\u7CFB\uFF0C\u5BFC\u5165\u540E\u7EE7\u7EED\u5728\u9879\u76EE\u8FDB\u5EA6\u9875\u6216\u5FEB\u901F\u8BB0\u5F55\u9875\u8865\u5145\u3002"
-      ].forEach((item) => notes.createEl("div", { text: item, cls: "pm-settings-note-item" }));
-      if (preview.issues.length > 0) {
-        const issueList = insight.createEl("ul", { cls: "pm-import-issues" });
-        preview.issues.slice(0, 6).forEach((issue) => {
-          issueList.createEl("li", { text: `\u7B2C ${issue.line} \u884C\uFF1A${issue.message}` });
-        });
-      }
-    };
-    sampleInput.addEventListener("input", renderSamplePreview);
-    doc.createEl("h3", { text: "\u5BFC\u5165\u540E\u4F1A\u5448\u73B0\u4EC0\u4E48" });
-    const list = doc.createEl("ul");
-    [
-      "\u8868\u683C\u89C6\u56FE\u4F1A\u5C55\u793A\u6807\u9898\u3001\u72B6\u6001\u3001\u4F18\u5148\u7EA7\u3001\u6807\u7B7E\u3001\u91CD\u590D\u89C4\u5219\u548C\u7EC4\u5408\u4EFB\u52A1\u8FDB\u5EA6\u3002",
-      "\u770B\u677F\u89C6\u56FE\u4F1A\u6309 status:todo / doing / blocked / done \u81EA\u52A8\u5206\u5217\u3002",
-      "\u7518\u7279\u56FE\u4F1A\u76F4\u63A5\u8BFB\u53D6\u65E5\u671F\u548C\u65F6\u95F4\u8303\u56F4\u751F\u6210\u65F6\u95F4\u8F74\u6761\u5E26\u3002",
-      "\u5DF2\u5B8C\u6210\u7EDF\u8BA1\u4F1A\u628A - [x] \u4EFB\u52A1\u76F4\u63A5\u8BA1\u5165\u5B8C\u6210\u6570\u91CF\u4E0E\u5B8C\u6210\u7387\uFF0Crepeat \u4EFB\u52A1\u8FD8\u652F\u6301 finish:series \u63D0\u524D\u7ED3\u675F\u6574\u4E2A\u7CFB\u5217\u3002",
-      "\u601D\u7EF4\u5BFC\u56FE\u4F1A\u5148\u751F\u6210\u4EFB\u52A1\u8282\u70B9\uFF1B\u8BC4\u8BED\u8282\u70B9\u3001\u4EFB\u52A1\u7236\u5B50\u5173\u7CFB\u548C\u4F9D\u8D56\u5173\u7CFB\u5728\u9879\u76EE\u8FDB\u5EA6\u9875\u6216\u5FEB\u901F\u8BB0\u5F55\u9875\u7EE7\u7EED\u8865\u5145\u3002"
-    ].forEach((item) => list.createEl("li", { text: item }));
-    renderSamplePreview();
-    new import_obsidian2.Setting(containerEl).setName("\u5BFC\u51FA Markdown \u8BED\u6CD5\u8BF4\u660E").setDesc("\u751F\u6210\u4E00\u4EFD\u5F53\u524D\u63D2\u4EF6\u652F\u6301\u7684 Markdown \u4EFB\u52A1\u8BED\u6CD5\u8BF4\u660E\uFF0C\u5305\u542B\u5B8C\u6574\u8BB0\u5F55\u5BFC\u51FA\u683C\u5F0F\u3002").addButton(
+    FORMAT_GUIDE_SECTIONS.forEach((section) => this.renderFormatGuideSection(doc, section));
+    new import_obsidian2.Setting(containerEl).setName("\u5BFC\u51FA Markdown \u8BED\u6CD5\u8BF4\u660E").setDesc("\u751F\u6210\u4E00\u4EFD\u5F53\u524D\u63D2\u4EF6\u652F\u6301\u7684\u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u8BF4\u660E\uFF0C\u5305\u542B\u6570\u636E\u8FC1\u79FB JSON \u4E0E\u4E24\u7C7B Markdown\u3002").addButton(
       (button) => button.setButtonText("\u5BFC\u51FA\u8BF4\u660E\u6587\u4EF6").setCta().onClick(async () => {
         const path = await this.plugin.store.exportMarkdownGuide();
         new import_obsidian2.Notice(`\u5DF2\u5BFC\u51FA\u5230 ${path}`);
@@ -3300,6 +4085,22 @@ var ProjectManagementSettingTab = class extends import_obsidian2.PluginSettingTa
         await this.plugin.updateSettings({ showCompletedTasks: value });
       })
     );
+  }
+  renderFormatGuideSection(containerEl, section) {
+    const wrapper = containerEl.createDiv({ cls: "pm-settings-format-section" });
+    const header = wrapper.createDiv({ cls: "pm-settings-format-header" });
+    const copy = header.createDiv();
+    copy.createEl("h4", { text: section.title });
+    copy.createDiv({ cls: "pm-muted", text: section.desc });
+    const button = header.createEl("button", { text: "\u590D\u5236\u8303\u4F8B", cls: "pm-button pm-button-secondary" });
+    const textarea = wrapper.createEl("textarea", { cls: "pm-settings-format-textarea" });
+    textarea.value = section.sample;
+    button.addEventListener("click", async () => {
+      await copyTextToClipboard(textarea.value);
+      new import_obsidian2.Notice(`\u5DF2\u590D\u5236${section.title}\u8303\u4F8B`);
+    });
+    const list = wrapper.createEl("ul", { cls: "pm-settings-format-points" });
+    section.points.forEach((point) => list.createEl("li", { text: point }));
   }
   renderAppendHeaderSettings(containerEl, title, description, key) {
     const wrapper = containerEl.createDiv({ cls: "pm-settings-group" });
@@ -3449,16 +4250,16 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
     if (this.target === "quick-task") {
       const importHint = container.createDiv({ cls: "pm-input-card" });
       const hintHeader = importHint.createDiv({ cls: "pm-input-card-header" });
-      hintHeader.createEl("strong", { text: "\u4EFB\u52A1\u5BFC\u5165\u89C4\u5219" });
-      hintHeader.createDiv({ cls: "pm-muted", text: "\u8FD9\u5957\u8BED\u6CD5\u4E0E\u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u3001\u4ECA\u65E5\u4EFB\u52A1\u5BFC\u51FA\u5B8C\u5168\u4E92\u901A\u3002" });
+      hintHeader.createEl("strong", { text: "\u521B\u5EFA\u4EFB\u52A1\u683C\u5F0F" });
+      hintHeader.createDiv({ cls: "pm-muted", text: "\u6570\u636E\u8FC1\u79FB JSON\u3001\u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\u3001\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown \u4F1A\u81EA\u52A8\u5206\u6D41\u3002" });
       [
-        "\u652F\u6301\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u660E\u6587\u4EFB\u52A1\u6E05\u5355\uFF1B\u63D0\u4EA4\u540E\u4F1A\u6309\u666E\u901A\u4EFB\u52A1\u8BED\u6CD5\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u3002",
-        "\u652F\u6301\u666E\u901A\u4EFB\u52A1\u4E0E\u7EC4\u5408\u4EFB\u52A1\uFF1B\u7EC4\u5408\u4EFB\u52A1\u53EF\u5199 kind:composite\uFF0C\u4E5F\u53EF\u76F4\u63A5\u5728\u4E0B\u4E00\u884C\u7F29\u8FDB\u5199\u5B50\u4EFB\u52A1\u3002",
+        "\u652F\u6301\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u6570\u636E\u8FC1\u79FB JSON\uFF1B\u63D0\u4EA4\u540E\u4F1A\u6062\u590D\u9879\u76EE\u3001\u9879\u76EE\u9875\u3001\u4EFB\u52A1\u89C6\u56FE\u72B6\u6001\u548C\u5BFC\u56FE\u5173\u7CFB\u3002",
+        "\u65B0\u4EFB\u52A1\u8BA1\u5212\u4F7F\u7528 + \u4EFB\u52A1\uFF1A\u6216 + \u7EC4\u5408\uFF1A\u5F00\u5934\uFF0C\u5FC5\u987B\u5199\u5B8C\u6574\u65E5\u671F\u548C\u65F6\u95F4\u6BB5\u3002",
+        "\u4ECA\u65E5\u5B8C\u6210\u53EA\u4F7F\u7528\u6781\u7B80 - [x] \u6807\u9898\uFF1B\u627E\u4E0D\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u4F1A\u62A5\u9519\uFF0C\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002",
+        "\u7EC4\u5408\u8BA1\u5212\u53EF\u76F4\u63A5\u5728\u4E0B\u4E00\u884C\u7F29\u8FDB\u5199\u8F7B\u91CF\u5B50\u4EFB\u52A1\u3002",
         "\u4EFB\u52A1\u884C\u4E0B\u7F29\u8FDB > \u63CF\u8FF0 \u53EF\u5199\u5165\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u591A\u884C\u63CF\u8FF0\u4F1A\u6309\u6362\u884C\u5408\u5E76\u3002",
         "\u652F\u6301\u5355\u6B21\u3001\u6BCF\u65E5\u3001\u6BCF\u5468\u6B64\u65F6\uFF1Arepeat:once / daily / weekly\uFF1B\u9700\u8981\u9650\u5236\u6B21\u6570\u53EF\u7EE7\u7EED\u5199 count:4 \u6216 until:2026-06-30\u3002",
-        "\u652F\u6301 done:2026-05-25,2026-05-26 \u6807\u8BB0\u5DF2\u5B8C\u6210\u53D1\u751F\u65E5\u671F\uFF0C\u4FBF\u4E8E\u8FC1\u79FB\u91CD\u590D\u4EFB\u52A1\u8FDB\u5EA6\u3002",
-        "\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u5199\u5B8C\u6574\u65E5\u671F\u548C\u65F6\u95F4\u6BB5\uFF0C\u4F8B\u5982 @2026-05-25 09:00-09:30\u3002",
-        "\u6781\u7B80 - [x] \u6807\u9898 \u53EA\u4F1A\u5339\u914D\u5E76\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\uFF1B\u627E\u4E0D\u5230\u65F6\u4F1A\u62A5\u9519\uFF0C\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002"
+        "\u652F\u6301 done:2026-05-25,2026-05-26 \u6807\u8BB0\u5DF2\u5B8C\u6210\u53D1\u751F\u65E5\u671F\uFF0C\u7528\u4E8E\u8BA1\u5212\u6587\u672C\u4E2D\u7684\u5C40\u90E8\u5B8C\u6210\u8BB0\u5F55\u3002"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
     }
     const editorCard = container.createDiv({ cls: "pm-editor-card" });
@@ -3682,7 +4483,7 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
     const previewCard = container.createDiv({ cls: "pm-input-card pm-dialog-task-preview" });
     const header = previewCard.createDiv({ cls: "pm-input-card-header" });
     header.createEl("strong", { text: "\u5B9E\u65F6\u4EFB\u52A1\u9884\u89C8" });
-    header.createDiv({ cls: "pm-muted", text: "\u548C\u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u3001\u4ECA\u65E5\u4EFB\u52A1\u5BFC\u51FA\u4F7F\u7528\u540C\u4E00\u5957\u89E3\u6790\u89C4\u5219\u3002" });
+    header.createDiv({ cls: "pm-muted", text: "\u652F\u6301\u6570\u636E\u8FC1\u79FB JSON\u3001\u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown \u548C\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\u3002" });
     const body = previewCard.createDiv({ cls: "pm-dialog-task-preview-body" });
     const renderPreview = () => {
       body.empty();
@@ -3690,19 +4491,25 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
         defaultDate: toDateKey(now())
       });
       const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
-      [
+      const summaryItems = preview.sourceFormat === "data-migration" && preview.dataMigration ? [
+        ["\u8BB0\u5F55\u7C7B\u578B", "\u6570\u636E\u8FC1\u79FB JSON"],
+        ["\u9879\u76EE / \u4EFB\u52A1", `${preview.dataMigration.projects} / ${preview.dataMigration.tasks}`],
+        ["\u5B9E\u4F8B / \u5BFC\u56FE\u5173\u7CFB", `${preview.dataMigration.occurrences} / ${preview.dataMigration.mindmapLinks}`],
+        ["\u65B0\u589E / \u8986\u76D6", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
+      ] : [
         ["\u4EFB\u52A1\u603B\u6570", String(preview.summary.total)],
         ["\u666E\u901A / \u7EC4\u5408", `${preview.tasks.filter((task) => task.input.kind !== "composite").length} / ${preview.summary.composite}`],
         ["\u5355\u6B21 / \u6BCF\u65E5 / \u6BCF\u5468", `${preview.tasks.filter((task) => task.input.recurrence === "once").length} / ${preview.tasks.filter((task) => task.input.recurrence === "daily").length} / ${preview.tasks.filter((task) => task.input.recurrence === "weekly").length}`],
         ["\u65B0\u589E / \u8986\u76D6", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
-      ].forEach(([label, value]) => {
+      ];
+      summaryItems.forEach(([label, value]) => {
         const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
         card.createDiv({ cls: "pm-muted", text: label });
         card.createEl("strong", { text: value });
       });
       const rows = body.createDiv({ cls: "pm-dialog-task-preview-list" });
       if (preview.tasks.length === 0) {
-        rows.createDiv({ cls: "pm-muted", text: "\u8F93\u5165\u4EFB\u52A1\u540E\uFF0C\u8FD9\u91CC\u4F1A\u663E\u793A\u4EFB\u52A1\u7C7B\u578B\u3001\u91CD\u590D\u89C4\u5219\u548C\u5BFC\u5165\u52A8\u4F5C\u3002" });
+        rows.createDiv({ cls: "pm-muted", text: "\u8F93\u5165\u6570\u636E\u8FC1\u79FB JSON\u3001\u4ECA\u65E5\u5B8C\u6210\u6216\u4EFB\u52A1\u8BA1\u5212\u540E\uFF0C\u8FD9\u91CC\u4F1A\u663E\u793A\u5BFC\u5165\u52A8\u4F5C\u3002" });
       } else {
         preview.tasks.slice(0, 8).forEach((task) => {
           const row = rows.createDiv({ cls: "pm-dialog-task-preview-item" });
@@ -3751,12 +4558,12 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
     if (this.target === "quick-task") {
       return [
         "#\u9879\u76EE\uFF1A\u65B0\u7684\u5B66\u4E60\u8BA1\u5212",
-        "- [ ] \u666E\u901A\u4EFB\u52A1 kind:simple @2026-05-18 09:00-10:00 #tag !high status:doing",
-        "- [ ] \u7EC4\u5408\u4EFB\u52A1 kind:composite @2026-05-18 14:00-15:00 #plan !medium status:todo",
+        "+ \u4EFB\u52A1\uFF1A\u666E\u901A\u4EFB\u52A1 @2026-05-18 09:00-10:00 #tag !high status:doing",
+        "+ \u7EC4\u5408\uFF1A\u7EC4\u5408\u4EFB\u52A1 @2026-05-18 14:00-15:00 #plan !medium status:todo",
         "  - \u5B50\u4EFB\u52A1\u4E00",
         "  - \u5B50\u4EFB\u52A1\u4E8C",
-        "- [ ] \u6BCF\u65E5\u590D\u4E60 @2026-05-18 20:00-20:30 #review repeat:daily count:5",
-        "- [x] \u6BCF\u5468\u56DE\u987E @2026-05-18 21:00-21:30 #review status:done repeat:weekly count:4 finish:series"
+        "+ \u4EFB\u52A1\uFF1A\u6BCF\u65E5\u590D\u4E60 @2026-05-18 20:00-20:30 #review repeat:daily count:5",
+        "+ \u4EFB\u52A1\uFF1A\u6BCF\u5468\u56DE\u987E @2026-05-18 21:00-21:30 #review status:todo repeat:weekly count:4"
       ].join("\n");
     }
     if (this.target === "mindmap") {
@@ -4041,7 +4848,7 @@ function editorHint(target, mode) {
     return mode === "inside" ? "\u5F53\u524D\u4F1A\u628A\u5185\u5BB9\u5E76\u5165\u6240\u9009\u8282\u70B9\u6B63\u6587\u3002" : "\u5F53\u524D\u4F1A\u628A\u6BCF\u4E00\u884C\u89E3\u6790\u6210\u4E00\u4E2A\u65B0\u7684\u8BC4\u8BED\u8282\u70B9\u3002";
   }
   if (target === "quick-task") {
-    return "\u5B8C\u6574\u8F93\u5165\u7528\u4E8E\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u6781\u7B80\u52FE\u9009\u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u3002";
+    return "\u6570\u636E\u8FC1\u79FB JSON \u7528\u4E8E\u6062\u590D\u6570\u636E\uFF1B+ \u4EFB\u52A1 / + \u7EC4\u5408\u7528\u4E8E\u8BA1\u5212\uFF1B\u6781\u7B80\u52FE\u9009\u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u3002";
   }
   return "\u7F16\u8F91\u533A\u5DF2\u5305\u88F9\u6210\u72EC\u7ACB\u5361\u7247\uFF0C\u4FBF\u4E8E\u4E13\u6CE8\u8F93\u5165\u3002";
 }
@@ -4051,29 +4858,29 @@ function buildQuickTaskShortcuts() {
     {
       label: "\u666E\u901A\u4EFB\u52A1",
       hint: "\u63D2\u5165\u666E\u901A\u4EFB\u52A1\u6A21\u677F",
-      snippet: `- [ ] \u666E\u901A\u4EFB\u52A1 kind:simple @${today} 09:00-09:30 status:todo`
+      snippet: `+ \u4EFB\u52A1\uFF1A\u666E\u901A\u4EFB\u52A1 @${today} 09:00-09:30 status:todo`
     },
     {
       label: "\u7EC4\u5408\u4EFB\u52A1",
       hint: "\u63D2\u5165\u7EC4\u5408\u4EFB\u52A1\u6A21\u677F\u548C\u4E24\u4E2A\u5B50\u4EFB\u52A1",
-      snippet: `- [ ] \u7EC4\u5408\u4EFB\u52A1 kind:composite @${today} 10:00-11:00 status:todo
+      snippet: `+ \u7EC4\u5408\uFF1A\u7EC4\u5408\u4EFB\u52A1 @${today} 10:00-11:00 status:todo
   - \u5B50\u4EFB\u52A1\u4E00
   - \u5B50\u4EFB\u52A1\u4E8C`
     },
     {
       label: "\u5355\u6B21",
       hint: "\u63D2\u5165\u5355\u6B21\u4EFB\u52A1\u6A21\u677F",
-      snippet: `- [ ] \u5355\u6B21\u4EFB\u52A1 kind:simple @${today} 14:00-14:30 repeat:once status:todo`
+      snippet: `+ \u4EFB\u52A1\uFF1A\u5355\u6B21\u4EFB\u52A1 @${today} 14:00-14:30 repeat:once status:todo`
     },
     {
       label: "\u6BCF\u65E5",
       hint: "\u63D2\u5165\u6BCF\u65E5\u4EFB\u52A1\u6A21\u677F",
-      snippet: `- [ ] \u6BCF\u65E5\u4EFB\u52A1 kind:simple @${today} 20:00-20:20 repeat:daily count:7 status:todo`
+      snippet: `+ \u4EFB\u52A1\uFF1A\u6BCF\u65E5\u4EFB\u52A1 @${today} 20:00-20:20 repeat:daily count:7 status:todo`
     },
     {
       label: "\u6BCF\u5468\u6B64\u65F6",
       hint: "\u63D2\u5165\u6BCF\u5468\u91CD\u590D\u6A21\u677F",
-      snippet: `- [ ] \u6BCF\u5468\u4EFB\u52A1 kind:simple @${today} 21:00-21:30 repeat:weekly count:4 status:todo`
+      snippet: `+ \u4EFB\u52A1\uFF1A\u6BCF\u5468\u4EFB\u52A1 @${today} 21:00-21:30 repeat:weekly count:4 status:todo`
     },
     {
       label: "\u672A\u5F52\u5C5E\u9879\u76EE",
@@ -4235,7 +5042,7 @@ var BulkImportModal = class extends import_obsidian7.Modal {
     const projectName = this.options.projectId ? this.options.store.getProject(this.options.projectId)?.name ?? "\u5F53\u524D\u9879\u76EE" : "";
     contentEl.createDiv({
       cls: "pm-import-guide",
-      text: this.options.projectId ? `\u5F53\u524D\u5904\u4E8E\u9879\u76EE\u5BFC\u5165\u6A21\u5F0F\uFF1A\u672A\u663E\u5F0F\u5207\u6362\u9879\u76EE\u65F6\uFF0C\u4EFB\u52A1\u4F1A\u6309\u201C${projectName}\u201D\u5904\u7406\u3002\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B @\u65E5\u671F \u65F6\u95F4\u6BB5\uFF1B\u6781\u7B80 - [x] \u6807\u9898 \u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u3002` : "\u652F\u6301 #\u9879\u76EE\uFF1A\u65B0\u9879\u76EE\u540D \u81EA\u52A8\u5EFA\u9879\u76EE\uFF0C\u4E5F\u652F\u6301\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B @\u65E5\u671F \u65F6\u95F4\u6BB5\uFF1B\u6781\u7B80 - [x] \u6807\u9898 \u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u3002"
+      text: this.options.projectId ? `\u5F53\u524D\u5904\u4E8E\u9879\u76EE\u5BFC\u5165\u6A21\u5F0F\uFF1A\u672A\u663E\u5F0F\u5207\u6362\u9879\u76EE\u65F6\uFF0C\u4EFB\u52A1\u4F1A\u6309\u201C${projectName}\u201D\u5904\u7406\u3002\u4E5F\u53EF\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u6570\u636E\u8FC1\u79FB JSON\u3002` : "\u652F\u6301 #\u9879\u76EE\uFF1A\u65B0\u9879\u76EE\u540D \u81EA\u52A8\u5EFA\u9879\u76EE\uFF0C\u4E5F\u652F\u6301\u672A\u5F52\u5C5E\u4EFB\u52A1\uFF1B\u4E5F\u53EF\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u6570\u636E\u8FC1\u79FB JSON\u3002"
     });
     const state = {
       text: "",
@@ -4249,7 +5056,7 @@ var BulkImportModal = class extends import_obsidian7.Modal {
     );
     const input = contentEl.createEl("textarea", {
       cls: "pm-bulk-import-input",
-      placeholder: "#\u9879\u76EE\uFF1A\u63D2\u4EF6\u4F53\u9A8C\u793A\u4F8B\n- [ ] \u5F00\u53D1\u4EFB\u52A1\u89E3\u6790\u5668 kind:composite @2026-05-18 09:00-10:30 #parser !high status:doing\n  - \u89E3\u6790\u6807\u9898\n  - \u89E3\u6790\u65E5\u671F\n- [ ] \u6BCF\u65E5\u56DE\u987E\u8F93\u5165\u6D41\u7A0B kind:simple @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n- [x] \u6BCF\u5468\u590D\u76D8\u5BFC\u5165\u6D41\u7A0B kind:simple @2026-05-18 20:30-21:00 #review status:done repeat:weekly count:4 finish:series"
+      placeholder: "#\u9879\u76EE\uFF1A\u63D2\u4EF6\u4F53\u9A8C\u793A\u4F8B\n+ \u7EC4\u5408\uFF1A\u5F00\u53D1\u4EFB\u52A1\u89E3\u6790\u5668 @2026-05-18 09:00-10:30 #parser !high status:doing\n  - \u89E3\u6790\u6807\u9898\n  - \u89E3\u6790\u65E5\u671F\n+ \u4EFB\u52A1\uFF1A\u6BCF\u65E5\u56DE\u987E\u8F93\u5165\u6D41\u7A0B @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n+ \u4EFB\u52A1\uFF1A\u6BCF\u5468\u590D\u76D8\u5BFC\u5165\u6D41\u7A0B @2026-05-18 20:30-21:00 #review status:todo repeat:weekly count:4"
     });
     input.addEventListener("input", () => {
       state.text = input.value;
@@ -4267,14 +5074,22 @@ var BulkImportModal = class extends import_obsidian7.Modal {
         text: `\u89E3\u6790 ${preview.summary.total} \u6761\uFF0C\u95EE\u9898 ${preview.issues.length} \u6761`
       });
       const summaryGrid = previewEl.createDiv({ cls: "pm-import-summary-grid" });
-      [
+      const summaryItems = preview.sourceFormat === "data-migration" && preview.dataMigration ? [
+        ["\u8BB0\u5F55\u7C7B\u578B", "\u6570\u636E\u8FC1\u79FB JSON"],
+        ["\u9879\u76EE", String(preview.dataMigration.projects)],
+        ["\u9879\u76EE\u9875", String(preview.dataMigration.progressPages)],
+        ["\u4EFB\u52A1 / \u5B9E\u4F8B", `${preview.dataMigration.tasks} / ${preview.dataMigration.occurrences}`],
+        ["\u5BFC\u56FE\u5173\u7CFB", String(preview.dataMigration.mindmapLinks)],
+        ["\u65B0\u589E / \u8986\u76D6", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
+      ] : [
         ["\u65B0\u589E\u4EFB\u52A1", String(preview.summary.createCount)],
         ["\u8986\u76D6\u4EFB\u52A1", String(preview.summary.overwriteCount)],
         ["\u5B8C\u6210\u4ECA\u65E5", String(preview.summary.completeTodayCount)],
         ["\u63D0\u524D\u7ED3\u675F", String(preview.summary.completeSeriesCount)],
         ["\u7EC4\u5408\u4EFB\u52A1", String(preview.summary.composite)],
         ["\u5DF2\u52FE\u9009\u5B8C\u6210", String(preview.summary.completed)]
-      ].forEach(([label, value]) => {
+      ];
+      summaryItems.forEach(([label, value]) => {
         const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
         card.createDiv({ cls: "pm-muted", text: label });
         card.createEl("strong", { text: value });
@@ -4804,26 +5619,6 @@ var TextEntryModal = class extends import_obsidian10.Modal {
   }
 };
 
-// src/utils/clipboard.ts
-async function copyTextToClipboard(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  document.body.removeChild(textarea);
-  if (!copied) {
-    throw new Error("\u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5\u7CFB\u7EDF\u526A\u8D34\u677F\u6743\u9650");
-  }
-}
-
 // src/views/overviewView.ts
 var OVERVIEW_VIEW_TYPE = "project-management-overview-view";
 var OverviewView = class extends BaseProjectView {
@@ -5229,8 +6024,8 @@ var OverviewView = class extends BaseProjectView {
     headerCopy.createDiv({ cls: "pm-muted", text: "\u56F4\u7ED5\u5355\u4E2A\u9879\u76EE\u7EDF\u4E00\u67E5\u770B\u8868\u683C\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u4E0E\u601D\u7EF4\u5BFC\u56FE\u3002" });
     const headerActions = header.createDiv({ cls: "pm-inline-actions" });
     headerActions.createEl("button", { text: "\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
-      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsMarkdown());
-      new import_obsidian11.Notice("\u5DF2\u590D\u5236\u5168\u90E8\u8BB0\u5F55 Markdown");
+      await copyTextToClipboard(this.plugin.store.exportAllRecordsAsDataMigrationJson());
+      new import_obsidian11.Notice("\u5DF2\u590D\u5236\u6570\u636E\u8FC1\u79FB JSON");
     });
     headerActions.createEl("button", { text: "\u65B0\u589E\u9879\u76EE", cls: "pm-button pm-button-primary" }).addEventListener("click", () => {
       new ProjectModal(this.app, {
