@@ -69,7 +69,6 @@ export const DEFAULT_CONFIG: PluginConfig = {
   dialogTabName: "快速记录",
   weekStartsOn: "monday",
   timeSlotMinutes: 15,
-  heatmapRange: "12months",
   showCompletedTasks: true,
   defaultTaskDurationMinutes: 30,
   defaultTaskStartTime: "07:00",
@@ -544,8 +543,8 @@ export class ProjectManagementStore extends Events {
       throw new Error("任务标题不能为空");
     }
     const description = patch.description === undefined ? occurrence.description ?? "" : patch.description.trim();
-    const start = patch.startTime === undefined ? occurrence.startTime ?? "" : patch.startTime?.trim() ?? "";
-    const end = patch.endTime === undefined ? occurrence.endTime ?? "" : patch.endTime?.trim() ?? "";
+    const start = patch.startTime === undefined ? occurrence.startTime ?? "" : normalizeClockTime(patch.startTime, "开始时间") ?? "";
+    const end = patch.endTime === undefined ? occurrence.endTime ?? "" : normalizeClockTime(patch.endTime, "结束时间") ?? "";
     if ((start && !end) || (!start && end)) {
       throw new Error("开始时间和结束时间必须同时填写");
     }
@@ -1500,8 +1499,8 @@ export class ProjectManagementStore extends Events {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new Error("任务日期格式错误");
     }
-    const startTime = input.startTime?.trim() || undefined;
-    const endTime = input.endTime?.trim() || undefined;
+    const startTime = normalizeClockTime(input.startTime, "开始时间");
+    const endTime = normalizeClockTime(input.endTime, "结束时间");
     const start = parseTimeToMinutes(startTime);
     const end = parseTimeToMinutes(endTime);
     if ((startTime && !endTime) || (!startTime && endTime)) {
@@ -1623,7 +1622,7 @@ export class ProjectManagementStore extends Events {
       if (item.date !== task.date) {
         return false;
       }
-      if (isCompositeContainerOverlap(task.taskId, item.taskId, taskById)) {
+      if (shareCompositeSchedulingContainer(task.taskId, item.taskId, taskById)) {
         return false;
       }
       const otherStart = parseTimeToMinutes(item.startTime);
@@ -1650,7 +1649,7 @@ export class ProjectManagementStore extends Events {
             return;
           }
           const dateOccupied = occupied.get(occurrence.date) ?? [];
-          const blockingIntervals = dateOccupied.filter((interval) => !isCompositeContainerOverlap(occurrence.taskId, interval.taskId, taskById));
+          const blockingIntervals = dateOccupied.filter((interval) => !shareCompositeSchedulingContainer(occurrence.taskId, interval.taskId, taskById));
           if (!hasTimeOverlap(blockingIntervals, start, end)) {
             dateOccupied.push({ taskId: occurrence.taskId, start, end });
             occupied.set(occurrence.date, sortOccupiedMinutes(dateOccupied));
@@ -1968,7 +1967,14 @@ export class ProjectManagementStore extends Events {
       if (!data.ok) {
         failedPaths.push(childPath);
       }
-      this.tasks.set(month, (data.value?.tasks ?? []).map(normalizeStoredTask));
+      try {
+        this.tasks.set(month, (data.value?.tasks ?? []).map(normalizeStoredTask));
+      } catch (error) {
+        console.error("Failed to normalize task file", childPath, error);
+        new Notice(`读取数据失败，已停止自动写回: ${childPath}`, 0);
+        failedPaths.push(childPath);
+        this.tasks.set(month, []);
+      }
     }
     return { failedPaths };
   }
@@ -2286,13 +2292,33 @@ type DataFolderUsage = {
 function normalizeStoredTask(task: Task): Task {
   const kind: TaskKind = task.kind ?? ((task.subtasks?.length ?? 0) > 0 ? "composite" : "simple");
   const status = normalizeTaskStatus(task.status);
+  const startTime = normalizeClockTime(task.startTime, "开始时间");
+  const endTime = normalizeClockTime(task.endTime, "结束时间");
+  if ((startTime && !endTime) || (!startTime && endTime)) {
+    throw new Error("开始时间和结束时间必须同时填写");
+  }
+  const start = parseTimeToMinutes(startTime);
+  const end = parseTimeToMinutes(endTime);
+  if (start !== null && end !== null && start >= end) {
+    throw new Error("结束时间必须晚于开始时间");
+  }
   const subtasks = (task.subtasks ?? []).map((item, index) => ({
     id: item.id,
     title: item.title,
-    startTime: item.startTime,
-    endTime: item.endTime,
+    startTime: normalizeClockTime(item.startTime, `轻量项「${item.title || index + 1}」开始时间`),
+    endTime: normalizeClockTime(item.endTime, `轻量项「${item.title || index + 1}」结束时间`),
     order: item.order ?? index
   }));
+  subtasks.forEach((item) => {
+    if ((item.startTime && !item.endTime) || (!item.startTime && item.endTime)) {
+      throw new Error(`轻量项「${item.title}」开始时间和结束时间必须同时填写`);
+    }
+    const subtaskStart = parseTimeToMinutes(item.startTime);
+    const subtaskEnd = parseTimeToMinutes(item.endTime);
+    if (subtaskStart !== null && subtaskEnd !== null && subtaskStart >= subtaskEnd) {
+      throw new Error(`轻量项「${item.title}」结束时间必须晚于开始时间`);
+    }
+  });
   const occurrenceStates = (task.occurrenceStates ?? []).map((item) =>
     buildNormalizedOccurrenceState(item.date, kind, subtasks, item.completedSubtaskIds ?? subtasks.map((subtask) => subtask.id), item.completedAt ?? null)
   );
@@ -2302,6 +2328,8 @@ function normalizeStoredTask(task: Task): Task {
     status,
     priority: normalizeTaskPriority(task.priority),
     tags: normalizeTags(task.tags),
+    startTime,
+    endTime,
     subtasks,
     occurrenceStates,
     occurrenceOverrides: normalizeOccurrenceOverrides(task.occurrenceOverrides),
@@ -2539,15 +2567,16 @@ function normalizeSubtaskInputs(subtasks: TaskSubtaskInput[] | undefined, kind: 
   }
   const normalized = (subtasks ?? [])
     .map((item, index) => {
-      const startTime = item.startTime?.trim() || undefined;
-      const endTime = item.endTime?.trim() || undefined;
+      const label = item.title.trim() || String(index + 1);
+      const startTime = normalizeClockTime(item.startTime, `轻量项「${label}」开始时间`);
+      const endTime = normalizeClockTime(item.endTime, `轻量项「${label}」结束时间`);
       if ((startTime && !endTime) || (!startTime && endTime)) {
-        throw new Error("轻量子任务开始时间和结束时间必须同时填写");
+        throw new Error("轻量项开始时间和结束时间必须同时填写");
       }
       const start = parseTimeToMinutes(startTime);
       const end = parseTimeToMinutes(endTime);
       if (start !== null && end !== null && start >= end) {
-        throw new Error("轻量子任务结束时间必须晚于开始时间");
+        throw new Error("轻量项结束时间必须晚于开始时间");
       }
       return { id: item.id, title: item.title.trim(), startTime, endTime, order: item.order ?? index };
     })
@@ -2564,8 +2593,8 @@ function resolveTaskSubtasks(inputSubtasks: TaskSubtaskInput[] | undefined, kind
     return {
       id: original?.id ?? item.id ?? crypto.randomUUID(),
       title: item.title.trim(),
-      startTime: item.startTime?.trim() || undefined,
-      endTime: item.endTime?.trim() || undefined,
+      startTime: normalizeClockTime(item.startTime, `轻量项「${item.title.trim() || index + 1}」开始时间`),
+      endTime: normalizeClockTime(item.endTime, `轻量项「${item.title.trim() || index + 1}」结束时间`),
       order: item.order ?? original?.order ?? index
     };
   });
@@ -2620,10 +2649,10 @@ function assertCompositeDefinitionValid(task: Task): void {
       return;
     }
     if (start === null || end === null) {
-      throw new Error(`轻量子任务「${subtask.title}」开始时间和结束时间必须同时填写`);
+      throw new Error(`轻量项「${subtask.title}」开始时间和结束时间必须同时填写`);
     }
     if (start < parentStart || end > parentEnd) {
-      throw new Error(`轻量子任务「${subtask.title}」必须在组合任务时间范围内`);
+      throw new Error(`轻量项「${subtask.title}」必须在组合任务时间范围内`);
     }
   });
 }
@@ -2795,6 +2824,17 @@ function normalizeDateOrUndefined(value?: string | null): string | null {
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
     throw new Error("重复结束日期格式错误");
+  }
+  return trimmed;
+}
+
+function normalizeClockTime(value: string | null | undefined, label: string): string | undefined {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) {
+    return undefined;
+  }
+  if (parseTimeToMinutes(trimmed) === null) {
+    throw new Error(`${label}必须使用 HH:mm 格式，范围 00:00-23:59`);
   }
   return trimmed;
 }
@@ -2981,32 +3021,33 @@ function collectTaskDescendants(tasks: Task[], rootId: string): Set<string> {
   return descendants;
 }
 
-function isCompositeContainerOverlap(leftTaskId: string, rightTaskId: string, taskById: Map<string, Task>): boolean {
+function shareCompositeSchedulingContainer(leftTaskId: string, rightTaskId: string, taskById: Map<string, Task>): boolean {
   if (leftTaskId === rightTaskId) {
     return false;
   }
-  return isCompositeAncestorOf(leftTaskId, rightTaskId, taskById) || isCompositeAncestorOf(rightTaskId, leftTaskId, taskById);
+  const leftContainerId = findCompositeSchedulingContainerId(leftTaskId, taskById);
+  const rightContainerId = findCompositeSchedulingContainerId(rightTaskId, taskById);
+  return Boolean(leftContainerId && rightContainerId && leftContainerId === rightContainerId);
 }
 
-function isCompositeAncestorOf(ancestorTaskId: string, childTaskId: string, taskById: Map<string, Task>): boolean {
-  let current = taskById.get(childTaskId);
+function findCompositeSchedulingContainerId(taskId: string, taskById: Map<string, Task>): string | null {
+  let current = taskById.get(taskId);
   const visited = new Set<string>();
-  while (current?.viewState.mindmap.parentTaskId) {
-    const parentId = current.viewState.mindmap.parentTaskId;
+  while (current) {
+    if (current.kind === "composite") {
+      return current.id;
+    }
+    const parentId = current.viewState.mindmap.parentTaskId ?? null;
+    if (!parentId) {
+      return null;
+    }
     if (visited.has(parentId)) {
-      return false;
+      return null;
     }
     visited.add(parentId);
-    const parent = taskById.get(parentId);
-    if (!parent) {
-      return false;
-    }
-    if (parent.id === ancestorTaskId) {
-      return parent.kind === "composite";
-    }
-    current = parent;
+    current = taskById.get(parentId);
   }
-  return false;
+  return null;
 }
 
 function mergeViewState(current: TaskViewState | undefined, patch: Partial<TaskViewState> | undefined, status: TaskStatus): TaskViewState {

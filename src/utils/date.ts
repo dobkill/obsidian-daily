@@ -49,7 +49,12 @@ export function parseTimeToMinutes(value?: string): number | null {
   if (!match) {
     return null;
   }
-  return Number(match[1]) * 60 + Number(match[2]);
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  return hours * 60 + minutes;
 }
 
 export function formatMinutesToTime(total: number): string {
@@ -95,10 +100,6 @@ export function formatWeekColumnTitle(date: Date): string {
   return `${getChineseWeekday(date)} ${toDateKey(date)}`;
 }
 
-export function formatShortMonth(date: Date): string {
-  return `${date.getMonth() + 1}月`;
-}
-
 export function compareDateKeys(a: string, b: string): number {
   return a.localeCompare(b);
 }
@@ -114,14 +115,4 @@ export function isPastDateKey(dateKey: string, anchor = now()): boolean {
 export function isWeekend(date: Date): boolean {
   const day = date.getDay();
   return day === 0 || day === 6;
-}
-
-export function getLastTwelveMonthsDays(anchor = now()): Date[] {
-  const end = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
-  const start = addDays(end, -364);
-  const result: Date[] = [];
-  for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) {
-    result.push(new Date(cursor));
-  }
-  return result;
 }

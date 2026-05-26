@@ -180,7 +180,6 @@ export type PluginConfig = {
   dialogTabName: string;
   weekStartsOn: "monday";
   timeSlotMinutes: number;
-  heatmapRange: "12months";
   showCompletedTasks: boolean;
   defaultTaskDurationMinutes: number;
   defaultTaskStartTime: string;

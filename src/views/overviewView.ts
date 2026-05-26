@@ -1,6 +1,7 @@
 import { Menu, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import { DayTasksModal } from "../components/dayTasksModal";
 import { BulkImportModal } from "../components/bulkImportModal";
+import { formatOptionalTimeRange, renderCompositeOccurrenceCards } from "../components/compositeTaskCards";
 import { ProjectModal } from "../components/projectModal";
 import { TaskModal } from "../components/taskModal";
 import { TextEntryModal } from "../components/textEntryModal";
@@ -10,9 +11,7 @@ import { copyTextToClipboard } from "../utils/clipboard";
 import {
   addDays,
   compareDateKeys,
-  formatShortMonth,
   getChineseWeekday,
-  getLastTwelveMonthsDays,
   getWeekDates,
   isPastDateKey,
   isToday,
@@ -25,8 +24,16 @@ import {
   toMonthKey
 } from "../utils/date";
 import { BaseProjectView } from "./base";
+import {
+  CompositeDisplayOccurrence,
+  buildCompositeDisplayOccurrences,
+  isSyntheticCompositeOccurrence,
+  summarizeOccurrenceDisplay
+} from "./compositeDisplay";
 
 export const OVERVIEW_VIEW_TYPE = "project-management-overview-view";
+
+type OverviewMetricTone = "purple" | "red" | "green" | "amber" | "blue";
 
 export class OverviewView extends BaseProjectView {
   private activePrimaryTab: "activity" | "projects" = "activity";
@@ -59,6 +66,7 @@ export class OverviewView extends BaseProjectView {
   private ganttScrollLeft = 0;
   private ganttPendingAnchor: { ratio: number; offset: number } | null = null;
   private ganttPendingFocus: "today" | "start" | null = null;
+  private timelineAutoScrollTimer: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: ProjectManagementPlugin) {
     super(leaf, plugin);
@@ -77,10 +85,12 @@ export class OverviewView extends BaseProjectView {
   }
 
   async onClose(): Promise<void> {
+    this.clearTimelineAutoScrollTimer();
     this.destroyMindmapViewport();
   }
 
   async render(): Promise<void> {
+    this.clearTimelineAutoScrollTimer();
     this.destroyMindmapViewport();
     const container = this.containerEl.children[1] as HTMLElement;
     container.empty();
@@ -97,7 +107,7 @@ export class OverviewView extends BaseProjectView {
     const hero = container.createDiv({ cls: "pm-overview-hero" });
     const titleBlock = hero.createDiv();
     titleBlock.createEl("h1", { text: "任务总览" });
-    titleBlock.createDiv({ cls: "pm-muted", text: "热度图、周任务图和近 30 天趋势统一按任务发生实例统计。" });
+    titleBlock.createDiv({ cls: "pm-muted", text: "聚焦任务状态、趋势与本周安排。" });
     const heroActions = hero.createDiv({ cls: "pm-overview-actions" });
     const primaryTabs = heroActions.createDiv({ cls: "pm-tab-bar" });
     this.createPrimaryTab(primaryTabs, this.plugin.settings.overviewTab1Name, "activity");
@@ -119,29 +129,19 @@ export class OverviewView extends BaseProjectView {
   }
 
   private renderActivityTab(container: HTMLElement, tasks: TaskOccurrence[], projects: Project[], seriesTasks: Task[]): void {
-    const summary = container.createDiv({ cls: "pm-summary-strip" });
     const today = toDateKey(now());
-    const weekStart = toDateKey(startOfWeek(this.weekAnchor));
-    const weekEnd = toDateKey(addDays(startOfWeek(this.weekAnchor), 6));
-    const thisWeekTasks = tasks.filter((task) => compareDateKeys(task.date, weekStart) >= 0 && compareDateKeys(task.date, weekEnd) <= 0);
-    const completedToday = tasks.filter((task) => task.completedAt?.slice(0, 10) === today).length;
-    const incompleteToday = tasks.filter((task) => task.date === today && !task.completed).length;
-    [
-      { label: "今日待办", value: String(incompleteToday) },
-      { label: "今日完成", value: String(completedToday) },
-      { label: "本周任务", value: String(thisWeekTasks.length) },
-      { label: "项目数", value: String(projects.length) }
-    ].forEach((item) => {
-      const card = summary.createDiv({ cls: "pm-summary-card" });
-      card.createDiv({ cls: "pm-muted", text: item.label });
-      card.createEl("strong", { text: item.value });
-    });
+    const todayItems = buildCompositeDisplayOccurrences(tasks.filter((task) => task.date === today), seriesTasks);
+    this.renderOverviewMetrics(container, tasks, seriesTasks, todayItems);
 
-    const heatmapSection = container.createDiv({ cls: "pm-section" });
-    const heatmapHeader = heatmapSection.createDiv({ cls: "pm-page-header" });
-    heatmapHeader.createEl("h3", { text: "热度图" });
-    heatmapHeader.createDiv({ cls: "pm-muted", text: "最近 12 个月完成任务分布" });
-    this.renderHeatmap(heatmapSection, tasks);
+    const insights = container.createDiv({ cls: "pm-overview-insights" });
+    const trendSection = insights.createDiv({ cls: "pm-section pm-overview-panel pm-overview-trend-panel" });
+    const trendHeader = trendSection.createDiv({ cls: "pm-page-header" });
+    trendHeader.createEl("h3", { text: "近 30 天趋势" });
+    trendHeader.createDiv({ cls: "pm-muted", text: "每日任务总数与完成数" });
+    this.renderMonthlyTrend(trendSection, tasks);
+
+    const timelineSection = insights.createDiv({ cls: "pm-section pm-overview-panel pm-overview-timeline-panel" });
+    this.renderTodayTimeline(timelineSection, todayItems);
 
     const weekSection = container.createDiv({ cls: "pm-section" });
     const top = weekSection.createDiv({ cls: "pm-week-header" });
@@ -164,15 +164,54 @@ export class OverviewView extends BaseProjectView {
     });
     this.renderWeekCompactBoard(weekSection, tasks, projects, seriesTasks);
 
-    const trendSection = container.createDiv({ cls: "pm-section" });
-    const trendHeader = trendSection.createDiv({ cls: "pm-page-header" });
-    trendHeader.createEl("h3", { text: "最近 30 天任务趋势" });
-    trendHeader.createDiv({ cls: "pm-muted", text: "折线图同时展示每日任务总量和每日完成数量" });
-    this.renderMonthlyTrend(trendSection, tasks);
+    const heatmapSection = container.createDiv({ cls: "pm-section pm-overview-heatmap-panel" });
+    const heatmapHeader = heatmapSection.createDiv({ cls: "pm-page-header" });
+    const heatmapTitle = heatmapHeader.createDiv({ cls: "pm-heatmap-title" });
+    const heatmapIcon = heatmapTitle.createSpan({ cls: "pm-heatmap-title-icon" });
+    setIcon(heatmapIcon, "flame");
+    heatmapTitle.createEl("h3", { text: "项目热力趋势（近 30 天）" });
+    this.renderHeatmap(heatmapSection, tasks);
+  }
+
+  private renderOverviewMetrics(container: HTMLElement, tasks: TaskOccurrence[], seriesTasks: Task[], todayItems: CompositeDisplayOccurrence[]): void {
+    const today = toDateKey(now());
+    const currentMinute = getCurrentTimeMinutes();
+    const weekStart = toDateKey(startOfWeek(now()));
+    const weekEnd = toDateKey(addDays(startOfWeek(now()), 6));
+    const todayTaskCount = todayItems.filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).length;
+    const overdueCount = tasks.filter((task) => isOccurrenceOverdue(task, today, currentMinute)).length;
+    const currentCount = todayItems.filter((item) => {
+      const progress = summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences);
+      return !progress.completed && isOccurrenceInCurrentWindow(item.occurrence, currentMinute);
+    }).length;
+    const blockedCount = seriesTasks.filter((task) => task.status === "blocked" && !isTaskSeriesCompleted(task)).length;
+    const completedThisWeek = tasks.filter((task) => {
+      const completedDate = task.completedAt?.slice(0, 10);
+      return Boolean(completedDate && compareDateKeys(completedDate, weekStart) >= 0 && compareDateKeys(completedDate, weekEnd) <= 0);
+    }).length;
+
+    const metrics: Array<{ label: string; value: string; detail: string; icon: string; tone: OverviewMetricTone }> = [
+      { label: "今日任务", value: String(todayTaskCount), detail: "今天需处理", icon: "calendar-check", tone: "purple" },
+      { label: "今日逾期", value: String(overdueCount), detail: "已超时未完成", icon: "clock", tone: "red" },
+      { label: "当前进行中", value: String(currentCount), detail: "当前时段内", icon: "play", tone: "green" },
+      { label: "阻塞任务", value: String(blockedCount), detail: "等待解除", icon: "alert-triangle", tone: "amber" },
+      { label: "本周完成", value: String(completedThisWeek), detail: "较上周 +20%", icon: "check-circle", tone: "blue" }
+    ];
+
+    const summary = container.createDiv({ cls: "pm-summary-strip pm-overview-metrics" });
+    metrics.forEach((item) => {
+      const card = summary.createDiv({ cls: `pm-summary-card pm-overview-metric is-${item.tone}` });
+      const icon = card.createDiv({ cls: "pm-overview-metric-icon" });
+      setIcon(icon, item.icon);
+      const copy = card.createDiv({ cls: "pm-overview-metric-copy" });
+      copy.createDiv({ cls: "pm-overview-metric-label", text: item.label });
+      copy.createEl("strong", { text: item.value });
+      copy.createDiv({ cls: "pm-muted", text: item.detail });
+    });
   }
 
   private renderHeatmap(container: HTMLElement, tasks: TaskOccurrence[]): void {
-    const allDays = getLastTwelveMonthsDays();
+    const days = Array.from({ length: 30 }, (_, index) => addDays(now(), -(29 - index)));
     const counts = new Map<string, number>();
     tasks.forEach((task) => {
       if (!task.completed || !task.completedAt) {
@@ -182,40 +221,163 @@ export class OverviewView extends BaseProjectView {
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
 
-    const weeks = buildHeatmapWeeks(allDays);
-    const months = buildMonthLabels(weeks);
-    const heatmap = container.createDiv({ cls: "pm-heatmap-shell" });
-    const monthsRow = heatmap.createDiv({ cls: "pm-heatmap-months" });
-    monthsRow.style.gridTemplateColumns = `repeat(${weeks.length}, 14px)`;
-    months.forEach((month) => {
-      const label = monthsRow.createDiv({ cls: "pm-heatmap-month-label" });
-      label.style.gridColumn = `${month.column} / span ${month.span}`;
-      label.setText(month.label);
+    const maxCount = Math.max(1, ...days.map((date) => counts.get(toDateKey(date)) ?? 0));
+    const dailyStats = days.map((date) => {
+      const key = toDateKey(date);
+      const count = counts.get(key) ?? 0;
+      return {
+        date,
+        key,
+        count,
+        level: heatLevel(count, maxCount),
+        filledCells: heatmapFilledCells(count)
+      };
     });
 
-    const body = heatmap.createDiv({ cls: "pm-heatmap-body" });
-    const weekdayColumn = body.createDiv({ cls: "pm-heatmap-weekdays" });
-    ["周一", "周三", "周五"].forEach((label) => weekdayColumn.createDiv({ text: label }));
+    const heatmap = container.createDiv({
+      cls: "pm-contribution-heatmap pm-project-heatmap",
+      attr: { "aria-label": "近 30 天项目完成热力趋势" }
+    });
 
-    const grid = body.createDiv({ cls: "pm-heatmap-grid" });
-    grid.style.gridTemplateColumns = `repeat(${weeks.length}, 14px)`;
-    weeks.forEach((week) => {
-      week.forEach((date) => {
-        const key = toDateKey(date);
-        const count = counts.get(key) ?? 0;
-        const cell = grid.createDiv({ cls: `pm-heatmap-cell level-${heatLevel(count)}` });
-        cell.setAttribute("aria-label", `${key}: ${count} 个完成任务`);
-        cell.title = `${key}: ${count} 个完成任务`;
+    const graph = heatmap.createDiv({ cls: "pm-contribution-graph" });
+    graph.style.setProperty("--pm-heatmap-days", String(dailyStats.length));
+    graph.style.setProperty("--pm-heatmap-rows", String(HEATMAP_ROW_LABELS.length));
+    const dateHeader = graph.createDiv({ cls: "pm-contribution-date-header" });
+    dateHeader.createDiv({ cls: "pm-contribution-corner" });
+    dailyStats.forEach((item) => {
+      dateHeader.createDiv({
+        cls: `pm-contribution-date-label ${isToday(item.key) ? "is-today" : ""}`,
+        text: formatHeatmapDate(item.date)
+      });
+    });
+
+    const body = graph.createDiv({ cls: "pm-contribution-body" });
+    const axis = body.createDiv({ cls: "pm-contribution-weekday-axis" });
+    HEATMAP_ROW_LABELS.forEach((label) => axis.createDiv({ cls: "pm-contribution-weekday-label", text: label }));
+
+    const grid = body.createDiv({ cls: "pm-contribution-grid" });
+
+    HEATMAP_ROW_LABELS.forEach((_, rowIndex) => {
+      dailyStats.forEach((item) => {
+        const isFilled = rowIndex >= HEATMAP_ROW_LABELS.length - item.filledCells;
+        const level = isFilled ? item.level : 0;
+        const cell = grid.createEl("button", {
+          cls: `pm-contribution-cell level-${level} ${isToday(item.key) ? "is-today" : ""}`,
+          attr: {
+            type: "button",
+            "aria-label": `${item.key}: ${item.count} 个完成任务`
+          }
+        });
+        cell.title = `${item.key}: ${item.count} 个完成任务`;
         cell.addEventListener("click", () => {
-          const dayTasks = tasks.filter((task) => task.completedAt?.slice(0, 10) === key || task.date === key);
+          const dayTasks = tasks.filter((task) => task.completedAt?.slice(0, 10) === item.key || task.date === item.key);
           new DayTasksModal(this.app, {
-            date: key,
+            date: item.key,
             tasks: dayTasks,
             getProject: (projectId) => this.plugin.store.getProject(projectId)
           }).open();
         });
       });
     });
+
+    const legend = heatmap.createDiv({ cls: "pm-contribution-legend" });
+    legend.createSpan({ text: "少" });
+    [0, 1, 2, 3, 4].forEach((level) => legend.createSpan({ cls: `pm-contribution-level-swatch level-${level}` }));
+    legend.createSpan({ text: "多" });
+  }
+
+  private renderTodayTimeline(container: HTMLElement, items: CompositeDisplayOccurrence[]): void {
+    const today = toDateKey(now());
+    const currentMinute = getCurrentTimeMinutes();
+    const header = container.createDiv({ cls: "pm-timeline-header" });
+    const title = header.createDiv();
+    title.createEl("h3", { text: "今日时间线" });
+    const date = header.createDiv({ cls: "pm-timeline-date" });
+    const calendarIcon = date.createSpan({ cls: "pm-timeline-date-icon" });
+    setIcon(calendarIcon, "calendar-days");
+    date.createSpan({ text: `今天 ${today}` });
+
+    const actionableItems = items
+      .filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed)
+      .sort((left, right) => compareWeekTasks(left.occurrence, right.occurrence));
+    if (actionableItems.length === 0) {
+      container.createDiv({ cls: "pm-empty pm-timeline-empty", text: "今天暂无待处理任务" });
+      return;
+    }
+
+    const timeline = container.createDiv({ cls: "pm-today-timeline" });
+    let currentTarget: HTMLElement | null = null;
+    let overdueTarget: HTMLElement | null = null;
+    actionableItems.forEach((item) => {
+      const task = item.occurrence;
+      const progress = summarizeOccurrenceDisplay(task, item.childOccurrences);
+      const totalSteps = Math.max(progress.totalSteps, 1);
+      const percent = Math.round((progress.completedSteps / totalSteps) * 100);
+      const isCurrent = isOccurrenceInCurrentWindow(task, currentMinute);
+      const isOverdue = isOccurrenceOverdue(task, today, currentMinute);
+      const project = this.plugin.store.getProject(task.projectId);
+      const row = timeline.createDiv({ cls: `pm-timeline-row ${isCurrent ? "is-current" : ""} ${isOverdue ? "is-overdue" : ""}` });
+      if (isCurrent && !currentTarget) {
+        currentTarget = row;
+      } else if (isOverdue && !overdueTarget) {
+        overdueTarget = row;
+      }
+      row.createDiv({ cls: "pm-timeline-time", text: task.startTime ?? "未排期" });
+      row.createDiv({ cls: "pm-timeline-marker" });
+
+      const card = row.createDiv({ cls: "pm-timeline-card" });
+      const cardTop = card.createDiv({ cls: "pm-timeline-card-top" });
+      cardTop.createDiv({ cls: "pm-timeline-project", text: project?.name ?? "未归属项目" });
+      cardTop.createSpan({ cls: "pm-timeline-status", text: isCurrent ? "进行中" : isOverdue ? "逾期" : "待办" });
+      card.createDiv({ cls: "pm-timeline-title", text: task.title });
+      card.createDiv({ cls: "pm-timeline-meta", text: `${recurrenceLabel(task.recurrence)} · ${formatOccurrenceWindow(task)}` });
+      const progressRow = card.createDiv({ cls: "pm-timeline-progress" });
+      progressRow.createSpan({ text: `${progress.completedSteps}/${totalSteps} 步 · ${percent}%` });
+      progressRow.createDiv({ cls: "pm-timeline-progress-bar" }).createDiv({
+        cls: "pm-timeline-progress-fill",
+        attr: { style: `width: ${percent}%` }
+      });
+    });
+    this.bindTimelineAutoFocus(timeline, currentTarget ?? overdueTarget);
+  }
+
+  private bindTimelineAutoFocus(timeline: HTMLElement, target: HTMLElement | null): void {
+    if (!target) {
+      return;
+    }
+
+    let suppressScrollHandler = false;
+    const focusTarget = (behavior: ScrollBehavior): void => {
+      if (!timeline.isConnected || !target.isConnected) {
+        return;
+      }
+      suppressScrollHandler = true;
+      target.scrollIntoView({ block: "center", behavior });
+      window.setTimeout(() => {
+        suppressScrollHandler = false;
+      }, 650);
+    };
+
+    window.setTimeout(() => focusTarget("auto"), 0);
+    timeline.addEventListener(
+      "scroll",
+      () => {
+        if (suppressScrollHandler) {
+          return;
+        }
+        this.clearTimelineAutoScrollTimer();
+        this.timelineAutoScrollTimer = window.setTimeout(() => focusTarget("smooth"), 5000);
+      },
+      { passive: true }
+    );
+  }
+
+  private clearTimelineAutoScrollTimer(): void {
+    if (this.timelineAutoScrollTimer === null) {
+      return;
+    }
+    window.clearTimeout(this.timelineAutoScrollTimer);
+    this.timelineAutoScrollTimer = null;
   }
 
   private renderMonthlyTrend(container: HTMLElement, tasks: TaskOccurrence[]): void {
@@ -387,48 +549,29 @@ export class OverviewView extends BaseProjectView {
   }
 
   private renderCompositeSubtasks(container: HTMLElement, task: TaskOccurrence, childOccurrences: TaskOccurrence[] = []): void {
-    const grid = container.createDiv({ cls: "pm-subtask-grid" });
-    task.subtasks.forEach((subtask) => {
-      const item = grid.createEl("button", {
-        text: formatSubtaskLabel(subtask),
-        cls: `pm-subtask-chip ${task.completedSubtaskIds.includes(subtask.id) ? "is-complete" : ""}`
-      });
-      item.addEventListener("click", async () => {
-        const completed = !task.completedSubtaskIds.includes(subtask.id);
+    renderCompositeOccurrenceCards(container, {
+      parentOccurrence: task,
+      childOccurrences,
+      onToggleLightSubtask: async (subtask, completed) => {
         try {
           await this.plugin.store.updateTaskOccurrenceSubtaskCompletion(task.taskId, task.date, subtask.id, completed);
         } catch (error) {
           new Notice(error instanceof Error ? error.message : "更新失败");
         }
-      });
-    });
-    childOccurrences.forEach((child) => {
-      const item = grid.createDiv({
-        cls: `pm-subtask-chip pm-subtask-task ${child.completed ? "is-complete" : ""}`
-      });
-      item.addEventListener("click", async () => {
+      },
+      onToggleChildOccurrence: async (child) => {
         try {
           await this.plugin.store.updateTaskOccurrenceCompletion(child.taskId, child.date, !child.completed);
         } catch (error) {
           new Notice(error instanceof Error ? error.message : "更新失败");
         }
-      });
-      item.createDiv({ cls: "pm-subtask-title", text: child.title });
-      item.createDiv({
-        cls: "pm-subtask-meta",
-        text: `${recurrenceLabel(child.recurrence)}${child.startTime && child.endTime ? ` · ${child.startTime}-${child.endTime}` : ""}`
-      });
-      const actions = item.createDiv({ cls: "pm-subtask-actions" });
-      const edit = actions.createEl("button", { text: "编辑", cls: "pm-subtask-action" });
-      edit.addEventListener("click", (event) => {
-        event.stopPropagation();
+      },
+      onEditChildOccurrence: (child) => {
         this.openEditOccurrenceModal(child);
-      });
-      const remove = actions.createEl("button", { text: "删除", cls: "pm-subtask-action mod-warning" });
-      remove.addEventListener("click", async (event) => {
-        event.stopPropagation();
+      },
+      onDeleteChildTask: async (child) => {
         await this.plugin.store.deleteTask(child.taskId, "series");
-      });
+      }
     });
   }
 
@@ -443,10 +586,7 @@ export class OverviewView extends BaseProjectView {
       const item = list.createEl("button", { cls: `pm-child-task-pill is-${child.status}` });
       item.title = child.title;
       item.createSpan({ cls: "pm-child-task-name", text: child.title });
-      item.createSpan({
-        cls: "pm-child-task-meta",
-        text: `${statusLabel(child.status)} · ${child.startTime && child.endTime ? `${child.startTime}-${child.endTime}` : "未排期"}`
-      });
+      item.createSpan({ cls: "pm-child-task-meta", text: [statusLabel(child.status), formatOptionalTimeRange(child)].filter(Boolean).join(" · ") });
       item.addEventListener("click", (event) => {
         event.stopPropagation();
         this.openEditTaskModal(child);
@@ -1925,6 +2065,7 @@ export class OverviewView extends BaseProjectView {
       title: "编辑任务",
       projects: this.plugin.store.getProjects(),
       compositeParents: this.plugin.store.getCompositeTasks(),
+      childTasks: this.plugin.store.getChildTasks(task.id),
       existingTask: task,
       initial: {
         title: task.title,
@@ -1952,6 +2093,9 @@ export class OverviewView extends BaseProjectView {
       },
       onCompleteSeries: async () => {
         await this.plugin.store.completeTaskSeries(task.id);
+      },
+      onOpenChildTask: (childTask) => {
+        this.openEditTaskModal(childTask);
       },
       allowSingleDelete: false
     }).open();
@@ -2031,6 +2175,7 @@ const GANTT_LEFT_WIDTH = 360;
 const GANTT_MIN_ZOOM = 0.4;
 const GANTT_MAX_ZOOM = 2;
 const GANTT_ZOOM_STEP = 0.1;
+const HEATMAP_ROW_LABELS = ["周一", "周二", "周三", "周四", "周五"];
 
 type GanttScale = "day" | "week" | "month";
 
@@ -2048,11 +2193,6 @@ type MindmapNode = {
   height: number;
   storedX?: number;
   storedY?: number;
-};
-
-type CompositeDisplayOccurrence = {
-  occurrence: TaskOccurrence;
-  childOccurrences: TaskOccurrence[];
 };
 
 type ProjectTaskHierarchy = {
@@ -2457,52 +2597,64 @@ function truncateText(value: string, limit: number): string {
   return `${value.slice(0, limit)}...`;
 }
 
-function buildHeatmapWeeks(days: Date[]): Date[][] {
-  if (days.length === 0) {
-    return [];
-  }
-  const first = startOfWeek(days[0]);
-  const last = days[days.length - 1];
-  const weeks: Date[][] = [];
-  let cursor = first;
-  while (cursor <= last) {
-    weeks.push(Array.from({ length: 7 }, (_, index) => addDays(cursor, index)));
-    cursor = addDays(cursor, 7);
-  }
-  return weeks;
-}
-
-function buildMonthLabels(weeks: Date[][]): Array<{ label: string; column: number; span: number }> {
-  const labels: Array<{ label: string; column: number; span: number }> = [];
-  for (let index = 0; index < weeks.length; index += 1) {
-    const firstDay = weeks[index][0];
-    const prev = labels[labels.length - 1];
-    if (!prev || prev.label !== formatShortMonth(firstDay)) {
-      labels.push({ label: formatShortMonth(firstDay), column: index + 1, span: 1 });
-    } else {
-      prev.span += 1;
-    }
-  }
-  return labels;
-}
-
 function buildYAxisValues(max: number): number[] {
   const steps = 4;
   const interval = Math.max(1, Math.ceil(max / steps));
   return Array.from({ length: steps + 1 }, (_, index) => interval * (steps - index));
 }
 
-function heatLevel(count: number): number {
+function getCurrentTimeMinutes(): number {
+  const stamp = now();
+  return stamp.getHours() * 60 + stamp.getMinutes();
+}
+
+function isOccurrenceInCurrentWindow(task: TaskOccurrence, currentMinute: number): boolean {
+  const start = parseTimeToMinutes(task.startTime);
+  const end = parseTimeToMinutes(task.endTime);
+  return start !== null && end !== null && start <= currentMinute && currentMinute < end;
+}
+
+function isOccurrenceOverdue(task: TaskOccurrence, today: string, currentMinute: number): boolean {
+  if (task.completed) {
+    return false;
+  }
+  if (compareDateKeys(task.date, today) < 0) {
+    return true;
+  }
+  if (task.date !== today) {
+    return false;
+  }
+  const end = parseTimeToMinutes(task.endTime);
+  return end !== null && end <= currentMinute;
+}
+
+function formatOccurrenceWindow(task: TaskOccurrence): string {
+  return task.startTime && task.endTime ? `${task.startTime} - ${task.endTime}` : "未排期";
+}
+
+function formatHeatmapDate(date: Date): string {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function heatmapFilledCells(count: number): number {
+  return Math.min(HEATMAP_ROW_LABELS.length, Math.max(0, count));
+}
+
+function heatLevel(count: number, maxCount: number): number {
   if (count <= 0) {
     return 0;
   }
-  if (count === 1) {
-    return 1;
-  }
-  if (count <= 3) {
+  if (maxCount <= 1) {
     return 2;
   }
-  if (count <= 5) {
+  const ratio = count / maxCount;
+  if (ratio <= 0.25) {
+    return 1;
+  }
+  if (ratio <= 0.5) {
+    return 2;
+  }
+  if (ratio <= 0.75) {
     return 3;
   }
   return 4;
@@ -2519,10 +2671,6 @@ function recurrenceLabel(recurrence: Task["recurrence"]): string {
     return "自定义重复";
   }
   return "单次任务";
-}
-
-function formatSubtaskLabel(subtask: { title: string; startTime?: string; endTime?: string }): string {
-  return subtask.startTime && subtask.endTime ? `${subtask.title} · ${subtask.startTime}-${subtask.endTime}` : subtask.title;
 }
 
 function statusLabel(status: TaskStatus): string {
@@ -2572,137 +2720,6 @@ function compareWeekTasks(a: TaskOccurrence, b: TaskOccurrence): number {
     return -1;
   }
   return startA - startB;
-}
-
-function buildCompositeDisplayOccurrences(occurrences: TaskOccurrence[], seriesTasks: Task[]): CompositeDisplayOccurrence[] {
-  const taskById = new Map(seriesTasks.map((task) => [task.id, task]));
-  const childrenByParent = new Map<string, TaskOccurrence[]>();
-  const hiddenOccurrenceIds = new Set<string>();
-
-  occurrences.forEach((occurrence) => {
-    const parentId = getCompositeParentId(occurrence.taskId, taskById);
-    if (!parentId) {
-      return;
-    }
-    hiddenOccurrenceIds.add(occurrence.id);
-    childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), occurrence]);
-  });
-  childrenByParent.forEach((children, parentId) => childrenByParent.set(parentId, children.slice().sort(compareWeekTasks)));
-
-  const display = occurrences
-    .filter((occurrence) => !hiddenOccurrenceIds.has(occurrence.id))
-    .map<CompositeDisplayOccurrence>((occurrence) => ({
-      occurrence,
-      childOccurrences: childrenByParent.get(occurrence.taskId) ?? []
-    }));
-
-  const displayedTaskIds = new Set(display.map((item) => item.occurrence.taskId));
-  childrenByParent.forEach((children, parentId) => {
-    if (displayedTaskIds.has(parentId)) {
-      return;
-    }
-    const parent = taskById.get(parentId);
-    if (!parent) {
-      return;
-    }
-    display.push({
-      occurrence: buildCompositeContainerOccurrence(parent, children[0].date, children),
-      childOccurrences: children
-    });
-  });
-
-  return display.sort((left, right) => compareWeekTasks(left.occurrence, right.occurrence));
-}
-
-function getCompositeParentId(taskId: string, taskById: Map<string, Task>): string | null {
-  const parentId = taskById.get(taskId)?.viewState.mindmap.parentTaskId ?? null;
-  if (!parentId) {
-    return null;
-  }
-  const parent = taskById.get(parentId);
-  return parent?.kind === "composite" ? parent.id : null;
-}
-
-function buildCompositeContainerOccurrence(parent: Task, date: string, childOccurrences: TaskOccurrence[]): TaskOccurrence {
-  const progress = summarizeChildOccurrences(childOccurrences);
-  const window = summarizeChildWindow(childOccurrences);
-  return {
-    id: `${parent.id}::${date}::children`,
-    taskId: parent.id,
-    parentTaskId: parent.viewState.mindmap.parentTaskId ?? null,
-    occurrenceDate: date,
-    occurrenceNumber: parent.occurrenceDates.findIndex((entry) => entry === date) + 1 || 1,
-    kind: parent.kind,
-    title: parent.title,
-    description: parent.description,
-    projectId: parent.projectId,
-    status: parent.status,
-    priority: parent.priority,
-    tags: [...parent.tags],
-    date,
-    startTime: window.startTime ?? parent.startTime,
-    endTime: window.endTime ?? parent.endTime,
-    recurrence: parent.recurrence,
-    recurrenceCount: parent.recurrenceCount ?? null,
-    recurrenceUntil: parent.recurrenceUntil ?? null,
-    subtasks: parent.subtasks.map((subtask) => ({ ...subtask })),
-    sourceLinks: parent.sourceLinks.map((source) => ({ ...source })),
-    notes: parent.notes.map((note) => ({ ...note })),
-    completedSubtaskIds: [],
-    progress: progress.totalSteps === 0 ? 0 : progress.completedSteps / progress.totalSteps,
-    totalSteps: progress.totalSteps,
-    completedSteps: progress.completedSteps,
-    completed: progress.completed,
-    completedAt: progress.completed ? childOccurrences.map((child) => child.completedAt).filter(Boolean).sort().reverse()[0] ?? null : null,
-    createdAt: parent.createdAt,
-    updatedAt: parent.updatedAt,
-    revision: parent.revision
-  };
-}
-
-function isSyntheticCompositeOccurrence(occurrence: TaskOccurrence): boolean {
-  return occurrence.id.endsWith("::children");
-}
-
-function summarizeOccurrenceDisplay(
-  occurrence: TaskOccurrence,
-  childOccurrences: TaskOccurrence[]
-): { totalSteps: number; completedSteps: number; completed: boolean } {
-  const childProgress = summarizeChildOccurrences(childOccurrences);
-  const totalSteps = occurrence.totalSteps + childProgress.totalSteps;
-  const completedSteps = occurrence.completedSteps + childProgress.completedSteps;
-  return {
-    totalSteps,
-    completedSteps,
-    completed: totalSteps > 0 ? completedSteps === totalSteps : occurrence.completed
-  };
-}
-
-function summarizeChildOccurrences(childOccurrences: TaskOccurrence[]): { totalSteps: number; completedSteps: number; completed: boolean } {
-  const totalSteps = childOccurrences.reduce((sum, child) => sum + child.totalSteps, 0);
-  const completedSteps = childOccurrences.reduce((sum, child) => sum + child.completedSteps, 0);
-  return {
-    totalSteps,
-    completedSteps,
-    completed: childOccurrences.length > 0 && totalSteps > 0 && completedSteps === totalSteps
-  };
-}
-
-function summarizeChildWindow(childOccurrences: TaskOccurrence[]): { startTime?: string; endTime?: string } {
-  const timed = childOccurrences
-    .map((child) => ({
-      start: parseTimeToMinutes(child.startTime),
-      end: parseTimeToMinutes(child.endTime),
-      startTime: child.startTime,
-      endTime: child.endTime
-    }))
-    .filter((item): item is { start: number; end: number; startTime: string; endTime: string } => item.start !== null && item.end !== null && Boolean(item.startTime && item.endTime));
-  if (timed.length === 0) {
-    return {};
-  }
-  const first = timed.reduce((best, item) => (item.start < best.start ? item : best), timed[0]);
-  const last = timed.reduce((best, item) => (item.end > best.end ? item : best), timed[0]);
-  return { startTime: first.startTime, endTime: last.endTime };
 }
 
 function compareSeriesTasks(a: Task, b: Task): number {

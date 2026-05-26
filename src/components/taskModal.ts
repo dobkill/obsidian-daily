@@ -1,12 +1,14 @@
 import { App, ButtonComponent, DropdownComponent, Modal, Notice, Setting, TextComponent } from "obsidian";
 import { Project, Task, TaskDeleteScope, TaskInput, TaskKind, TaskOccurrence, TaskPriority, TaskRecurrence, TaskStatus, TaskSubtaskInput, TaskUpdateScope } from "../types";
-import { addMinutes, parseTimeToMinutes } from "../utils/date";
+import { parseTimeToMinutes } from "../utils/date";
+import { renderAttachedCompositeTaskCards } from "./compositeTaskCards";
 
 type TaskModalOptions = {
   title: string;
   projects: Project[];
   initial: TaskInput;
   compositeParents?: Task[];
+  childTasks?: Task[];
   existingTask?: Task;
   occurrenceContext?: TaskOccurrence;
   allowSingleDelete?: boolean;
@@ -14,6 +16,7 @@ type TaskModalOptions = {
   onDelete?: (scope: TaskDeleteScope) => Promise<void>;
   onCompleteSeries?: () => Promise<void>;
   onOpenSeriesEditor?: () => void;
+  onOpenChildTask?: (task: Task) => void;
 };
 
 export class TaskModal extends Modal {
@@ -41,7 +44,7 @@ export class TaskModal extends Modal {
     const scheduleSection = createTaskModalSection(form, "时间安排");
     const relationSection = isOccurrenceEditor ? null : createTaskModalSection(form, "归属与状态");
     const recurrenceSection = isOccurrenceEditor ? null : createTaskModalSection(form, "重复规则");
-    const subtaskSection = isOccurrenceEditor ? null : createTaskModalSection(form, "组合轻量项");
+    const subtaskSection = isOccurrenceEditor ? null : createTaskModalSection(form, "组合项");
 
     if (this.options.occurrenceContext) {
       basicSection.createDiv({
@@ -179,7 +182,7 @@ export class TaskModal extends Modal {
           return;
         }
         setStartTimeValue(parent.startTime);
-        setEndTimeValue(parentEnd - parentStart <= 1 ? parent.endTime : addMinutes(parent.startTime, 1));
+        setEndTimeValue(parent.endTime);
       };
       clearParentIfDisallowed = (): void => {
         const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
@@ -392,6 +395,22 @@ export class TaskModal extends Modal {
       actions.createEl("button", { text: "新增轻量检查项" }).addEventListener("click", () => {
         state.subtasks = [...(state.subtasks ?? []), { title: "" } satisfies TaskSubtaskInput];
         renderSubtaskFields();
+      });
+
+      const childTasks = this.options.childTasks ?? [];
+      if (childTasks.length === 0) {
+        return;
+      }
+      const attached = subtaskFields.createDiv({ cls: "pm-attached-task-list" });
+      attached.createDiv({ cls: "pm-muted pm-attached-task-list-title", text: `已挂入任务 ${childTasks.length} 项` });
+      renderAttachedCompositeTaskCards(attached, {
+        tasks: childTasks,
+        onEditTask: this.options.onOpenChildTask
+          ? (task) => {
+              this.close();
+              this.options.onOpenChildTask?.(task);
+            }
+          : undefined
       });
     };
     renderSubtaskFields();

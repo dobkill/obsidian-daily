@@ -103,9 +103,9 @@ const FORMAT_GUIDE_SECTIONS: FormatGuideSection[] = [
     title: "新任务计划复杂 Markdown",
     desc: "用于制定新计划或覆盖已有任务，语法与今日完成格式明显分离。",
     points: [
-      "任务行使用 + 任务：或 + 组合：开头，创建 / 覆盖必须提供 @YYYY-MM-DD HH:mm-HH:mm。",
+      "任务行使用 + 任务：或 + 组合：开头，创建 / 覆盖必须提供 @YYYY-MM-DD HH:mm-HH:mm，时间范围为 00:00 至 23:59。",
       "支持 #标签、!优先级、status、repeat、count、until、dates、done 和缩进描述。",
-      "组合任务可在下方缩进写轻量子任务。"
+      "组合任务可在下方缩进写轻量项。"
     ],
     sample: TASK_PLAN_SAMPLE_TEXT
   }

@@ -1,10 +1,17 @@
 import { Menu, Notice, WorkspaceLeaf, setIcon } from "obsidian";
+import { renderCompositeOccurrenceCards } from "../components/compositeTaskCards";
 import { TaskModal } from "../components/taskModal";
 import type ProjectManagementPlugin from "../main";
 import { Task, TaskOccurrence } from "../types";
 import { copyTextToClipboard } from "../utils/clipboard";
-import { now, parseTimeToMinutes, toDateKey } from "../utils/date";
+import { now, toDateKey } from "../utils/date";
 import { BaseProjectView } from "./base";
+import {
+  CompositeDisplayOccurrence,
+  buildCompositeDisplayOccurrences,
+  isSyntheticCompositeOccurrence,
+  summarizeOccurrenceDisplay
+} from "./compositeDisplay";
 
 export const TODAY_VIEW_TYPE = "project-management-today-view";
 
@@ -218,6 +225,7 @@ export class TodayTasksView extends BaseProjectView {
       title: "编辑任务",
       projects: this.plugin.store.getProjects(),
       compositeParents: this.plugin.store.getCompositeTasks(),
+      childTasks: this.plugin.store.getChildTasks(seriesTask.id),
       existingTask: seriesTask,
       initial: {
         title: seriesTask.title,
@@ -245,6 +253,9 @@ export class TodayTasksView extends BaseProjectView {
       },
       onCompleteSeries: async () => {
         await this.plugin.store.completeTaskSeries(seriesTask.id);
+      },
+      onOpenChildTask: (childTask) => {
+        this.openSeriesEditor(childTask);
       },
       allowSingleDelete: false
     }).open();
@@ -308,201 +319,31 @@ export class TodayTasksView extends BaseProjectView {
     if (task.kind !== "composite") {
       return;
     }
-    const grid = container.createDiv({ cls: "pm-subtask-grid" });
-    task.subtasks.forEach((subtask) => {
-      const item = grid.createEl("button", {
-        text: formatSubtaskLabel(subtask),
-        cls: `pm-subtask-chip ${task.completedSubtaskIds.includes(subtask.id) ? "is-complete" : ""}`
-      });
-      item.addEventListener("click", async () => {
-        const completed = !task.completedSubtaskIds.includes(subtask.id);
+    renderCompositeOccurrenceCards(container, {
+      parentOccurrence: task,
+      childOccurrences,
+      onToggleLightSubtask: async (subtask, completed) => {
         try {
           await this.plugin.store.updateTaskOccurrenceSubtaskCompletion(task.taskId, task.date, subtask.id, completed);
         } catch (error) {
           new Notice(error instanceof Error ? error.message : "更新失败");
         }
-      });
-    });
-    childOccurrences.forEach((child) => {
-      const item = grid.createDiv({
-        cls: `pm-subtask-chip pm-subtask-task ${child.completed ? "is-complete" : ""}`
-      });
-      item.addEventListener("click", async () => {
+      },
+      onToggleChildOccurrence: async (child) => {
         try {
           await this.plugin.store.updateTaskOccurrenceCompletion(child.taskId, child.date, !child.completed);
         } catch (error) {
           new Notice(error instanceof Error ? error.message : "更新失败");
         }
-      });
-      item.createDiv({ cls: "pm-subtask-title", text: child.title });
-      item.createDiv({
-        cls: "pm-subtask-meta",
-        text: `${recurrenceLabel(child)}${child.startTime && child.endTime ? ` · ${child.startTime}-${child.endTime}` : ""}`
-      });
-      const actions = item.createDiv({ cls: "pm-subtask-actions" });
-      const edit = actions.createEl("button", { text: "编辑", cls: "pm-subtask-action" });
-      edit.addEventListener("click", (event) => {
-        event.stopPropagation();
+      },
+      onEditChildOccurrence: (child) => {
         this.openEditor(child);
-      });
-      const remove = actions.createEl("button", { text: "删除", cls: "pm-subtask-action mod-warning" });
-      remove.addEventListener("click", async (event) => {
-        event.stopPropagation();
+      },
+      onDeleteChildTask: async (child) => {
         await this.plugin.store.deleteTask(child.taskId, "series");
-      });
+      }
     });
   }
-}
-
-type CompositeDisplayOccurrence = {
-  occurrence: TaskOccurrence;
-  childOccurrences: TaskOccurrence[];
-};
-
-function buildCompositeDisplayOccurrences(occurrences: TaskOccurrence[], seriesTasks: Task[]): CompositeDisplayOccurrence[] {
-  const taskById = new Map(seriesTasks.map((task) => [task.id, task]));
-  const childrenByParent = new Map<string, TaskOccurrence[]>();
-  const hiddenOccurrenceIds = new Set<string>();
-
-  occurrences.forEach((occurrence) => {
-    const parentId = getCompositeParentId(occurrence.taskId, taskById);
-    if (!parentId) {
-      return;
-    }
-    hiddenOccurrenceIds.add(occurrence.id);
-    childrenByParent.set(parentId, [...(childrenByParent.get(parentId) ?? []), occurrence]);
-  });
-  childrenByParent.forEach((children, parentId) => childrenByParent.set(parentId, children.slice().sort(compareTaskOccurrences)));
-
-  const display = occurrences
-    .filter((occurrence) => !hiddenOccurrenceIds.has(occurrence.id))
-    .map<CompositeDisplayOccurrence>((occurrence) => ({
-      occurrence,
-      childOccurrences: childrenByParent.get(occurrence.taskId) ?? []
-    }));
-
-  const displayedTaskIds = new Set(display.map((item) => item.occurrence.taskId));
-  childrenByParent.forEach((children, parentId) => {
-    if (displayedTaskIds.has(parentId)) {
-      return;
-    }
-    const parent = taskById.get(parentId);
-    if (!parent) {
-      return;
-    }
-    display.push({
-      occurrence: buildCompositeContainerOccurrence(parent, children[0].date, children),
-      childOccurrences: children
-    });
-  });
-
-  return display.sort((left, right) => compareTaskOccurrences(left.occurrence, right.occurrence));
-}
-
-function getCompositeParentId(taskId: string, taskById: Map<string, Task>): string | null {
-  const parentId = taskById.get(taskId)?.viewState.mindmap.parentTaskId ?? null;
-  if (!parentId) {
-    return null;
-  }
-  const parent = taskById.get(parentId);
-  return parent?.kind === "composite" ? parent.id : null;
-}
-
-function buildCompositeContainerOccurrence(parent: Task, date: string, childOccurrences: TaskOccurrence[]): TaskOccurrence {
-  const progress = summarizeChildOccurrences(childOccurrences);
-  const window = summarizeChildWindow(childOccurrences);
-  return {
-    id: `${parent.id}::${date}::children`,
-    taskId: parent.id,
-    parentTaskId: parent.viewState.mindmap.parentTaskId ?? null,
-    occurrenceDate: date,
-    occurrenceNumber: parent.occurrenceDates.findIndex((entry) => entry === date) + 1 || 1,
-    kind: parent.kind,
-    title: parent.title,
-    description: parent.description,
-    projectId: parent.projectId,
-    status: parent.status,
-    priority: parent.priority,
-    tags: [...parent.tags],
-    date,
-    startTime: window.startTime ?? parent.startTime,
-    endTime: window.endTime ?? parent.endTime,
-    recurrence: parent.recurrence,
-    recurrenceCount: parent.recurrenceCount ?? null,
-    recurrenceUntil: parent.recurrenceUntil ?? null,
-    subtasks: parent.subtasks.map((subtask) => ({ ...subtask })),
-    sourceLinks: parent.sourceLinks.map((source) => ({ ...source })),
-    notes: parent.notes.map((note) => ({ ...note })),
-    completedSubtaskIds: [],
-    progress: progress.totalSteps === 0 ? 0 : progress.completedSteps / progress.totalSteps,
-    totalSteps: progress.totalSteps,
-    completedSteps: progress.completedSteps,
-    completed: progress.completed,
-    completedAt: progress.completed ? childOccurrences.map((child) => child.completedAt).filter(Boolean).sort().reverse()[0] ?? null : null,
-    createdAt: parent.createdAt,
-    updatedAt: parent.updatedAt,
-    revision: parent.revision
-  };
-}
-
-function isSyntheticCompositeOccurrence(occurrence: TaskOccurrence): boolean {
-  return occurrence.id.endsWith("::children");
-}
-
-function summarizeOccurrenceDisplay(
-  occurrence: TaskOccurrence,
-  childOccurrences: TaskOccurrence[]
-): { totalSteps: number; completedSteps: number; completed: boolean } {
-  const childProgress = summarizeChildOccurrences(childOccurrences);
-  const totalSteps = occurrence.totalSteps + childProgress.totalSteps;
-  const completedSteps = occurrence.completedSteps + childProgress.completedSteps;
-  return {
-    totalSteps,
-    completedSteps,
-    completed: totalSteps > 0 ? completedSteps === totalSteps : occurrence.completed
-  };
-}
-
-function summarizeChildOccurrences(childOccurrences: TaskOccurrence[]): { totalSteps: number; completedSteps: number; completed: boolean } {
-  const totalSteps = childOccurrences.reduce((sum, child) => sum + child.totalSteps, 0);
-  const completedSteps = childOccurrences.reduce((sum, child) => sum + child.completedSteps, 0);
-  return {
-    totalSteps,
-    completedSteps,
-    completed: childOccurrences.length > 0 && totalSteps > 0 && completedSteps === totalSteps
-  };
-}
-
-function summarizeChildWindow(childOccurrences: TaskOccurrence[]): { startTime?: string; endTime?: string } {
-  const timed = childOccurrences
-    .map((child) => ({
-      start: parseTimeToMinutes(child.startTime),
-      end: parseTimeToMinutes(child.endTime),
-      startTime: child.startTime,
-      endTime: child.endTime
-    }))
-    .filter((item): item is { start: number; end: number; startTime: string; endTime: string } => item.start !== null && item.end !== null && Boolean(item.startTime && item.endTime));
-  if (timed.length === 0) {
-    return {};
-  }
-  const first = timed.reduce((best, item) => (item.start < best.start ? item : best), timed[0]);
-  const last = timed.reduce((best, item) => (item.end > best.end ? item : best), timed[0]);
-  return { startTime: first.startTime, endTime: last.endTime };
-}
-
-function compareTaskOccurrences(a: TaskOccurrence, b: TaskOccurrence): number {
-  const startA = parseTimeToMinutes(a.startTime);
-  const startB = parseTimeToMinutes(b.startTime);
-  if (startA === null && startB === null) {
-    return a.title.localeCompare(b.title);
-  }
-  if (startA === null) {
-    return 1;
-  }
-  if (startB === null) {
-    return -1;
-  }
-  return startA - startB || a.title.localeCompare(b.title);
 }
 
 function renderProgressRing(container: HTMLElement, progress: number): void {
@@ -539,10 +380,6 @@ function statusLabel(status: TaskOccurrence["status"]): string {
     return "已完成";
   }
   return "待办";
-}
-
-function formatSubtaskLabel(subtask: { title: string; startTime?: string; endTime?: string }): string {
-  return subtask.startTime && subtask.endTime ? `${subtask.title} · ${subtask.startTime}-${subtask.endTime}` : subtask.title;
 }
 
 function isTaskSeriesCompleted(task: Task): boolean {
