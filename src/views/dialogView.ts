@@ -126,9 +126,11 @@ export class QuickDialogView extends BaseProjectView {
       hintHeader.createEl("strong", { text: "任务导入规则" });
       hintHeader.createDiv({ cls: "pm-muted", text: "这套语法与项目页批量导入、今日任务导出完全互通。" });
       [
-        "支持粘贴“导出全部记录”的完整迁移包；识别后会按迁移包恢复全量项目管理数据。",
+        "支持粘贴“导出全部记录”的明文任务清单；提交后会按普通任务语法创建或覆盖任务。",
         "支持普通任务与组合任务；组合任务可写 kind:composite，也可直接在下一行缩进写子任务。",
+        "任务行下缩进 > 描述 可写入任务描述，多行描述会按换行合并。",
         "支持单次、每日、每周此时：repeat:once / daily / weekly；需要限制次数可继续写 count:4 或 until:2026-06-30。",
+        "支持 done:2026-05-25,2026-05-26 标记已完成发生日期，便于迁移重复任务进度。",
         "创建或覆盖任务必须写完整日期和时间段，例如 @2026-05-25 09:00-09:30。",
         "极简 - [x] 标题 只会匹配并完成今日已有任务；找不到时会报错，不会创建新任务。"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
@@ -386,24 +388,6 @@ export class QuickDialogView extends BaseProjectView {
       const preview = this.plugin.store.previewFormattedTasks(textarea.value, {
         defaultDate: toDateKey(now())
       });
-      if (preview.transferPackage) {
-        const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
-        [
-          ["恢复模式", "替换全部"],
-          ["项目 / 进度页", `${preview.transferPackage.projectCount} / ${preview.transferPackage.progressPageCount}`],
-          ["任务系列", String(preview.transferPackage.taskCount)],
-          ["历史 / 索引", `${preview.transferPackage.writeHistoryCount} / ${preview.transferPackage.noteTaskIndexCount}`]
-        ].forEach(([label, value]) => {
-          const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
-          card.createDiv({ cls: "pm-muted", text: label });
-          card.createEl("strong", { text: value });
-        });
-        body.createDiv({
-          cls: "pm-import-project-hint",
-          text: `检测到完整迁移包，导出时间 ${preview.transferPackage.exportedAt}。提交后会替换当前项目管理数据。`
-        });
-        return;
-      }
       const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
       [
         ["任务总数", String(preview.summary.total)],

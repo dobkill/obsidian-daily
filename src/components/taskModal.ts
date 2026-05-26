@@ -13,6 +13,7 @@ type TaskModalOptions = {
   onSubmit: (input: TaskInput, scope: TaskUpdateScope) => Promise<void>;
   onDelete?: (scope: TaskDeleteScope) => Promise<void>;
   onCompleteSeries?: () => Promise<void>;
+  onOpenSeriesEditor?: () => void;
 };
 
 export class TaskModal extends Modal {
@@ -33,20 +34,24 @@ export class TaskModal extends Modal {
     state.kind = state.kind ?? "simple";
     state.subtasks = [...(state.subtasks ?? [])];
     state.viewState = cloneTaskInputViewState(state.viewState);
+    const isOccurrenceEditor = Boolean(this.options.occurrenceContext);
 
     const form = contentEl.createDiv({ cls: "pm-task-modal-form" });
     const basicSection = createTaskModalSection(form, "基础信息");
     const scheduleSection = createTaskModalSection(form, "时间安排");
-    const relationSection = createTaskModalSection(form, "归属与状态");
-    const recurrenceSection = createTaskModalSection(form, "重复规则");
-    const subtaskSection = createTaskModalSection(form, "组合轻量项");
+    const relationSection = isOccurrenceEditor ? null : createTaskModalSection(form, "归属与状态");
+    const recurrenceSection = isOccurrenceEditor ? null : createTaskModalSection(form, "重复规则");
+    const subtaskSection = isOccurrenceEditor ? null : createTaskModalSection(form, "组合轻量项");
 
-    if (this.options.existingTask?.occurrenceDates.length && this.options.existingTask.occurrenceDates.length > 1) {
+    if (this.options.occurrenceContext) {
       basicSection.createDiv({
         cls: "pm-muted",
-        text: this.options.occurrenceContext
-          ? `当前正在查看 ${this.options.occurrenceContext.occurrenceDate} 这次发生，但保存会更新整条重复任务。`
-          : "当前编辑的是整条重复任务，下面的日期与重复规则会一起更新全部发生时间。"
+        text: `当前正在编辑 ${this.options.occurrenceContext.occurrenceDate} 这次发生。保存本次只会更新这一条实例，不影响未来；如需修改整条重复任务，请使用下方“编辑整条系列”。`
+      });
+    } else if (this.options.existingTask?.occurrenceDates.length && this.options.existingTask.occurrenceDates.length > 1) {
+      basicSection.createDiv({
+        cls: "pm-muted",
+        text: "当前编辑的是整条重复任务，下面的日期与重复规则会一起更新全部发生时间。"
       });
     }
 
@@ -61,22 +66,24 @@ export class TaskModal extends Modal {
           })
       );
 
-    new Setting(basicSection)
-      .setName("任务类型")
-      .setDesc("组合任务可作为容器，挂载单次、每日或每周子任务")
-      .addDropdown((dropdown) => {
-        const labels: Record<TaskKind, string> = {
-          simple: "普通任务",
-          composite: "组合任务"
-        };
-        (Object.keys(labels) as TaskKind[]).forEach((key) => dropdown.addOption(key, labels[key]));
-        dropdown.setValue(state.kind ?? "simple");
-        dropdown.onChange((value) => {
-          state.kind = value as TaskKind;
-          state.subtasks = state.kind === "composite" ? state.subtasks ?? [] : [];
-          renderSubtaskFields();
+    if (!isOccurrenceEditor) {
+      new Setting(basicSection)
+        .setName("任务类型")
+        .setDesc("组合任务可作为容器，挂载单次、每日或每周子任务")
+        .addDropdown((dropdown) => {
+          const labels: Record<TaskKind, string> = {
+            simple: "普通任务",
+            composite: "组合任务"
+          };
+          (Object.keys(labels) as TaskKind[]).forEach((key) => dropdown.addOption(key, labels[key]));
+          dropdown.setValue(state.kind ?? "simple");
+          dropdown.onChange((value) => {
+            state.kind = value as TaskKind;
+            state.subtasks = state.kind === "composite" ? state.subtasks ?? [] : [];
+            renderSubtaskFields();
+          });
         });
-      });
+    }
 
     new Setting(basicSection)
       .setName("描述")
@@ -107,7 +114,12 @@ export class TaskModal extends Modal {
       .setName("日期")
       .addText((text) => {
         dateInput = text;
-        return text.setPlaceholder("YYYY-MM-DD").setValue(state.date).onChange((value) => {
+        text.setPlaceholder("YYYY-MM-DD").setValue(state.date);
+        if (isOccurrenceEditor) {
+          text.inputEl.disabled = true;
+          return text;
+        }
+        return text.onChange((value) => {
           state.date = value;
         });
       });
@@ -133,156 +145,161 @@ export class TaskModal extends Modal {
     let projectDropdown: DropdownComponent | null = null;
     let renderParentField = (): void => undefined;
     let clearParentIfDisallowed = (): void => undefined;
-    const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
-    new Setting(relationGrid)
-      .setName("所属项目")
-      .addDropdown((dropdown) => {
-        projectDropdown = dropdown;
-        dropdown.addOption("", "未归属项目");
-        this.options.projects.forEach((project) => dropdown.addOption(project.id, project.name));
-        dropdown.setValue(state.projectId ?? "");
-        dropdown.onChange((value) => {
-          state.projectId = value || undefined;
-          clearParentIfDisallowed();
-          renderParentField();
-        });
-      });
-
-    const compositeParents = this.options.compositeParents ?? [];
-    const parentField = relationSection.createDiv({ cls: "pm-task-parent-field" });
-    const getSelectableParents = (): Task[] =>
-      compositeParents
-        .filter((task) => task.id !== this.options.existingTask?.id)
-        .filter((task) => !state.projectId || task.projectId === state.projectId);
-    const applyParentSchedule = (parent: Task): void => {
-      const nextDate = parent.occurrenceDates.includes(state.date) ? state.date : parent.date;
-      setDateValue(nextDate);
-      if (!parent.startTime || !parent.endTime) {
-        return;
-      }
-      const parentStart = parseTimeToMinutes(parent.startTime);
-      const parentEnd = parseTimeToMinutes(parent.endTime);
-      if (parentStart === null || parentEnd === null || parentStart >= parentEnd) {
-        return;
-      }
-      setStartTimeValue(parent.startTime);
-      setEndTimeValue(parentEnd - parentStart <= 1 ? parent.endTime : addMinutes(parent.startTime, 1));
-    };
-    clearParentIfDisallowed = (): void => {
-      const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
-      if (!currentParentId) {
-        return;
-      }
-      if (!getSelectableParents().some((task) => task.id === currentParentId)) {
-        state.viewState = withMindmapParent(state.viewState, null);
-      }
-    };
-    renderParentField = (): void => {
-      parentField.empty();
-      clearParentIfDisallowed();
-      const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
-      const parentOptions = getSelectableParents();
-      if (parentOptions.length === 0) {
-        parentField.createDiv({
-          cls: "pm-muted pm-task-parent-note",
-          text: state.projectId ? "当前项目下暂无可挂入的组合任务。" : "暂无可挂入的组合任务。"
-        });
-        return;
-      }
-      new Setting(parentField)
-        .setName("挂入组合任务")
-        .setDesc("选择后，这条任务会作为该组合任务的子任务，并保留自己的重复规则")
+    if (!isOccurrenceEditor && relationSection && recurrenceSection && subtaskSection) {
+      const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
+      new Setting(relationGrid)
+        .setName("所属项目")
         .addDropdown((dropdown) => {
-          dropdown.addOption("", "不挂入组合任务");
-          parentOptions.forEach((parent) => {
-            const projectName = this.options.projects.find((project) => project.id === parent.projectId)?.name ?? "未归属项目";
-            dropdown.addOption(parent.id, `${projectName} / ${parent.title}`);
-          });
-          dropdown.setValue(currentParentId);
+          projectDropdown = dropdown;
+          dropdown.addOption("", "未归属项目");
+          this.options.projects.forEach((project) => dropdown.addOption(project.id, project.name));
+          dropdown.setValue(state.projectId ?? "");
           dropdown.onChange((value) => {
-            const parentTaskId = value || null;
-            state.viewState = withMindmapParent(state.viewState, parentTaskId);
-            const parent = parentTaskId ? parentOptions.find((task) => task.id === parentTaskId) : undefined;
-            if (parent) {
-              state.projectId = parent.projectId;
-              projectDropdown?.setValue(parent.projectId ?? "");
-              applyParentSchedule(parent);
-              renderParentField();
-            }
+            state.projectId = value || undefined;
+            clearParentIfDisallowed();
+            renderParentField();
           });
         });
-    };
-    renderParentField();
 
-    new Setting(relationGrid)
-      .setName("状态")
-      .addDropdown((dropdown) => {
-        const labels: Record<TaskStatus, string> = {
-          todo: "待办",
-          doing: "进行中",
-          blocked: "阻塞",
-          done: "已完成"
-        };
-        (Object.keys(labels) as TaskStatus[]).forEach((key) => dropdown.addOption(key, labels[key]));
-        dropdown.setValue(state.status ?? "todo");
-        dropdown.onChange((value) => {
-          state.status = value as TaskStatus;
+      const compositeParents = this.options.compositeParents ?? [];
+      const parentField = relationSection.createDiv({ cls: "pm-task-parent-field" });
+      const getSelectableParents = (): Task[] =>
+        compositeParents
+          .filter((task) => task.id !== this.options.existingTask?.id)
+          .filter((task) => !state.projectId || task.projectId === state.projectId);
+      const applyParentSchedule = (parent: Task): void => {
+        const nextDate = parent.occurrenceDates.includes(state.date) ? state.date : parent.date;
+        setDateValue(nextDate);
+        if (!parent.startTime || !parent.endTime) {
+          return;
+        }
+        const parentStart = parseTimeToMinutes(parent.startTime);
+        const parentEnd = parseTimeToMinutes(parent.endTime);
+        if (parentStart === null || parentEnd === null || parentStart >= parentEnd) {
+          return;
+        }
+        setStartTimeValue(parent.startTime);
+        setEndTimeValue(parentEnd - parentStart <= 1 ? parent.endTime : addMinutes(parent.startTime, 1));
+      };
+      clearParentIfDisallowed = (): void => {
+        const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+        if (!currentParentId) {
+          return;
+        }
+        if (!getSelectableParents().some((task) => task.id === currentParentId)) {
+          state.viewState = withMindmapParent(state.viewState, null);
+        }
+      };
+      renderParentField = (): void => {
+        parentField.empty();
+        clearParentIfDisallowed();
+        const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+        const parentOptions = getSelectableParents();
+        if (parentOptions.length === 0) {
+          parentField.createDiv({
+            cls: "pm-muted pm-task-parent-note",
+            text: state.projectId ? "当前项目下暂无可挂入的组合任务。" : "暂无可挂入的组合任务。"
+          });
+          return;
+        }
+        new Setting(parentField)
+          .setName("挂入组合任务")
+          .setDesc("选择后，这条任务会作为该组合任务的子任务，并保留自己的重复规则")
+          .addDropdown((dropdown) => {
+            dropdown.addOption("", "不挂入组合任务");
+            parentOptions.forEach((parent) => {
+              const projectName = this.options.projects.find((project) => project.id === parent.projectId)?.name ?? "未归属项目";
+              dropdown.addOption(parent.id, `${projectName} / ${parent.title}`);
+            });
+            dropdown.setValue(currentParentId);
+            dropdown.onChange((value) => {
+              const parentTaskId = value || null;
+              state.viewState = withMindmapParent(state.viewState, parentTaskId);
+              const parent = parentTaskId ? parentOptions.find((task) => task.id === parentTaskId) : undefined;
+              if (parent) {
+                state.projectId = parent.projectId;
+                projectDropdown?.setValue(parent.projectId ?? "");
+                applyParentSchedule(parent);
+                renderParentField();
+              }
+            });
+          });
+      };
+      renderParentField();
+
+      new Setting(relationGrid)
+        .setName("状态")
+        .addDropdown((dropdown) => {
+          const labels: Record<TaskStatus, string> = {
+            todo: "待办",
+            doing: "进行中",
+            blocked: "阻塞",
+            done: "已完成"
+          };
+          (Object.keys(labels) as TaskStatus[]).forEach((key) => dropdown.addOption(key, labels[key]));
+          dropdown.setValue(state.status ?? "todo");
+          dropdown.onChange((value) => {
+            state.status = value as TaskStatus;
+          });
         });
-      });
 
-    new Setting(relationGrid)
-      .setName("优先级")
-      .addDropdown((dropdown) => {
-        dropdown.addOption("", "无");
-        const labels: Record<TaskPriority, string> = {
-          low: "低",
-          medium: "中",
-          high: "高",
-          urgent: "紧急"
-        };
-        (Object.keys(labels) as TaskPriority[]).forEach((key) => dropdown.addOption(key, labels[key]));
-        dropdown.setValue(state.priority ?? "");
-        dropdown.onChange((value) => {
-          state.priority = (value || undefined) as TaskPriority | undefined;
+      new Setting(relationGrid)
+        .setName("优先级")
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", "无");
+          const labels: Record<TaskPriority, string> = {
+            low: "低",
+            medium: "中",
+            high: "高",
+            urgent: "紧急"
+          };
+          (Object.keys(labels) as TaskPriority[]).forEach((key) => dropdown.addOption(key, labels[key]));
+          dropdown.setValue(state.priority ?? "");
+          dropdown.onChange((value) => {
+            state.priority = (value || undefined) as TaskPriority | undefined;
+          });
         });
-      });
 
-    new Setting(relationSection)
-      .setName("标签")
-      .setDesc("多个标签用逗号分隔")
-      .addText((text) =>
-        text.setPlaceholder("例如 parser, ui").setValue((state.tags ?? []).join(", ")).onChange((value) => {
-          state.tags = value
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean);
-        })
-      );
+      new Setting(relationSection)
+        .setName("标签")
+        .setDesc("多个标签用逗号分隔")
+        .addText((text) =>
+          text.setPlaceholder("例如 parser, ui").setValue((state.tags ?? []).join(", ")).onChange((value) => {
+            state.tags = value
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean);
+          })
+        );
 
-    new Setting(recurrenceSection)
-      .setName("重复类型")
-      .setDesc("单次、每日重复、每周此时重复")
-      .addDropdown((dropdown) => {
-        const labels: Array<[TaskRecurrence, string]> = [
-          ["once", "单次任务"],
-          ["daily", "每日重复"],
-          ["weekly", "每周此时重复"]
-        ];
-        labels.forEach(([key, label]) => dropdown.addOption(key, label));
-        dropdown.setValue(state.recurrence);
-        dropdown.onChange((value) => {
-          state.recurrence = value as TaskRecurrence;
-          if (state.recurrence === "once") {
-            state.recurrenceCount = null;
-            state.recurrenceUntil = null;
-          }
-          renderRecurrenceFields();
+      new Setting(recurrenceSection)
+        .setName("重复类型")
+        .setDesc("单次、每日重复、每周此时重复")
+        .addDropdown((dropdown) => {
+          const labels: Array<[TaskRecurrence, string]> = [
+            ["once", "单次任务"],
+            ["daily", "每日重复"],
+            ["weekly", "每周此时重复"]
+          ];
+          labels.forEach(([key, label]) => dropdown.addOption(key, label));
+          dropdown.setValue(state.recurrence);
+          dropdown.onChange((value) => {
+            state.recurrence = value as TaskRecurrence;
+            if (state.recurrence === "once") {
+              state.recurrenceCount = null;
+              state.recurrenceUntil = null;
+            }
+            renderRecurrenceFields();
+          });
         });
-      });
+    }
 
-    const recurrenceFields = recurrenceSection.createDiv({ cls: "pm-task-nested-fields" });
-    const subtaskFields = subtaskSection.createDiv({ cls: "pm-task-nested-fields" });
+    const recurrenceFields = recurrenceSection?.createDiv({ cls: "pm-task-nested-fields" }) ?? null;
+    const subtaskFields = subtaskSection?.createDiv({ cls: "pm-task-nested-fields" }) ?? null;
     const renderRecurrenceFields = (): void => {
+      if (!recurrenceFields) {
+        return;
+      }
       recurrenceFields.empty();
       if (state.recurrence === "once") {
         return;
@@ -307,6 +324,9 @@ export class TaskModal extends Modal {
     renderRecurrenceFields();
 
     const renderSubtaskFields = (): void => {
+      if (!subtaskFields || !subtaskSection) {
+        return;
+      }
       subtaskFields.empty();
       if (state.kind !== "composite") {
         subtaskSection.addClass("is-hidden");
@@ -378,27 +398,23 @@ export class TaskModal extends Modal {
 
     const footer = contentEl.createDiv({ cls: "pm-modal-actions" });
     new ButtonComponent(footer)
-      .setButtonText(this.options.occurrenceContext ? "保存整条系列" : "保存")
+      .setButtonText(isOccurrenceEditor ? "保存本次" : "保存")
       .setCta()
       .onClick(async () => {
         try {
-          await this.options.onSubmit(state, "series");
+          await this.options.onSubmit(state, isOccurrenceEditor ? "occurrence" : "series");
           this.close();
         } catch (error) {
           new Notice(error instanceof Error ? error.message : "保存失败");
         }
       });
 
-    if (this.options.occurrenceContext && this.options.existingTask?.occurrenceDates.length && this.options.existingTask.occurrenceDates.length > 1) {
+    if (isOccurrenceEditor && this.options.onOpenSeriesEditor) {
       new ButtonComponent(footer)
-        .setButtonText("仅保存本次时间")
-        .onClick(async () => {
-          try {
-            await this.options.onSubmit(state, "occurrence");
-            this.close();
-          } catch (error) {
-            new Notice(error instanceof Error ? error.message : "保存失败");
-          }
+        .setButtonText("编辑整条系列")
+        .onClick(() => {
+          this.close();
+          this.options.onOpenSeriesEditor?.();
         });
     }
 

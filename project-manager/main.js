@@ -142,6 +142,7 @@ var MARKDOWN_FORMAT_GUIDE = `# \u9879\u76EE\u7BA1\u7406\u63D2\u4EF6 Markdown \u8
 - \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5C5E\u8BE5\u9879\u76EE\uFF0C\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002
 - \`#\u9879\u76EE\uFF1A\` \u6216 \`#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE\` \u8868\u793A\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002
 - \u540C\u9879\u76EE\u540C\u540D\u4E14\u540C\u65E5\u53EF\u5339\u914D\u7684\u6D3B\u52A8\u4EFB\u52A1\u4F1A\u88AB\u8986\u76D6\uFF1B\u5426\u5219\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002
+- \u4EFB\u52A1\u884C\u4E0B\u7F29\u8FDB \`> \u63CF\u8FF0\` \u53EF\u5199\u5165\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u591A\u884C\u63CF\u8FF0\u4F1A\u6309\u6362\u884C\u5408\u5E76\u3002
 
 ## \u4ECA\u65E5\u6781\u7B80\u5B8C\u6210
 
@@ -165,7 +166,16 @@ var MARKDOWN_FORMAT_GUIDE = `# \u9879\u76EE\u7BA1\u7406\u63D2\u4EF6 Markdown \u8
 - \`count:N\`\uFF1A\u91CD\u590D\u6B21\u6570\u3002
 - \`until:YYYY-MM-DD\`\uFF1A\u91CD\u590D\u7ED3\u675F\u65E5\u671F\u3002
 - \`dates:YYYY-MM-DD,YYYY-MM-DD\`\uFF1A\u81EA\u5B9A\u4E49\u53D1\u751F\u65E5\u671F\u3002
+- \`done:YYYY-MM-DD,YYYY-MM-DD\`\uFF1A\u5DF2\u5B8C\u6210\u53D1\u751F\u65E5\u671F\uFF1B\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u4F1A\u7528\u5B83\u4FDD\u7559\u91CD\u590D\u4EFB\u52A1\u8FDB\u5EA6\u3002
 - \`finish:today | series\`\uFF1A\u4EC5\u5728\u5B8C\u6574 \`- [x]\` \u8F93\u5165\u65F6\u751F\u6548\u3002
+
+\u4EFB\u52A1\u63CF\u8FF0\u5199\u6CD5\uFF1A
+
+\`\`\`md
+- [ ] \u5E26\u63CF\u8FF0\u4EFB\u52A1 kind:simple @2026-05-25 09:00-09:30 status:todo
+  > \u7B2C\u4E00\u884C\u63CF\u8FF0
+  > \u7B2C\u4E8C\u884C\u63CF\u8FF0
+\`\`\`
 
 ## \u7EC4\u5408\u4EFB\u52A1
 
@@ -184,15 +194,17 @@ var MARKDOWN_FORMAT_GUIDE = `# \u9879\u76EE\u7BA1\u7406\u63D2\u4EF6 Markdown \u8
 <!-- pm:end -->
 \`\`\`
 
-## \u5386\u53F2\u9694\u79BB
+## \u5355\u6B21\u5B9E\u4F8B\u7F16\u8F91
 
-\u4ECA\u5929\u4EE5\u524D\u7684\u4EFB\u52A1\u53D1\u751F\u8BB0\u5F55\u4E0D\u53EF\u88AB\u7F16\u8F91\u3001\u5220\u9664\u3001\u6539\u65F6\u95F4\u6216\u91CD\u65B0\u6807\u8BB0\u5B8C\u6210\u3002\u7F16\u8F91\u3001\u5220\u9664\u3001\u63D0\u524D\u7ED3\u675F\u91CD\u590D\u4EFB\u52A1\u65F6\uFF0C\u63D2\u4EF6\u53EA\u6539\u4ECA\u5929\u548C\u672A\u6765\u7684\u53D1\u751F\u8BB0\u5F55\uFF0C\u8FC7\u53BB\u8BB0\u5F55\u4FDD\u7559\u65E7\u7248\u672C\u3002
+\u91CD\u590D\u4EFB\u52A1\u652F\u6301\u201C\u7F16\u8F91\u672C\u6B21\u201D\u3002\u5B83\u4F1A\u53EA\u8986\u76D6\u5F53\u524D\u65E5\u671F\u7684\u6807\u9898\u3001\u63CF\u8FF0\u548C\u65F6\u95F4\uFF0C\u4E0D\u5F71\u54CD\u672A\u6765\u53D1\u751F\uFF1B\u5982\u679C\u8981\u4FEE\u6539\u6574\u6761\u91CD\u590D\u4EFB\u52A1\uFF0C\u8BF7\u4F7F\u7528\u7CFB\u5217\u7F16\u8F91\u3002
 
 ## \u5168\u90E8\u8BB0\u5F55\u5BFC\u51FA
 
-\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u4F4D\u4E8E\u4EFB\u52A1\u603B\u89C8\u7684\u9879\u76EE\u8FDB\u5EA6\u6807\u9898\u533A\u3002\u5BFC\u51FA\u7ED3\u679C\u662F\u5B8C\u6574\u8FC1\u79FB\u5305 Markdown\uFF0C\u5185\u90E8\u5305\u542B base64 \u7F16\u7801\u7684 JSON \u6570\u636E\u5757\u3002\u628A\u6574\u4EFD Markdown \u7C98\u8D34\u5230\u53E6\u4E00\u53F0\u8BBE\u5907\u7684\u201C\u5FEB\u901F\u8BB0\u5F55 - \u521B\u5EFA\u4EFB\u52A1\u201D\u5E76\u63D0\u4EA4\uFF0C\u4F1A\u66FF\u6362\u76EE\u6807\u8BBE\u5907\u5F53\u524D\u9879\u76EE\u7BA1\u7406\u6570\u636E\uFF0C\u5E76\u6062\u590D\u9879\u76EE\u3001\u8FDB\u5EA6\u9875\u3001\u4EFB\u52A1\u3001\u770B\u677F\u72B6\u6001\u3001\u7518\u7279\u8BBE\u7F6E\u3001\u601D\u7EF4\u5BFC\u56FE\u3001\u4EFB\u52A1\u7B14\u8BB0\u3001\u6765\u6E90\u7D22\u5F15\u548C\u5199\u5165\u5386\u53F2\u3002
+\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u4F4D\u4E8E\u4EFB\u52A1\u603B\u89C8\u7684\u9879\u76EE\u8FDB\u5EA6\u6807\u9898\u533A\u3002\u5BFC\u51FA\u7ED3\u679C\u662F\u660E\u6587 Markdown \u4EFB\u52A1\u6E05\u5355\uFF0C\u53EA\u5305\u542B \`#\u9879\u76EE\uFF1A...\`\u3001\u4EFB\u52A1 checklist \u548C\u7EC4\u5408\u4EFB\u52A1\u5B50\u9879\uFF0C\u4E0D\u518D\u5305\u542B base64\u3001\u538B\u7F29 JSON \u6216\u9690\u85CF\u8FC1\u79FB\u5305\u3002
 
-\u8FC1\u79FB\u5305\u5BFC\u5165\u53EA\u5728\u5FEB\u901F\u8BB0\u5F55\u7684\u521B\u5EFA\u4EFB\u52A1\u5165\u53E3\u751F\u6548\uFF1B\u9879\u76EE\u7EA7\u6279\u91CF\u5BFC\u5165\u4F1A\u963B\u65AD\u5B8C\u6574\u8FC1\u79FB\u5305\uFF0C\u907F\u514D\u8BEF\u628A\u5168\u5E93\u6062\u590D\u5F53\u6210\u5355\u9879\u76EE\u5BFC\u5165\u3002\u4E3A\u907F\u514D\u8DE8\u8BBE\u5907\u76EE\u5F55\u540D\u8BEF\u4F24\uFF0C\u5BFC\u5165\u65F6\u4FDD\u7559\u76EE\u6807\u8BBE\u5907\u5F53\u524D\u6570\u636E\u76EE\u5F55\uFF0C\u5176\u4F59\u4E1A\u52A1\u6570\u636E\u6309\u8FC1\u79FB\u5305\u6062\u590D\u3002`;
+\u628A\u5BFC\u51FA\u5185\u5BB9\u7C98\u8D34\u5230\u53E6\u4E00\u53F0\u8BBE\u5907\u7684\u201C\u5FEB\u901F\u8BB0\u5F55 - \u521B\u5EFA\u4EFB\u52A1\u201D\u5E76\u63D0\u4EA4\uFF0C\u4F1A\u6309\u666E\u901A\u4EFB\u52A1\u5BFC\u5165\u89C4\u5219\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u4F1A\u6309 \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\` \u81EA\u52A8\u521B\u5EFA\u3002\u91CD\u590D\u4EFB\u52A1\u7684\u5B8C\u6210\u8FDB\u5EA6\u901A\u8FC7 \`done:\` \u660E\u6587\u65E5\u671F\u5217\u8868\u8868\u8FBE\uFF0C\u7528\u6237\u53EF\u4EE5\u5728\u5BFC\u5165\u524D\u76F4\u63A5\u7F16\u8F91\u4EFB\u52A1\u6807\u9898\u3001\u65E5\u671F\u3001\u65F6\u95F4\u3001\u6807\u7B7E\u3001\u91CD\u590D\u89C4\u5219\u6216\u5B8C\u6210\u65E5\u671F\u3002
+
+\u65E7\u7248\u5B8C\u6574\u8FC1\u79FB\u5305\u3001base64 \u6570\u636E\u5757\u548C\u201C\u66FF\u6362\u5168\u90E8\u201D\u6062\u590D\u6D41\u7A0B\u5DF2\u5E9F\u5F03\uFF1B\u5F53\u524D\u5BFC\u5165\u59CB\u7EC8\u8D70\u521B\u5EFA\u4EFB\u52A1\u8BED\u6CD5\uFF0C\u5E76\u7EE7\u7EED\u6267\u884C\u5B8C\u6574\u65E5\u671F\u65F6\u95F4\u3001\u7EC4\u5408\u4EFB\u52A1\u8FB9\u754C\u548C\u6781\u7B80\u5B8C\u6210\u89C4\u5219\u3002`;
 
 // src/storage/store.ts
 var DEFAULT_CONFIG = {
@@ -242,10 +254,6 @@ var WRITE_HISTORY_FILE = "write-history.json";
 var TASKS_DIR = "tasks";
 var MARKDOWN_GUIDE_FILE = "markdown-format-guide.md";
 var UNASSIGNED_PROJECT_LABEL = "\u672A\u5F52\u5C5E\u9879\u76EE";
-var FULL_TRANSFER_SCHEMA = "obsidian-project-management.full-transfer.v1";
-var FULL_TRANSFER_START = "<!-- pm-full-transfer:v1:start -->";
-var FULL_TRANSFER_END = "<!-- pm-full-transfer:v1:end -->";
-var FULL_TRANSFER_CODE_BLOCK = "pm-json-base64";
 var ProjectManagementStore = class extends import_obsidian.Events {
   constructor(app, config) {
     super();
@@ -521,16 +529,13 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       throw new Error("\u4EFB\u52A1\u66F4\u65B0\u5931\u8D25");
     }
     assertValidTaskMindmapParent(next, this.getAllTasks().filter((task) => task.id !== original.id));
-    const mutation = this.prepareFutureMutation(original, next);
-    if (mutation.activeTask) {
-      this.assertCompositeTaskConsistency([mutation.activeTask], /* @__PURE__ */ new Set([original.id]));
-      this.assertNoConflicts([mutation.activeTask], occurrenceKeysForTask(original));
-    }
-    this.replaceTasks([original.id], mutation.replacements);
-    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
+    this.assertCompositeTaskConsistency([next], /* @__PURE__ */ new Set([original.id]));
+    this.assertNoConflicts([next], occurrenceKeysForTask(original));
+    this.replaceTasks([original.id], [next]);
+    await this.persistMonths(monthsForTasks([original, next]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
-    return cloneTask((mutation.activeTask ? this.findTask(mutation.activeTask.id) : void 0) ?? mutation.activeTask ?? mutation.replacements[0] ?? next);
+    return cloneTask(this.findTask(next.id) ?? next);
   }
   async updateTaskOccurrenceCompletion(taskId, date, completed) {
     this.assertWritable();
@@ -541,16 +546,15 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     if (!original.occurrenceDates.includes(date)) {
       throw new Error("\u4EFB\u52A1\u53D1\u751F\u65E5\u671F\u4E0D\u5B58\u5728");
     }
-    assertMutableOccurrenceDate(date);
     const next = cloneTask(original);
     next.occurrenceStates = completed ? upsertOccurrenceState(original, date, {
       completedSubtaskIds: getAllSubtaskIds(original),
       completedAt: toIsoLocal(now())
     }) : next.occurrenceStates.filter((item) => item.date !== date);
     next.updatedAt = toIsoLocal(now());
-    const mutation = this.prepareFutureMutation(original, next);
-    this.replaceTasks([original.id], mutation.replacements);
-    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
+    next.revision = (next.revision ?? 0) + 1;
+    this.replaceTasks([original.id], [next]);
+    await this.persistMonths(monthsForTasks([original, next]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -566,7 +570,6 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     if (!original.occurrenceDates.includes(date)) {
       throw new Error("\u4EFB\u52A1\u53D1\u751F\u65E5\u671F\u4E0D\u5B58\u5728");
     }
-    assertMutableOccurrenceDate(date);
     if (!original.subtasks.some((item) => item.id === subtaskId)) {
       throw new Error("\u5B50\u4EFB\u52A1\u4E0D\u5B58\u5728");
     }
@@ -584,13 +587,13 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       completedAt: nextCompletedIds.length === original.subtasks.length ? toIsoLocal(now()) : null
     });
     next.updatedAt = toIsoLocal(now());
-    const mutation = this.prepareFutureMutation(original, next);
-    this.replaceTasks([original.id], mutation.replacements);
-    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
+    next.revision = (next.revision ?? 0) + 1;
+    this.replaceTasks([original.id], [next]);
+    await this.persistMonths(monthsForTasks([original, next]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
-  async updateTaskOccurrenceWindow(taskId, date, startTime, endTime) {
+  async updateTaskOccurrenceDetails(taskId, date, patch) {
     this.assertWritable();
     const original = this.findTask(taskId);
     if (!original) {
@@ -599,9 +602,30 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     if (!original.occurrenceDates.includes(date)) {
       throw new Error("\u4EFB\u52A1\u53D1\u751F\u65E5\u671F\u4E0D\u5B58\u5728");
     }
-    assertMutableOccurrenceDate(date);
-    const start = startTime?.trim() || void 0;
-    const end = endTime?.trim() || void 0;
+    if (original.recurrence === "once" && original.occurrenceDates.length === 1) {
+      await this.updateTask(
+        taskId,
+        {
+          title: patch.title ?? original.title,
+          description: patch.description ?? original.description,
+          startTime: patch.startTime ?? original.startTime,
+          endTime: patch.endTime ?? original.endTime
+        },
+        "series"
+      );
+      return;
+    }
+    const occurrence = expandTask(original).find((item) => item.date === date);
+    if (!occurrence) {
+      throw new Error("\u4EFB\u52A1\u53D1\u751F\u65E5\u671F\u4E0D\u5B58\u5728");
+    }
+    const title = (patch.title ?? occurrence.title).trim();
+    if (!title) {
+      throw new Error("\u4EFB\u52A1\u6807\u9898\u4E0D\u80FD\u4E3A\u7A7A");
+    }
+    const description = patch.description === void 0 ? occurrence.description ?? "" : patch.description.trim();
+    const start = patch.startTime === void 0 ? occurrence.startTime ?? "" : patch.startTime?.trim() ?? "";
+    const end = patch.endTime === void 0 ? occurrence.endTime ?? "" : patch.endTime?.trim() ?? "";
     if (start && !end || !start && end) {
       throw new Error("\u5F00\u59CB\u65F6\u95F4\u548C\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u540C\u65F6\u586B\u5199");
     }
@@ -611,27 +635,27 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       throw new Error("\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4");
     }
     const next = cloneTask(original);
-    if (original.recurrence === "once" && original.occurrenceDates.length === 1) {
-      next.startTime = start;
-      next.endTime = end;
-    } else {
-      next.occurrenceOverrides = upsertOccurrenceOverride(next, {
-        date,
-        startTime: start,
-        endTime: end
-      });
-    }
+    next.occurrenceOverrides = replaceOccurrenceOverride(
+      next,
+      date,
+      buildOccurrenceDetailsOverride(original, date, {
+        title,
+        description,
+        startTime: start || void 0,
+        endTime: end || void 0
+      })
+    );
     next.updatedAt = toIsoLocal(now());
     next.revision = (next.revision ?? 0) + 1;
-    const mutation = this.prepareFutureMutation(original, next);
-    if (mutation.activeTask) {
-      this.assertCompositeTaskConsistency([mutation.activeTask], /* @__PURE__ */ new Set([original.id]));
-      this.assertNoConflicts([mutation.activeTask], occurrenceKeysForTask(original));
-    }
-    this.replaceTasks([original.id], mutation.replacements);
-    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
+    this.assertCompositeTaskConsistency([next], /* @__PURE__ */ new Set([original.id]));
+    this.assertNoConflicts([next], occurrenceKeysForTask(original));
+    this.replaceTasks([original.id], [next]);
+    await this.persistMonths(monthsForTasks([original, next]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
+  }
+  async updateTaskOccurrenceWindow(taskId, date, startTime, endTime) {
+    await this.updateTaskOccurrenceDetails(taskId, date, { startTime, endTime });
   }
   async patchTask(taskId, patch) {
     this.assertWritable();
@@ -665,15 +689,12 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     assertValidTaskMindmapParent(next, this.getAllTasks().filter((task) => task.id !== original.id));
     next.updatedAt = toIsoLocal(now());
     next.revision = (next.revision ?? 0) + 1;
-    const mutation = this.prepareFutureMutation(original, next);
-    if (mutation.activeTask) {
-      this.assertCompositeTaskConsistency([mutation.activeTask], /* @__PURE__ */ new Set([original.id]));
-    }
-    this.replaceTasks([original.id], mutation.replacements);
-    await this.persistMonths(monthsForTasks([original, ...mutation.replacements]));
+    this.assertCompositeTaskConsistency([next], /* @__PURE__ */ new Set([original.id]));
+    this.replaceTasks([original.id], [next]);
+    await this.persistMonths(monthsForTasks([original, next]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
-    return cloneTask((mutation.activeTask ? this.findTask(mutation.activeTask.id) : void 0) ?? mutation.activeTask ?? mutation.replacements[0] ?? next);
+    return cloneTask(this.findTask(next.id) ?? next);
   }
   async addTaskMindmapComment(taskId, content, parentCommentId) {
     this.assertWritable();
@@ -769,10 +790,6 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     await this.patchTask(taskId, { notes: [...task.notes, note] });
   }
   previewFormattedTasks(text, options = {}) {
-    const transfer = parseFullTransferPackage(text);
-    if (transfer.found) {
-      return this.previewFullTransferPackage(transfer, Boolean(options.projectId));
-    }
     const parsed = parseFormattedTaskText(text, {
       projects: this.projects,
       projectId: options.projectId,
@@ -783,16 +800,6 @@ var ProjectManagementStore = class extends import_obsidian.Events {
   }
   async importFormattedTasks(text, options = {}) {
     this.assertWritable();
-    const transfer = parseFullTransferPackage(text);
-    if (transfer.found) {
-      if (options.projectId) {
-        throw new Error("\u5B8C\u6574\u8FC1\u79FB\u5305\u53EA\u80FD\u5728\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u4E2D\u5BFC\u5165\uFF0C\u4E0D\u80FD\u5BFC\u5165\u5230\u5355\u4E2A\u9879\u76EE");
-      }
-      if (!transfer.package) {
-        throw new Error(transfer.message ?? "\u5B8C\u6574\u8FC1\u79FB\u5305\u89E3\u6790\u5931\u8D25");
-      }
-      return this.restoreFullTransferPackage(transfer.package);
-    }
     const preview = this.previewFormattedTasks(text, options);
     const blockingIssue = preview.issues.find((issue) => issue.blocking);
     if (blockingIssue) {
@@ -841,6 +848,9 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     const lines = [`#\u9879\u76EE\uFF1A${project.name}`];
     tasks.forEach((task) => {
       lines.push(renderTaskSeriesForExport(task));
+      renderDescriptionForExport(task.description).forEach((line) => {
+        lines.push(line);
+      });
       if (task.kind === "composite") {
         task.subtasks.forEach((subtask) => {
           lines.push(renderSubtaskForExport(subtask));
@@ -850,97 +860,11 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     return lines.join("\n").trim();
   }
   exportAllRecordsAsMarkdown() {
-    const snapshot = this.getSnapshot();
-    const exportedAt = toIsoLocal(now());
-    const transferPackage = buildFullTransferPackage(snapshot, exportedAt);
-    const encoded = wrapBase64(encodeBase64Text(JSON.stringify(transferPackage)));
-    return [
-      "# \u9879\u76EE\u7BA1\u7406\u5B8C\u6574\u8FC1\u79FB\u5305",
-      "",
-      "\u8FD9\u4EFD Markdown \u7528\u4E8E\u8DE8\u8BBE\u5907\u5B8C\u6574\u8FC1\u79FB\u3002\u628A\u5168\u6587\u590D\u5236\u5230\u53E6\u4E00\u53F0\u8BBE\u5907\u7684\u300C\u5FEB\u901F\u8BB0\u5F55 - \u521B\u5EFA\u4EFB\u52A1\u300D\u5E76\u63D0\u4EA4\uFF0C\u4F1A\u66FF\u6362\u76EE\u6807\u8BBE\u5907\u5F53\u524D\u9879\u76EE\u7BA1\u7406\u6570\u636E\u3002",
-      "",
-      `\u5BFC\u51FA\u65F6\u95F4\uFF1A${exportedAt}`,
-      `\u9879\u76EE\u6570\uFF1A${snapshot.projects.length}`,
-      `\u8FDB\u5EA6\u9875\u6570\uFF1A${snapshot.progressPages.length}`,
-      `\u4EFB\u52A1\u7CFB\u5217\u6570\uFF1A${snapshot.tasks.length}`,
-      `\u4EFB\u52A1\u53D1\u751F\u6B21\u6570\uFF1A${snapshot.occurrences.length}`,
-      `\u7B14\u8BB0\u7D22\u5F15\u6570\uFF1A${snapshot.noteTaskIndex.length}`,
-      `\u5199\u5165\u5386\u53F2\u6570\uFF1A${snapshot.writeHistory.length}`,
-      "",
-      FULL_TRANSFER_START,
-      `\`\`\`${FULL_TRANSFER_CODE_BLOCK}`,
-      encoded,
-      "```",
-      FULL_TRANSFER_END
-    ].join("\n").trim();
-  }
-  previewFullTransferPackage(transfer, blockedByProjectScope) {
-    const preview = createEmptyTaskImportPreview();
-    if (blockedByProjectScope) {
-      preview.issues.push({
-        line: 1,
-        raw: "",
-        blocking: true,
-        message: "\u5B8C\u6574\u8FC1\u79FB\u5305\u53EA\u80FD\u5728\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u4E2D\u5BFC\u5165\uFF0C\u4E0D\u80FD\u5BFC\u5165\u5230\u5355\u4E2A\u9879\u76EE"
-      });
-      return preview;
+    const tasks = this.getAllTasks().sort(compareSeriesTasks);
+    if (tasks.length === 0) {
+      return "";
     }
-    if (!transfer.package) {
-      preview.issues.push({
-        line: 1,
-        raw: "",
-        blocking: true,
-        message: transfer.message ?? "\u5B8C\u6574\u8FC1\u79FB\u5305\u89E3\u6790\u5931\u8D25"
-      });
-      return preview;
-    }
-    try {
-      const next = buildDataStateFromTransferPackage(transfer.package, this.config);
-      const taskCount = [...next.tasks.values()].reduce((sum, tasks) => sum + tasks.length, 0);
-      preview.transferPackage = {
-        schema: transfer.package.schema,
-        exportedAt: transfer.package.exportedAt,
-        projectCount: next.projects.length,
-        taskCount,
-        progressPageCount: next.progressPages.length,
-        noteTaskIndexCount: next.noteTaskIndex.length,
-        writeHistoryCount: next.writeHistory.length,
-        restoreMode: "replace-all"
-      };
-      preview.summary.total = taskCount;
-      preview.summary.composite = [...next.tasks.values()].flat().filter((task) => task.kind === "composite").length;
-      preview.summary.completed = [...next.tasks.values()].flat().filter(isTaskFullyCompleted).length;
-    } catch (error) {
-      preview.issues.push({
-        line: 1,
-        raw: "",
-        blocking: true,
-        message: error instanceof Error ? error.message : "\u5B8C\u6574\u8FC1\u79FB\u5305\u6570\u636E\u6821\u9A8C\u5931\u8D25"
-      });
-    }
-    return preview;
-  }
-  async restoreFullTransferPackage(transferPackage) {
-    const next = buildDataStateFromTransferPackage(transferPackage, this.config);
-    const previousConfig = structuredClone(this.config);
-    const previousState = this.captureDataState();
-    try {
-      this.config = next.config;
-      this.projects = next.projects;
-      this.progressPages = next.progressPages;
-      this.tasks = next.tasks;
-      this.noteTaskIndex = next.noteTaskIndex;
-      this.writeHistory = next.writeHistory;
-      await this.ensureDataFolder();
-      await this.flushAll();
-      await this.reloadCurrentFolderData();
-      this.trigger("changed");
-      return this.getAllTasks();
-    } catch (error) {
-      this.config = previousConfig;
-      this.restoreDataState(previousState);
-      throw error;
-    }
+    return renderTaskListForImport(tasks, (projectId) => this.getProject(projectId)?.name);
   }
   async exportMarkdownGuide() {
     this.assertWritable();
@@ -1089,7 +1013,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
         if (input.completed && parsedTask.completionMode === "today") {
           await this.updateTaskOccurrenceCompletion(saved.id, input.date, true);
         } else if (input.completed && parsedTask.completionMode === "series") {
-          await this.completeTaskSeries(saved.id, input.date);
+          await this.completeTaskSeries(saved.id);
         }
         createdIds.push(saved.id);
       } catch (error) {
@@ -1135,34 +1059,24 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       await this.deleteTaskOccurrence(taskId, task.date);
       return;
     }
-    const today = toDateKey(now());
-    const futureDates = task.occurrenceDates.filter((date) => compareDateKeys(date, today) >= 0);
-    if (futureDates.length === 0) {
-      throw new Error("\u4E0D\u80FD\u5220\u9664\u8FC7\u53BB\u65E5\u671F\u7684\u4EFB\u52A1\u8BB0\u5F55");
-    }
-    const pastDates = task.occurrenceDates.filter((date) => compareDateKeys(date, today) < 0);
     const timestamp = toIsoLocal(now());
-    const mutableChildrenToReparent = this.getAllTasks().filter(
-      (candidate) => (candidate.viewState.mindmap.parentTaskId ?? null) === taskId && hasMutableOccurrences(candidate)
-    );
-    const childMutations = mutableChildrenToReparent.flatMap((child) => {
+    const childrenToReparent = this.getAllTasks().filter((candidate) => (candidate.viewState.mindmap.parentTaskId ?? null) === taskId);
+    const childMutations = childrenToReparent.map((child, index) => {
       const next = cloneTask(child);
       next.viewState = mergeViewState(next.viewState, {
         mindmap: {
           ...next.viewState.mindmap,
           parentTaskId: task.viewState.mindmap.parentTaskId ?? null,
-          childOrder: Date.now()
+          childOrder: Date.now() + index
         }
       }, next.status);
       next.updatedAt = timestamp;
       next.revision = (next.revision ?? 0) + 1;
-      return this.prepareFutureMutation(child, next).replacements;
+      return next;
     });
-    const preservedPast = pastDates.length > 0 ? sliceTaskToDates(task, pastDates, task.id) : null;
-    const childIds = new Set(mutableChildrenToReparent.map((child) => child.id));
-    const finalReplacements = [preservedPast, ...childMutations].filter((item) => Boolean(item));
-    const removed = this.replaceTasks([taskId, ...childIds], finalReplacements);
-    await this.persistMonths(monthsForTasks([...removed, ...finalReplacements]));
+    const childIds = new Set(childrenToReparent.map((child) => child.id));
+    const removed = this.replaceTasks([taskId, ...childIds], childMutations);
+    await this.persistMonths(monthsForTasks([...removed, ...childMutations]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -1175,7 +1089,6 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     if (!task.occurrenceDates.includes(date)) {
       throw new Error("\u4EFB\u52A1\u53D1\u751F\u65E5\u671F\u4E0D\u5B58\u5728");
     }
-    assertMutableOccurrenceDate(date);
     if (task.occurrenceDates.length === 1) {
       const removed = this.replaceTasks([task.id], []);
       await this.persistMonths(monthsForTasks(removed));
@@ -1194,13 +1107,10 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
     }
     next.updatedAt = toIsoLocal(now());
-    const mutation = this.prepareFutureMutation(task, next);
-    if (mutation.activeTask) {
-      this.assertCompositeTaskConsistency([mutation.activeTask], /* @__PURE__ */ new Set([task.id]));
-      this.assertNoConflicts([mutation.activeTask], occurrenceKeysForTask(task));
-    }
-    this.replaceTasks([task.id], mutation.replacements);
-    await this.persistMonths(monthsForTasks([task, ...mutation.replacements]));
+    next.revision = (next.revision ?? 0) + 1;
+    this.assertCompositeTaskConsistency([next], /* @__PURE__ */ new Set([task.id]));
+    this.replaceTasks([task.id], [next]);
+    await this.persistMonths(monthsForTasks([task, next]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -1211,20 +1121,21 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       return;
     }
     const effectiveDate = throughDate ?? task.occurrenceDates[task.occurrenceDates.length - 1];
-    assertMutableOccurrenceDate(effectiveDate);
-    if (!hasMutableOccurrences(task)) {
-      throw new Error("\u4E0D\u80FD\u4FEE\u6539\u8FC7\u53BB\u65E5\u671F\u7684\u4EFB\u52A1\u8BB0\u5F55");
+    if (!task.occurrenceDates.includes(effectiveDate)) {
+      throw new Error("\u4EFB\u52A1\u53D1\u751F\u65E5\u671F\u4E0D\u5B58\u5728");
     }
     const next = cloneTask(task);
-    const today = toDateKey(now());
-    const remainingDates = task.occurrenceDates.filter((date) => compareDateKeys(date, today) >= 0 && compareDateKeys(date, effectiveDate) <= 0);
+    const remainingDates = task.occurrenceDates.filter((date) => compareDateKeys(date, effectiveDate) <= 0);
+    if (remainingDates.length === 0) {
+      throw new Error("\u6CA1\u6709\u53EF\u4FDD\u7559\u7684\u4EFB\u52A1\u53D1\u751F\u65E5\u671F");
+    }
     const stamp = toIsoLocal(now());
     next.occurrenceDates = remainingDates;
     next.occurrenceOverrides = task.occurrenceOverrides.filter((entry) => remainingDates.includes(entry.date));
     next.occurrenceStates = remainingDates.reduce((records, date) => {
       const existing = getOccurrenceState(task, date);
       records.push(
-        existing ? buildNormalizedOccurrenceState(date, task.kind, task.subtasks, existing.completedSubtaskIds ?? getAllSubtaskIds(task), stamp) : buildNormalizedOccurrenceState(date, task.kind, task.subtasks, getAllSubtaskIds(task), stamp)
+        buildNormalizedOccurrenceState(date, task.kind, task.subtasks, getAllSubtaskIds(task), existing?.completedAt ?? stamp)
       );
       return records;
     }, []);
@@ -1233,9 +1144,10 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     next.recurrenceCount = next.recurrence === "once" ? null : next.occurrenceDates.length;
     next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
     next.updatedAt = stamp;
-    const mutation = this.prepareFutureMutation(task, next, { allowNoFuture: true });
-    this.replaceTasks([task.id], mutation.replacements);
-    await this.persistMonths(monthsForTasks([task, ...mutation.replacements]));
+    next.revision = (next.revision ?? 0) + 1;
+    this.assertCompositeTaskConsistency([next], /* @__PURE__ */ new Set([task.id]));
+    this.replaceTasks([task.id], [next]);
+    await this.persistMonths(monthsForTasks([task, next]));
     await this.reloadCurrentFolderData();
     this.trigger("changed");
   }
@@ -1379,7 +1291,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       issues,
       summary: {
         total: previewTasks.length,
-        completed: previewTasks.filter((task) => task.input.completed).length,
+        completed: previewTasks.filter((task) => task.input.completed || (task.input.completedOccurrenceDates?.length ?? 0) > 0).length,
         composite: previewTasks.filter((task) => task.input.kind === "composite").length,
         createCount: previewTasks.filter((task) => task.action === "create").length,
         overwriteCount: previewTasks.filter((task) => task.action === "overwrite").length,
@@ -1415,12 +1327,11 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     const sameProject = this.getAllTasks().filter(
       (task) => normalizeImportIdentity(task.title) === normalizeImportIdentity(title) && (task.projectId ?? void 0) === projectId
     );
-    const mutable = sameProject.filter(hasMutableOccurrences);
-    const sameDate = mutable.find((task) => task.occurrenceDates.includes(date));
+    const sameDate = sameProject.find((task) => task.occurrenceDates.includes(date));
     if (sameDate) {
       return sameDate;
     }
-    return mutable.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+    return sameProject.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
   }
   async ensureImportProject(projectName) {
     if (!projectName || projectName === UNASSIGNED_PROJECT_LABEL) {
@@ -1471,7 +1382,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       return this.getTask(created.id) ?? created;
     }
     if (input.completed && entry.completionMode === "series") {
-      await this.completeTaskSeries(created.id, input.date);
+      await this.completeTaskSeries(created.id);
       return this.getTask(created.id) ?? created;
     }
     return created;
@@ -1526,6 +1437,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       recurrenceCount,
       recurrenceUntil,
       occurrenceDates: normalizeOccurrenceDates(input.occurrenceDates),
+      completedOccurrenceDates: normalizeOccurrenceDates(input.completedOccurrenceDates),
       occurrenceOverrides: normalizeOccurrenceOverrides(input.occurrenceOverrides),
       subtasks,
       viewState: input.viewState,
@@ -1638,31 +1550,6 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     });
     return adjusted;
   }
-  prepareFutureMutation(original, next, options = {}) {
-    const today = toDateKey(now());
-    const originalFutureDates = original.occurrenceDates.filter((date) => compareDateKeys(date, today) >= 0);
-    if (originalFutureDates.length === 0) {
-      throw new Error("\u4E0D\u80FD\u4FEE\u6539\u8FC7\u53BB\u65E5\u671F\u7684\u4EFB\u52A1\u8BB0\u5F55");
-    }
-    const originalPastDates = original.occurrenceDates.filter((date) => compareDateKeys(date, today) < 0);
-    const nextFutureDates = next.occurrenceDates.filter((date) => compareDateKeys(date, today) >= 0);
-    if (originalPastDates.length === 0) {
-      if (nextFutureDates.length === 0) {
-        if (options.allowNoFuture) {
-          return { replacements: [] };
-        }
-        throw new Error("\u4FEE\u6539\u540E\u7684\u4EFB\u52A1\u6CA1\u6709\u4ECA\u5929\u6216\u672A\u6765\u7684\u53D1\u751F\u65E5\u671F");
-      }
-      const active2 = sliceTaskToDates(next, nextFutureDates, original.id);
-      return { replacements: [active2], activeTask: active2 };
-    }
-    const past = sliceTaskToDates(original, originalPastDates, crypto.randomUUID());
-    if (nextFutureDates.length === 0) {
-      return { replacements: [past] };
-    }
-    const active = sliceTaskToDates(next, nextFutureDates, original.id);
-    return { replacements: [past, active], activeTask: active };
-  }
   assertCompositeTaskConsistency(candidates, excludedTaskIds) {
     const taskById = new Map(this.getAllTasks().filter((task) => !excludedTaskIds.has(task.id)).map((task) => [task.id, task]));
     candidates.forEach((task) => taskById.set(task.id, task));
@@ -1720,7 +1607,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     return void 0;
   }
   findTaskBySource(path, hash) {
-    return this.getAllTasks().filter(hasMutableOccurrences).find((task) => task.sourceLinks.some((source) => source.path === path && source.hash === hash));
+    return this.getAllTasks().find((task) => task.sourceLinks.some((source) => source.path === path && source.hash === hash));
   }
   async recordWriteHistory(input) {
     const record = {
@@ -2266,232 +2153,6 @@ function isTaskSubtaskRecord(value) {
 function isOccurrenceStateRecord(value) {
   return isRecord(value) && typeof value.date === "string";
 }
-function createEmptyTaskImportPreview() {
-  return {
-    tasks: [],
-    issues: [],
-    summary: {
-      total: 0,
-      completed: 0,
-      composite: 0,
-      createCount: 0,
-      overwriteCount: 0,
-      completeTodayCount: 0,
-      completeSeriesCount: 0,
-      newProjectNames: []
-    }
-  };
-}
-function buildFullTransferPackage(snapshot, exportedAt) {
-  return {
-    schema: FULL_TRANSFER_SCHEMA,
-    exportedAt,
-    config: structuredClone(snapshot.config),
-    projects: snapshot.projects.map((project) => ({ ...project })),
-    progressPages: snapshot.progressPages.map((page) => ({ ...page, columnOrder: [...page.columnOrder] })),
-    tasks: snapshot.tasks.map(cloneTask),
-    noteTaskIndex: snapshot.noteTaskIndex.map((entry) => ({ ...entry, taskIds: [...entry.taskIds] })),
-    writeHistory: snapshot.writeHistory.map((record) => ({ ...record, taskIds: [...record.taskIds] }))
-  };
-}
-function parseFullTransferPackage(text) {
-  const startIndex = text.indexOf(FULL_TRANSFER_START);
-  if (startIndex < 0) {
-    return { found: false };
-  }
-  const endIndex = text.indexOf(FULL_TRANSFER_END, startIndex + FULL_TRANSFER_START.length);
-  if (endIndex < 0) {
-    return { found: true, message: "\u5B8C\u6574\u8FC1\u79FB\u5305\u7F3A\u5C11\u7ED3\u675F\u6807\u8BB0" };
-  }
-  const block = text.slice(startIndex + FULL_TRANSFER_START.length, endIndex);
-  const fence = new RegExp(`\`\`\`${FULL_TRANSFER_CODE_BLOCK}\\s*([\\s\\S]*?)\\s*\`\`\``).exec(block);
-  if (!fence) {
-    return { found: true, message: "\u5B8C\u6574\u8FC1\u79FB\u5305\u7F3A\u5C11\u6570\u636E\u5757" };
-  }
-  try {
-    const decoded = decodeBase64Text(fence[1].replace(/\s+/g, ""));
-    const parsed = JSON.parse(decoded);
-    if (!isFullTransferPackage(parsed)) {
-      return { found: true, message: "\u5B8C\u6574\u8FC1\u79FB\u5305\u7ED3\u6784\u4E0D\u7B26\u5408\u5F53\u524D\u63D2\u4EF6\u683C\u5F0F" };
-    }
-    return { found: true, package: parsed };
-  } catch (error) {
-    return {
-      found: true,
-      message: error instanceof Error ? `\u5B8C\u6574\u8FC1\u79FB\u5305\u89E3\u6790\u5931\u8D25\uFF1A${error.message}` : "\u5B8C\u6574\u8FC1\u79FB\u5305\u89E3\u6790\u5931\u8D25"
-    };
-  }
-}
-function isFullTransferPackage(value) {
-  return isRecord(value) && value.schema === FULL_TRANSFER_SCHEMA && typeof value.exportedAt === "string" && isPartialPluginConfig(value.config) && Array.isArray(value.projects) && value.projects.every(isProjectRecord) && Array.isArray(value.progressPages) && value.progressPages.every(isProgressPageRecord) && Array.isArray(value.tasks) && value.tasks.every(isStoredTaskRecord) && Array.isArray(value.noteTaskIndex) && value.noteTaskIndex.every(isNoteTaskIndexEntryRecord) && Array.isArray(value.writeHistory) && value.writeHistory.every(isWriteHistoryRecord);
-}
-function isProjectRecord(value) {
-  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string" && typeof value.status === "string";
-}
-function isProgressPageRecord(value) {
-  return isRecord(value) && typeof value.id === "string" && typeof value.projectId === "string" && typeof value.name === "string" && Array.isArray(value.columnOrder) && value.columnOrder.every((item) => typeof item === "string");
-}
-function isNoteTaskIndexEntryRecord(value) {
-  return isRecord(value) && typeof value.path === "string" && typeof value.mtime === "number" && typeof value.hash === "string" && Array.isArray(value.taskIds) && value.taskIds.every((item) => typeof item === "string") && typeof value.parsedAt === "string";
-}
-function isWriteHistoryRecord(value) {
-  return isRecord(value) && typeof value.id === "string" && typeof value.type === "string" && typeof value.summary === "string" && Array.isArray(value.taskIds) && value.taskIds.every((item) => typeof item === "string") && typeof value.createdAt === "string";
-}
-function buildDataStateFromTransferPackage(transferPackage, currentConfig) {
-  const config = {
-    ...DEFAULT_CONFIG,
-    ...transferPackage.config,
-    dataFolder: sanitizeFolder(currentConfig.dataFolder)
-  };
-  const projects = transferPackage.projects.map(normalizeImportedProject);
-  const progressPages = transferPackage.progressPages.map(normalizeImportedProgressPage);
-  const taskList = transferPackage.tasks.map(normalizeImportedTask).sort(compareSeriesTasks);
-  const next = {
-    config,
-    projects,
-    progressPages,
-    tasks: groupTasksByMonth(taskList),
-    noteTaskIndex: transferPackage.noteTaskIndex.map((entry) => ({
-      path: entry.path,
-      mtime: entry.mtime,
-      hash: entry.hash,
-      taskIds: [...entry.taskIds],
-      parsedAt: entry.parsedAt
-    })),
-    writeHistory: transferPackage.writeHistory.map((record) => ({
-      ...record,
-      taskIds: [...record.taskIds]
-    }))
-  };
-  assertRestoredDataStateValid(next);
-  return next;
-}
-function normalizeImportedProject(project) {
-  const timestamp = toIsoLocal(now());
-  return {
-    id: project.id,
-    name: project.name.trim() || "\u672A\u547D\u540D\u9879\u76EE",
-    description: project.description?.trim() || "",
-    color: project.color?.trim() || "",
-    status: normalizeProjectStatus(project.status),
-    createdAt: project.createdAt || timestamp,
-    updatedAt: project.updatedAt || project.createdAt || timestamp
-  };
-}
-function normalizeImportedProgressPage(page) {
-  const timestamp = toIsoLocal(now());
-  return {
-    id: page.id,
-    projectId: page.projectId,
-    name: page.name.trim() || "\u672A\u547D\u540D\u9879\u76EE",
-    columnOrder: [...page.columnOrder],
-    createdAt: page.createdAt || timestamp,
-    updatedAt: page.updatedAt || page.createdAt || timestamp
-  };
-}
-function normalizeImportedTask(task) {
-  const normalized = normalizeStoredTask(task);
-  const occurrenceDates = [...new Set(normalized.occurrenceDates)].sort(compareDateKeys);
-  if (occurrenceDates.length === 0) {
-    throw new Error(`\u4EFB\u52A1\u300C${normalized.title}\u300D\u7F3A\u5C11\u53D1\u751F\u65E5\u671F`);
-  }
-  return {
-    ...normalized,
-    date: occurrenceDates[0],
-    occurrenceDates,
-    occurrenceStates: normalized.occurrenceStates.filter((state) => occurrenceDates.includes(state.date)),
-    occurrenceOverrides: normalized.occurrenceOverrides.filter((override) => occurrenceDates.includes(override.date)),
-    mindmapComments: normalized.mindmapComments.map((comment) => ({ ...comment, taskId: normalized.id }))
-  };
-}
-function normalizeProjectStatus(status) {
-  if (status === "paused" || status === "completed" || status === "archived") {
-    return status;
-  }
-  return "active";
-}
-function groupTasksByMonth(tasks) {
-  const grouped = /* @__PURE__ */ new Map();
-  tasks.forEach((task) => {
-    const month = toMonthKeyFromTask(task);
-    grouped.set(month, [...grouped.get(month) ?? [], task]);
-  });
-  grouped.forEach((items, month) => grouped.set(month, items.slice().sort(compareSeriesTasks)));
-  return grouped;
-}
-function assertRestoredDataStateValid(state) {
-  assertUniqueIds(state.projects.map((project) => project.id), "\u9879\u76EE");
-  assertUniqueIds(state.progressPages.map((page) => page.id), "\u8FDB\u5EA6\u9875");
-  const taskList = [...state.tasks.values()].flat();
-  assertUniqueIds(taskList.map((task) => task.id), "\u4EFB\u52A1");
-  const projectIds = new Set(state.projects.map((project) => project.id));
-  state.progressPages.forEach((page) => {
-    if (!projectIds.has(page.projectId)) {
-      throw new Error(`\u8FDB\u5EA6\u9875\u300C${page.name}\u300D\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u9879\u76EE`);
-    }
-  });
-  const taskIds = new Set(taskList.map((task) => task.id));
-  taskList.forEach((task) => {
-    if (task.projectId && !projectIds.has(task.projectId)) {
-      throw new Error(`\u4EFB\u52A1\u300C${task.title}\u300D\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u9879\u76EE`);
-    }
-    task.viewState.gantt.dependencyIds.forEach((dependencyId) => {
-      if (!taskIds.has(dependencyId)) {
-        throw new Error(`\u4EFB\u52A1\u300C${task.title}\u300D\u5F15\u7528\u4E86\u4E0D\u5B58\u5728\u7684\u7518\u7279\u4F9D\u8D56`);
-      }
-    });
-    assertValidTaskMindmapParent(task, taskList);
-    assertCompositeDefinitionValid(task);
-    task.mindmapComments.forEach((comment) => {
-      if (comment.taskId !== task.id) {
-        throw new Error(`\u4EFB\u52A1\u300C${task.title}\u300D\u5B58\u5728\u5F52\u5C5E\u5F02\u5E38\u7684\u601D\u7EF4\u5BFC\u56FE\u8BC4\u8BED`);
-      }
-      assertValidCommentParent(task.mindmapComments, comment.id, comment.parentCommentId ?? null);
-    });
-  });
-  taskList.forEach((task) => {
-    const parentId = task.viewState.mindmap.parentTaskId ?? null;
-    if (!parentId) {
-      return;
-    }
-    const parent = taskList.find((item) => item.id === parentId);
-    if (parent?.kind === "composite") {
-      assertChildTaskWithinComposite(task, parent);
-    }
-  });
-}
-function assertUniqueIds(ids, label) {
-  const seen = /* @__PURE__ */ new Set();
-  ids.forEach((id) => {
-    if (!id) {
-      throw new Error(`${label}\u5B58\u5728\u7A7A ID`);
-    }
-    if (seen.has(id)) {
-      throw new Error(`${label}\u5B58\u5728\u91CD\u590D ID\uFF1A${id}`);
-    }
-    seen.add(id);
-  });
-}
-function encodeBase64Text(value) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  const chunkSize = 32768;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.slice(index, index + chunkSize));
-  }
-  return btoa(binary);
-}
-function decodeBase64Text(value) {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return new TextDecoder().decode(bytes);
-}
-function wrapBase64(value) {
-  return value.match(/.{1,96}/g)?.join("\n") ?? "";
-}
 function cloneTask(task) {
   return {
     ...task,
@@ -2525,14 +2186,14 @@ function expandTask(task) {
       occurrenceNumber: index + 1,
       kind: task.kind,
       title: override?.title ?? task.title,
-      description: task.description,
+      description: resolveOccurrenceDescription(task, override),
       projectId: task.projectId,
       status: task.status,
       priority: task.priority,
       tags: [...task.tags],
       date,
-      startTime: override?.startTime ?? task.startTime,
-      endTime: override?.endTime ?? task.endTime,
+      startTime: resolveOccurrenceTimeField(task.startTime, override, "startTime"),
+      endTime: resolveOccurrenceTimeField(task.endTime, override, "endTime"),
       recurrence: task.recurrence,
       recurrenceCount: task.recurrenceCount ?? null,
       recurrenceUntil: task.recurrenceUntil ?? null,
@@ -2591,6 +2252,16 @@ function buildOccurrenceDates(input) {
 }
 function resolveOccurrenceStates(params) {
   const { input, original, subtasks, occurrenceDates, timestamp, completedPatch } = params;
+  if (input.completedOccurrenceDates?.length) {
+    const completedDates = [...new Set(input.completedOccurrenceDates)].sort(compareDateKeys);
+    const invalidDates = completedDates.filter((date) => !occurrenceDates.includes(date));
+    if (invalidDates.length > 0) {
+      throw new Error(`\u5B8C\u6210\u65E5\u671F\u4E0D\u5728\u4EFB\u52A1\u53D1\u751F\u65E5\u671F\u5185\uFF1A${invalidDates.join("\u3001")}`);
+    }
+    return completedDates.map(
+      (date) => buildNormalizedOccurrenceState(date, input.kind ?? "simple", subtasks, subtasks.map((item) => item.id), timestamp)
+    );
+  }
   if (completedPatch === true || original === void 0 && input.completed) {
     return occurrenceDates.map((date) => buildNormalizedOccurrenceState(date, input.kind ?? "simple", subtasks, subtasks.map((item) => item.id), timestamp));
   }
@@ -2650,6 +2321,18 @@ function getOccurrenceState(task, date) {
 }
 function getOccurrenceOverride(task, date) {
   return task?.occurrenceOverrides.find((item) => item.date === date);
+}
+function resolveOccurrenceDescription(task, override) {
+  if (override && isOverrideFieldSet(override, "description")) {
+    return override.description ?? void 0;
+  }
+  return task.description;
+}
+function resolveOccurrenceTimeField(baseValue, override, key) {
+  if (override && isOverrideFieldSet(override, key)) {
+    return override[key] ?? void 0;
+  }
+  return baseValue;
 }
 function getAllSubtaskIds(task) {
   if (task.kind === "composite") {
@@ -2781,26 +2464,6 @@ function buildOccurrenceKey(taskId, date) {
 function occurrenceKeysForTask(task) {
   return new Set(task.occurrenceDates.map((date) => buildOccurrenceKey(task.id, date)));
 }
-function sliceTaskToDates(task, dates, id) {
-  if (dates.length === 0) {
-    throw new Error("\u4EFB\u52A1\u5207\u7247\u5FC5\u987B\u81F3\u5C11\u5305\u542B\u4E00\u4E2A\u53D1\u751F\u65E5\u671F");
-  }
-  const sliced = cloneTask(task);
-  sliced.id = id;
-  sliced.occurrenceDates = [...dates].sort(compareDateKeys);
-  sliced.date = sliced.occurrenceDates[0];
-  sliced.occurrenceStates = task.occurrenceStates.filter((state) => sliced.occurrenceDates.includes(state.date)).map((state) => ({ ...state, completedSubtaskIds: [...state.completedSubtaskIds ?? []] }));
-  sliced.occurrenceOverrides = task.occurrenceOverrides.filter((override) => sliced.occurrenceDates.includes(override.date)).map((override) => ({ ...override }));
-  sliced.recurrence = detectRecurrenceFromDates(sliced.occurrenceDates);
-  sliced.recurrenceCount = sliced.recurrence === "once" ? null : sliced.occurrenceDates.length;
-  sliced.recurrenceUntil = sliced.recurrence === "once" ? null : sliced.occurrenceDates[sliced.occurrenceDates.length - 1];
-  sliced.mindmapComments = sliced.mindmapComments.map((comment) => ({ ...comment, taskId: id }));
-  return sliced;
-}
-function hasMutableOccurrences(task) {
-  const today = toDateKey(now());
-  return task.occurrenceDates.some((date) => compareDateKeys(date, today) >= 0);
-}
 function assertMutableOccurrenceDate(date) {
   if (compareDateKeys(date, toDateKey(now())) < 0) {
     throw new Error("\u4E0D\u80FD\u4FEE\u6539\u8FC7\u53BB\u65E5\u671F\u7684\u4EFB\u52A1\u8BB0\u5F55");
@@ -2864,15 +2527,57 @@ function normalizeOccurrenceDates(dates) {
   }
   return [...new Set(dates.map((date) => date.trim()).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)))].sort(compareDateKeys);
 }
+function isOverrideFieldSet(override, key) {
+  return Object.prototype.hasOwnProperty.call(override, key);
+}
+function normalizeOccurrenceOverrideTimeValue(value) {
+  const trimmed = value?.trim() ?? "";
+  return trimmed ? trimmed : null;
+}
+function isMeaningfulOccurrenceOverride(override) {
+  return override.title !== void 0 || isOverrideFieldSet(override, "description") || isOverrideFieldSet(override, "startTime") || isOverrideFieldSet(override, "endTime") || override.skipped === true || override.reason !== void 0;
+}
 function normalizeOccurrenceOverrides(overrides) {
-  return (overrides ?? []).filter((override) => /^\d{4}-\d{2}-\d{2}$/.test(override.date)).map((override) => ({
-    date: override.date,
-    startTime: override.startTime?.trim() || void 0,
-    endTime: override.endTime?.trim() || void 0,
-    title: override.title?.trim() || void 0,
-    skipped: Boolean(override.skipped),
-    reason: override.reason?.trim() || void 0
-  }));
+  return (overrides ?? []).filter((override) => /^\d{4}-\d{2}-\d{2}$/.test(override.date)).map((override) => {
+    const normalized = {
+      date: override.date
+    };
+    const title = override.title?.trim();
+    if (title) {
+      normalized.title = title;
+    }
+    if (isOverrideFieldSet(override, "description")) {
+      normalized.description = override.description?.trim() || null;
+    }
+    if (isOverrideFieldSet(override, "startTime")) {
+      normalized.startTime = normalizeOccurrenceOverrideTimeValue(override.startTime);
+    }
+    if (isOverrideFieldSet(override, "endTime")) {
+      normalized.endTime = normalizeOccurrenceOverrideTimeValue(override.endTime);
+    }
+    if (normalized.startTime !== void 0 || normalized.endTime !== void 0) {
+      const start = normalized.startTime ?? null;
+      const end = normalized.endTime ?? null;
+      if (start === null !== (end === null)) {
+        throw new Error("\u5355\u6B21\u5B9E\u4F8B\u7684\u5F00\u59CB\u65F6\u95F4\u548C\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u540C\u65F6\u4FEE\u6539");
+      }
+      if (start !== null && end !== null) {
+        const startMinutes = parseTimeToMinutes(start);
+        const endMinutes = parseTimeToMinutes(end);
+        if (startMinutes === null || endMinutes === null || startMinutes >= endMinutes) {
+          throw new Error("\u5355\u6B21\u5B9E\u4F8B\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4");
+        }
+      }
+    }
+    if (override.skipped) {
+      normalized.skipped = true;
+    }
+    const reason = override.reason?.trim();
+    if (reason) {
+      normalized.reason = reason;
+    }
+    return isMeaningfulOccurrenceOverride(normalized) ? normalized : null;
+  }).filter((override) => Boolean(override));
 }
 function normalizeSourceLinks(sourceLinks) {
   return (sourceLinks ?? []).map((source) => ({
@@ -3086,10 +2791,32 @@ function compareOccurrences(a, b) {
   }
   return startA - startB || a.title.localeCompare(b.title);
 }
-function upsertOccurrenceOverride(task, override) {
-  const normalized = normalizeOccurrenceOverrides([override])[0];
-  const existing = task.occurrenceOverrides.filter((item) => item.date !== override.date);
+function replaceOccurrenceOverride(task, date, override) {
+  const existing = task.occurrenceOverrides.filter((item) => item.date !== date);
+  const normalized = override ? normalizeOccurrenceOverrides([override])[0] : void 0;
   return normalized ? [...existing, normalized].sort((a, b) => a.date.localeCompare(b.date)) : existing;
+}
+function upsertOccurrenceOverride(task, override) {
+  return replaceOccurrenceOverride(task, override.date, override);
+}
+function buildOccurrenceDetailsOverride(task, date, values) {
+  const override = { date };
+  if (values.title !== task.title) {
+    override.title = values.title;
+  }
+  const baseDescription = task.description?.trim() || "";
+  if (values.description !== baseDescription) {
+    override.description = values.description || null;
+  }
+  const baseStart = task.startTime ?? "";
+  const baseEnd = task.endTime ?? "";
+  const nextStart = values.startTime ?? "";
+  const nextEnd = values.endTime ?? "";
+  if (nextStart !== baseStart || nextEnd !== baseEnd) {
+    override.startTime = nextStart || null;
+    override.endTime = nextEnd || null;
+  }
+  return isMeaningfulOccurrenceOverride(override) ? override : null;
 }
 function snapMinutes(value, slot) {
   return Math.ceil(value / slot) * slot;
@@ -3217,6 +2944,11 @@ function parseFormattedTaskText(text, options) {
       ];
       return;
     }
+    const descriptionMatch = /^\s{2,}>\s?(.*)$/.exec(line);
+    if (descriptionMatch && currentTask) {
+      currentTask.input.description = [currentTask.input.description, descriptionMatch[1]].filter(Boolean).join("\n");
+      return;
+    }
     if (line.trim()) {
       issues.push({ line: index + 1, message: "\u65E0\u6CD5\u8BC6\u522B\u7684\u884C", raw });
     }
@@ -3241,12 +2973,14 @@ function parseTaskLine(rawTitle, context) {
   const countMatch = /\bcount:(\d+)\b/.exec(title);
   const untilMatch = /\buntil:(\d{4}-\d{2}-\d{2})\b/.exec(title);
   const datesMatch = /\bdates:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
+  const doneMatch = /\bdone:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
   const statusMatch = /\bstatus:(todo|doing|blocked|done)\b/.exec(title);
   const finishMatch = /\bfinish:(today|series)\b/.exec(title);
   const priorityMatch = /!(low|medium|high|urgent)\b/.exec(title);
   const tags = [...title.matchAll(/#([^\s#]+)/g)].map((match) => match[1]).filter((tag) => !tag.startsWith("\u9879\u76EE"));
   const customDates = datesMatch?.[1].split(",").filter(Boolean) ?? [];
-  title = title.replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "").replace(/\b(?:kind|type):(simple|composite)\b/g, "").replace(/\brepeat:(once|daily|weekly|custom)\b/g, "").replace(/\bcount:\d+\b/g, "").replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "").replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bstatus:(todo|doing|blocked|done)\b/g, "").replace(/\bfinish:(today|series)\b/g, "").replace(/!(low|medium|high|urgent)\b/g, "").replace(/#[^\s#]+/g, "").trim();
+  const completedDates = doneMatch?.[1].split(",").filter(Boolean) ?? [];
+  title = title.replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "").replace(/\b(?:kind|type):(simple|composite)\b/g, "").replace(/\brepeat:(once|daily|weekly|custom)\b/g, "").replace(/\bcount:\d+\b/g, "").replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "").replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bdone:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bstatus:(todo|doing|blocked|done)\b/g, "").replace(/\bfinish:(today|series)\b/g, "").replace(/!(low|medium|high|urgent)\b/g, "").replace(/#[^\s#]+/g, "").trim();
   if (!title) {
     throw new Error("\u4EFB\u52A1\u6807\u9898\u4E0D\u80FD\u4E3A\u7A7A");
   }
@@ -3262,14 +2996,15 @@ function parseTaskLine(rawTitle, context) {
       recurrenceCount: countMatch ? Number(countMatch[1]) : null,
       recurrenceUntil: untilMatch?.[1] ?? null,
       occurrenceDates: customDates.length > 0 ? customDates : void 0,
+      completedOccurrenceDates: completedDates.length > 0 ? completedDates : void 0,
       status: statusMatch?.[1] ?? (context.completed ? "done" : "todo"),
       priority: priorityMatch?.[1],
       tags,
       sourceLinks: context.source ? [context.source] : [],
-      completed: context.completed
+      completed: context.completed && completedDates.length === 0
     },
     projectName: context.projectName,
-    completionMode: context.completed ? finishMatch?.[1] ?? "today" : "pending",
+    completionMode: context.completed && completedDates.length === 0 ? finishMatch?.[1] ?? "today" : "pending",
     createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
   };
 }
@@ -3288,17 +3023,48 @@ function resolveTaskImportAction(matched, completionMode, completed) {
 function normalizeImportIdentity(value) {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("zh-Hans-CN");
 }
+function renderTaskListForImport(tasks, projectNameForId) {
+  const grouped = /* @__PURE__ */ new Map();
+  tasks.forEach((task) => {
+    const key = task.projectId ?? UNASSIGNED_PROJECT_LABEL;
+    grouped.set(key, [...grouped.get(key) ?? [], task]);
+  });
+  const sections = [];
+  [...grouped.entries()].forEach(([projectKey, projectTasks], index) => {
+    if (index > 0) {
+      sections.push("");
+    }
+    sections.push(`#\u9879\u76EE\uFF1A${projectKey === UNASSIGNED_PROJECT_LABEL ? UNASSIGNED_PROJECT_LABEL : projectNameForId(projectKey) ?? UNASSIGNED_PROJECT_LABEL}`);
+    projectTasks.slice().sort(compareSeriesTasks).forEach((task) => {
+      sections.push(renderTaskSeriesForExport(task));
+      renderDescriptionForExport(task.description).forEach((line) => {
+        sections.push(line);
+      });
+      if (task.kind === "composite") {
+        task.subtasks.forEach((subtask) => {
+          sections.push(renderSubtaskForExport(subtask));
+        });
+      }
+    });
+  });
+  return sections.join("\n").trim();
+}
 function renderTaskSeriesForExport(task) {
-  const completed = isTaskFullyCompleted(task);
-  const parts = buildFormattedTaskParts(task);
-  if (completed && task.recurrence !== "once") {
-    parts.push("finish:series");
-  }
+  const completedOccurrenceDates = getCompletedOccurrenceDates(task);
+  const completed = task.occurrenceDates.length > 0 && completedOccurrenceDates.length === task.occurrenceDates.length;
+  const parts = buildFormattedTaskParts({ ...task, completedOccurrenceDates });
   return `- [${completed ? "x" : " "}] ${parts.join(" ")}`.trim();
 }
 function renderSubtaskForExport(subtask) {
   const time = subtask.startTime && subtask.endTime ? ` @${subtask.startTime}-${subtask.endTime}` : "";
   return `  - ${subtask.title}${time}`;
+}
+function renderDescriptionForExport(description) {
+  const trimmed = description?.trim();
+  if (!trimmed) {
+    return [];
+  }
+  return trimmed.split(/\r?\n/).map((line) => `  > ${line}`);
 }
 function buildFormattedTaskParts(task) {
   const parts = [task.title];
@@ -3321,7 +3087,13 @@ function buildFormattedTaskParts(task) {
   if (task.recurrence === "custom" && task.occurrenceDates?.length) {
     parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
   }
+  if (task.completedOccurrenceDates?.length) {
+    parts.push(`done:${[...new Set(task.completedOccurrenceDates)].sort(compareDateKeys).join(",")}`);
+  }
   return parts;
+}
+function getCompletedOccurrenceDates(task) {
+  return task.occurrenceDates.filter((date) => getOccurrenceProgress(task, date).completed);
 }
 function extractProjectTaskBlocks(text) {
   const blocks = [...text.matchAll(/<!--\s*pm:start\s*-->([\s\S]*?)<!--\s*pm:end\s*-->/g)].map((match) => match[1].trim());
@@ -3680,9 +3452,11 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
       hintHeader.createEl("strong", { text: "\u4EFB\u52A1\u5BFC\u5165\u89C4\u5219" });
       hintHeader.createDiv({ cls: "pm-muted", text: "\u8FD9\u5957\u8BED\u6CD5\u4E0E\u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u3001\u4ECA\u65E5\u4EFB\u52A1\u5BFC\u51FA\u5B8C\u5168\u4E92\u901A\u3002" });
       [
-        "\u652F\u6301\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u5B8C\u6574\u8FC1\u79FB\u5305\uFF1B\u8BC6\u522B\u540E\u4F1A\u6309\u8FC1\u79FB\u5305\u6062\u590D\u5168\u91CF\u9879\u76EE\u7BA1\u7406\u6570\u636E\u3002",
+        "\u652F\u6301\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u660E\u6587\u4EFB\u52A1\u6E05\u5355\uFF1B\u63D0\u4EA4\u540E\u4F1A\u6309\u666E\u901A\u4EFB\u52A1\u8BED\u6CD5\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u3002",
         "\u652F\u6301\u666E\u901A\u4EFB\u52A1\u4E0E\u7EC4\u5408\u4EFB\u52A1\uFF1B\u7EC4\u5408\u4EFB\u52A1\u53EF\u5199 kind:composite\uFF0C\u4E5F\u53EF\u76F4\u63A5\u5728\u4E0B\u4E00\u884C\u7F29\u8FDB\u5199\u5B50\u4EFB\u52A1\u3002",
+        "\u4EFB\u52A1\u884C\u4E0B\u7F29\u8FDB > \u63CF\u8FF0 \u53EF\u5199\u5165\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u591A\u884C\u63CF\u8FF0\u4F1A\u6309\u6362\u884C\u5408\u5E76\u3002",
         "\u652F\u6301\u5355\u6B21\u3001\u6BCF\u65E5\u3001\u6BCF\u5468\u6B64\u65F6\uFF1Arepeat:once / daily / weekly\uFF1B\u9700\u8981\u9650\u5236\u6B21\u6570\u53EF\u7EE7\u7EED\u5199 count:4 \u6216 until:2026-06-30\u3002",
+        "\u652F\u6301 done:2026-05-25,2026-05-26 \u6807\u8BB0\u5DF2\u5B8C\u6210\u53D1\u751F\u65E5\u671F\uFF0C\u4FBF\u4E8E\u8FC1\u79FB\u91CD\u590D\u4EFB\u52A1\u8FDB\u5EA6\u3002",
         "\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u5199\u5B8C\u6574\u65E5\u671F\u548C\u65F6\u95F4\u6BB5\uFF0C\u4F8B\u5982 @2026-05-25 09:00-09:30\u3002",
         "\u6781\u7B80 - [x] \u6807\u9898 \u53EA\u4F1A\u5339\u914D\u5E76\u5B8C\u6210\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\uFF1B\u627E\u4E0D\u5230\u65F6\u4F1A\u62A5\u9519\uFF0C\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
@@ -3915,24 +3689,6 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
       const preview = this.plugin.store.previewFormattedTasks(textarea.value, {
         defaultDate: toDateKey(now())
       });
-      if (preview.transferPackage) {
-        const summaryGrid2 = body.createDiv({ cls: "pm-import-summary-grid" });
-        [
-          ["\u6062\u590D\u6A21\u5F0F", "\u66FF\u6362\u5168\u90E8"],
-          ["\u9879\u76EE / \u8FDB\u5EA6\u9875", `${preview.transferPackage.projectCount} / ${preview.transferPackage.progressPageCount}`],
-          ["\u4EFB\u52A1\u7CFB\u5217", String(preview.transferPackage.taskCount)],
-          ["\u5386\u53F2 / \u7D22\u5F15", `${preview.transferPackage.writeHistoryCount} / ${preview.transferPackage.noteTaskIndexCount}`]
-        ].forEach(([label, value]) => {
-          const card = summaryGrid2.createDiv({ cls: "pm-import-summary-card" });
-          card.createDiv({ cls: "pm-muted", text: label });
-          card.createEl("strong", { text: value });
-        });
-        body.createDiv({
-          cls: "pm-import-project-hint",
-          text: `\u68C0\u6D4B\u5230\u5B8C\u6574\u8FC1\u79FB\u5305\uFF0C\u5BFC\u51FA\u65F6\u95F4 ${preview.transferPackage.exportedAt}\u3002\u63D0\u4EA4\u540E\u4F1A\u66FF\u6362\u5F53\u524D\u9879\u76EE\u7BA1\u7406\u6570\u636E\u3002`
-        });
-        return;
-      }
       const summaryGrid = body.createDiv({ cls: "pm-import-summary-grid" });
       [
         ["\u4EFB\u52A1\u603B\u6570", String(preview.summary.total)],
@@ -4510,24 +4266,6 @@ var BulkImportModal = class extends import_obsidian7.Modal {
         cls: "pm-muted",
         text: `\u89E3\u6790 ${preview.summary.total} \u6761\uFF0C\u95EE\u9898 ${preview.issues.length} \u6761`
       });
-      if (preview.transferPackage) {
-        const summaryGrid2 = previewEl.createDiv({ cls: "pm-import-summary-grid" });
-        [
-          ["\u6062\u590D\u6A21\u5F0F", "\u66FF\u6362\u5168\u90E8"],
-          ["\u9879\u76EE / \u8FDB\u5EA6\u9875", `${preview.transferPackage.projectCount} / ${preview.transferPackage.progressPageCount}`],
-          ["\u4EFB\u52A1\u7CFB\u5217", String(preview.transferPackage.taskCount)],
-          ["\u5386\u53F2 / \u7D22\u5F15", `${preview.transferPackage.writeHistoryCount} / ${preview.transferPackage.noteTaskIndexCount}`]
-        ].forEach(([label, value]) => {
-          const card = summaryGrid2.createDiv({ cls: "pm-import-summary-card" });
-          card.createDiv({ cls: "pm-muted", text: label });
-          card.createEl("strong", { text: value });
-        });
-        previewEl.createDiv({
-          cls: "pm-import-project-hint",
-          text: `\u68C0\u6D4B\u5230\u5B8C\u6574\u8FC1\u79FB\u5305\uFF0C\u5BFC\u51FA\u65F6\u95F4 ${preview.transferPackage.exportedAt}\u3002\u63D0\u4EA4\u540E\u4F1A\u66FF\u6362\u5F53\u524D\u9879\u76EE\u7BA1\u7406\u6570\u636E\u3002`
-        });
-        return;
-      }
       const summaryGrid = previewEl.createDiv({ cls: "pm-import-summary-grid" });
       [
         ["\u65B0\u589E\u4EFB\u52A1", String(preview.summary.createCount)],
@@ -4669,16 +4407,22 @@ var TaskModal = class extends import_obsidian9.Modal {
     state.kind = state.kind ?? "simple";
     state.subtasks = [...state.subtasks ?? []];
     state.viewState = cloneTaskInputViewState(state.viewState);
+    const isOccurrenceEditor = Boolean(this.options.occurrenceContext);
     const form = contentEl.createDiv({ cls: "pm-task-modal-form" });
     const basicSection = createTaskModalSection(form, "\u57FA\u7840\u4FE1\u606F");
     const scheduleSection = createTaskModalSection(form, "\u65F6\u95F4\u5B89\u6392");
-    const relationSection = createTaskModalSection(form, "\u5F52\u5C5E\u4E0E\u72B6\u6001");
-    const recurrenceSection = createTaskModalSection(form, "\u91CD\u590D\u89C4\u5219");
-    const subtaskSection = createTaskModalSection(form, "\u7EC4\u5408\u8F7B\u91CF\u9879");
-    if (this.options.existingTask?.occurrenceDates.length && this.options.existingTask.occurrenceDates.length > 1) {
+    const relationSection = isOccurrenceEditor ? null : createTaskModalSection(form, "\u5F52\u5C5E\u4E0E\u72B6\u6001");
+    const recurrenceSection = isOccurrenceEditor ? null : createTaskModalSection(form, "\u91CD\u590D\u89C4\u5219");
+    const subtaskSection = isOccurrenceEditor ? null : createTaskModalSection(form, "\u7EC4\u5408\u8F7B\u91CF\u9879");
+    if (this.options.occurrenceContext) {
       basicSection.createDiv({
         cls: "pm-muted",
-        text: this.options.occurrenceContext ? `\u5F53\u524D\u6B63\u5728\u67E5\u770B ${this.options.occurrenceContext.occurrenceDate} \u8FD9\u6B21\u53D1\u751F\uFF0C\u4F46\u4FDD\u5B58\u4F1A\u66F4\u65B0\u6574\u6761\u91CD\u590D\u4EFB\u52A1\u3002` : "\u5F53\u524D\u7F16\u8F91\u7684\u662F\u6574\u6761\u91CD\u590D\u4EFB\u52A1\uFF0C\u4E0B\u9762\u7684\u65E5\u671F\u4E0E\u91CD\u590D\u89C4\u5219\u4F1A\u4E00\u8D77\u66F4\u65B0\u5168\u90E8\u53D1\u751F\u65F6\u95F4\u3002"
+        text: `\u5F53\u524D\u6B63\u5728\u7F16\u8F91 ${this.options.occurrenceContext.occurrenceDate} \u8FD9\u6B21\u53D1\u751F\u3002\u4FDD\u5B58\u672C\u6B21\u53EA\u4F1A\u66F4\u65B0\u8FD9\u4E00\u6761\u5B9E\u4F8B\uFF0C\u4E0D\u5F71\u54CD\u672A\u6765\uFF1B\u5982\u9700\u4FEE\u6539\u6574\u6761\u91CD\u590D\u4EFB\u52A1\uFF0C\u8BF7\u4F7F\u7528\u4E0B\u65B9\u201C\u7F16\u8F91\u6574\u6761\u7CFB\u5217\u201D\u3002`
+      });
+    } else if (this.options.existingTask?.occurrenceDates.length && this.options.existingTask.occurrenceDates.length > 1) {
+      basicSection.createDiv({
+        cls: "pm-muted",
+        text: "\u5F53\u524D\u7F16\u8F91\u7684\u662F\u6574\u6761\u91CD\u590D\u4EFB\u52A1\uFF0C\u4E0B\u9762\u7684\u65E5\u671F\u4E0E\u91CD\u590D\u89C4\u5219\u4F1A\u4E00\u8D77\u66F4\u65B0\u5168\u90E8\u53D1\u751F\u65F6\u95F4\u3002"
       });
     }
     new import_obsidian9.Setting(basicSection).setName("\u6807\u9898").addText(
@@ -4686,19 +4430,21 @@ var TaskModal = class extends import_obsidian9.Modal {
         state.title = value;
       })
     );
-    new import_obsidian9.Setting(basicSection).setName("\u4EFB\u52A1\u7C7B\u578B").setDesc("\u7EC4\u5408\u4EFB\u52A1\u53EF\u4F5C\u4E3A\u5BB9\u5668\uFF0C\u6302\u8F7D\u5355\u6B21\u3001\u6BCF\u65E5\u6216\u6BCF\u5468\u5B50\u4EFB\u52A1").addDropdown((dropdown) => {
-      const labels = {
-        simple: "\u666E\u901A\u4EFB\u52A1",
-        composite: "\u7EC4\u5408\u4EFB\u52A1"
-      };
-      Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
-      dropdown.setValue(state.kind ?? "simple");
-      dropdown.onChange((value) => {
-        state.kind = value;
-        state.subtasks = state.kind === "composite" ? state.subtasks ?? [] : [];
-        renderSubtaskFields();
+    if (!isOccurrenceEditor) {
+      new import_obsidian9.Setting(basicSection).setName("\u4EFB\u52A1\u7C7B\u578B").setDesc("\u7EC4\u5408\u4EFB\u52A1\u53EF\u4F5C\u4E3A\u5BB9\u5668\uFF0C\u6302\u8F7D\u5355\u6B21\u3001\u6BCF\u65E5\u6216\u6BCF\u5468\u5B50\u4EFB\u52A1").addDropdown((dropdown) => {
+        const labels = {
+          simple: "\u666E\u901A\u4EFB\u52A1",
+          composite: "\u7EC4\u5408\u4EFB\u52A1"
+        };
+        Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
+        dropdown.setValue(state.kind ?? "simple");
+        dropdown.onChange((value) => {
+          state.kind = value;
+          state.subtasks = state.kind === "composite" ? state.subtasks ?? [] : [];
+          renderSubtaskFields();
+        });
       });
-    });
+    }
     new import_obsidian9.Setting(basicSection).setName("\u63CF\u8FF0").addTextArea(
       (text) => text.setValue(state.description ?? "").onChange((value) => {
         state.description = value;
@@ -4722,7 +4468,12 @@ var TaskModal = class extends import_obsidian9.Modal {
     const scheduleGrid = scheduleSection.createDiv({ cls: "pm-task-field-grid" });
     new import_obsidian9.Setting(scheduleGrid).setName("\u65E5\u671F").addText((text) => {
       dateInput = text;
-      return text.setPlaceholder("YYYY-MM-DD").setValue(state.date).onChange((value) => {
+      text.setPlaceholder("YYYY-MM-DD").setValue(state.date);
+      if (isOccurrenceEditor) {
+        text.inputEl.disabled = true;
+        return text;
+      }
+      return text.onChange((value) => {
         state.date = value;
       });
     });
@@ -4741,129 +4492,134 @@ var TaskModal = class extends import_obsidian9.Modal {
     let projectDropdown = null;
     let renderParentField = () => void 0;
     let clearParentIfDisallowed = () => void 0;
-    const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
-    new import_obsidian9.Setting(relationGrid).setName("\u6240\u5C5E\u9879\u76EE").addDropdown((dropdown) => {
-      projectDropdown = dropdown;
-      dropdown.addOption("", "\u672A\u5F52\u5C5E\u9879\u76EE");
-      this.options.projects.forEach((project) => dropdown.addOption(project.id, project.name));
-      dropdown.setValue(state.projectId ?? "");
-      dropdown.onChange((value) => {
-        state.projectId = value || void 0;
-        clearParentIfDisallowed();
-        renderParentField();
-      });
-    });
-    const compositeParents = this.options.compositeParents ?? [];
-    const parentField = relationSection.createDiv({ cls: "pm-task-parent-field" });
-    const getSelectableParents = () => compositeParents.filter((task) => task.id !== this.options.existingTask?.id).filter((task) => !state.projectId || task.projectId === state.projectId);
-    const applyParentSchedule = (parent) => {
-      const nextDate = parent.occurrenceDates.includes(state.date) ? state.date : parent.date;
-      setDateValue(nextDate);
-      if (!parent.startTime || !parent.endTime) {
-        return;
-      }
-      const parentStart = parseTimeToMinutes(parent.startTime);
-      const parentEnd = parseTimeToMinutes(parent.endTime);
-      if (parentStart === null || parentEnd === null || parentStart >= parentEnd) {
-        return;
-      }
-      setStartTimeValue(parent.startTime);
-      setEndTimeValue(parentEnd - parentStart <= 1 ? parent.endTime : addMinutes(parent.startTime, 1));
-    };
-    clearParentIfDisallowed = () => {
-      const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
-      if (!currentParentId) {
-        return;
-      }
-      if (!getSelectableParents().some((task) => task.id === currentParentId)) {
-        state.viewState = withMindmapParent(state.viewState, null);
-      }
-    };
-    renderParentField = () => {
-      parentField.empty();
-      clearParentIfDisallowed();
-      const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
-      const parentOptions = getSelectableParents();
-      if (parentOptions.length === 0) {
-        parentField.createDiv({
-          cls: "pm-muted pm-task-parent-note",
-          text: state.projectId ? "\u5F53\u524D\u9879\u76EE\u4E0B\u6682\u65E0\u53EF\u6302\u5165\u7684\u7EC4\u5408\u4EFB\u52A1\u3002" : "\u6682\u65E0\u53EF\u6302\u5165\u7684\u7EC4\u5408\u4EFB\u52A1\u3002"
-        });
-        return;
-      }
-      new import_obsidian9.Setting(parentField).setName("\u6302\u5165\u7EC4\u5408\u4EFB\u52A1").setDesc("\u9009\u62E9\u540E\uFF0C\u8FD9\u6761\u4EFB\u52A1\u4F1A\u4F5C\u4E3A\u8BE5\u7EC4\u5408\u4EFB\u52A1\u7684\u5B50\u4EFB\u52A1\uFF0C\u5E76\u4FDD\u7559\u81EA\u5DF1\u7684\u91CD\u590D\u89C4\u5219").addDropdown((dropdown) => {
-        dropdown.addOption("", "\u4E0D\u6302\u5165\u7EC4\u5408\u4EFB\u52A1");
-        parentOptions.forEach((parent) => {
-          const projectName = this.options.projects.find((project) => project.id === parent.projectId)?.name ?? "\u672A\u5F52\u5C5E\u9879\u76EE";
-          dropdown.addOption(parent.id, `${projectName} / ${parent.title}`);
-        });
-        dropdown.setValue(currentParentId);
+    if (!isOccurrenceEditor && relationSection && recurrenceSection && subtaskSection) {
+      const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
+      new import_obsidian9.Setting(relationGrid).setName("\u6240\u5C5E\u9879\u76EE").addDropdown((dropdown) => {
+        projectDropdown = dropdown;
+        dropdown.addOption("", "\u672A\u5F52\u5C5E\u9879\u76EE");
+        this.options.projects.forEach((project) => dropdown.addOption(project.id, project.name));
+        dropdown.setValue(state.projectId ?? "");
         dropdown.onChange((value) => {
-          const parentTaskId = value || null;
-          state.viewState = withMindmapParent(state.viewState, parentTaskId);
-          const parent = parentTaskId ? parentOptions.find((task) => task.id === parentTaskId) : void 0;
-          if (parent) {
-            state.projectId = parent.projectId;
-            projectDropdown?.setValue(parent.projectId ?? "");
-            applyParentSchedule(parent);
-            renderParentField();
-          }
+          state.projectId = value || void 0;
+          clearParentIfDisallowed();
+          renderParentField();
         });
       });
-    };
-    renderParentField();
-    new import_obsidian9.Setting(relationGrid).setName("\u72B6\u6001").addDropdown((dropdown) => {
-      const labels = {
-        todo: "\u5F85\u529E",
-        doing: "\u8FDB\u884C\u4E2D",
-        blocked: "\u963B\u585E",
-        done: "\u5DF2\u5B8C\u6210"
-      };
-      Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
-      dropdown.setValue(state.status ?? "todo");
-      dropdown.onChange((value) => {
-        state.status = value;
-      });
-    });
-    new import_obsidian9.Setting(relationGrid).setName("\u4F18\u5148\u7EA7").addDropdown((dropdown) => {
-      dropdown.addOption("", "\u65E0");
-      const labels = {
-        low: "\u4F4E",
-        medium: "\u4E2D",
-        high: "\u9AD8",
-        urgent: "\u7D27\u6025"
-      };
-      Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
-      dropdown.setValue(state.priority ?? "");
-      dropdown.onChange((value) => {
-        state.priority = value || void 0;
-      });
-    });
-    new import_obsidian9.Setting(relationSection).setName("\u6807\u7B7E").setDesc("\u591A\u4E2A\u6807\u7B7E\u7528\u9017\u53F7\u5206\u9694").addText(
-      (text) => text.setPlaceholder("\u4F8B\u5982 parser, ui").setValue((state.tags ?? []).join(", ")).onChange((value) => {
-        state.tags = value.split(",").map((item) => item.trim()).filter(Boolean);
-      })
-    );
-    new import_obsidian9.Setting(recurrenceSection).setName("\u91CD\u590D\u7C7B\u578B").setDesc("\u5355\u6B21\u3001\u6BCF\u65E5\u91CD\u590D\u3001\u6BCF\u5468\u6B64\u65F6\u91CD\u590D").addDropdown((dropdown) => {
-      const labels = [
-        ["once", "\u5355\u6B21\u4EFB\u52A1"],
-        ["daily", "\u6BCF\u65E5\u91CD\u590D"],
-        ["weekly", "\u6BCF\u5468\u6B64\u65F6\u91CD\u590D"]
-      ];
-      labels.forEach(([key, label]) => dropdown.addOption(key, label));
-      dropdown.setValue(state.recurrence);
-      dropdown.onChange((value) => {
-        state.recurrence = value;
-        if (state.recurrence === "once") {
-          state.recurrenceCount = null;
-          state.recurrenceUntil = null;
+      const compositeParents = this.options.compositeParents ?? [];
+      const parentField = relationSection.createDiv({ cls: "pm-task-parent-field" });
+      const getSelectableParents = () => compositeParents.filter((task) => task.id !== this.options.existingTask?.id).filter((task) => !state.projectId || task.projectId === state.projectId);
+      const applyParentSchedule = (parent) => {
+        const nextDate = parent.occurrenceDates.includes(state.date) ? state.date : parent.date;
+        setDateValue(nextDate);
+        if (!parent.startTime || !parent.endTime) {
+          return;
         }
-        renderRecurrenceFields();
+        const parentStart = parseTimeToMinutes(parent.startTime);
+        const parentEnd = parseTimeToMinutes(parent.endTime);
+        if (parentStart === null || parentEnd === null || parentStart >= parentEnd) {
+          return;
+        }
+        setStartTimeValue(parent.startTime);
+        setEndTimeValue(parentEnd - parentStart <= 1 ? parent.endTime : addMinutes(parent.startTime, 1));
+      };
+      clearParentIfDisallowed = () => {
+        const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+        if (!currentParentId) {
+          return;
+        }
+        if (!getSelectableParents().some((task) => task.id === currentParentId)) {
+          state.viewState = withMindmapParent(state.viewState, null);
+        }
+      };
+      renderParentField = () => {
+        parentField.empty();
+        clearParentIfDisallowed();
+        const currentParentId = state.viewState?.mindmap?.parentTaskId ?? "";
+        const parentOptions = getSelectableParents();
+        if (parentOptions.length === 0) {
+          parentField.createDiv({
+            cls: "pm-muted pm-task-parent-note",
+            text: state.projectId ? "\u5F53\u524D\u9879\u76EE\u4E0B\u6682\u65E0\u53EF\u6302\u5165\u7684\u7EC4\u5408\u4EFB\u52A1\u3002" : "\u6682\u65E0\u53EF\u6302\u5165\u7684\u7EC4\u5408\u4EFB\u52A1\u3002"
+          });
+          return;
+        }
+        new import_obsidian9.Setting(parentField).setName("\u6302\u5165\u7EC4\u5408\u4EFB\u52A1").setDesc("\u9009\u62E9\u540E\uFF0C\u8FD9\u6761\u4EFB\u52A1\u4F1A\u4F5C\u4E3A\u8BE5\u7EC4\u5408\u4EFB\u52A1\u7684\u5B50\u4EFB\u52A1\uFF0C\u5E76\u4FDD\u7559\u81EA\u5DF1\u7684\u91CD\u590D\u89C4\u5219").addDropdown((dropdown) => {
+          dropdown.addOption("", "\u4E0D\u6302\u5165\u7EC4\u5408\u4EFB\u52A1");
+          parentOptions.forEach((parent) => {
+            const projectName = this.options.projects.find((project) => project.id === parent.projectId)?.name ?? "\u672A\u5F52\u5C5E\u9879\u76EE";
+            dropdown.addOption(parent.id, `${projectName} / ${parent.title}`);
+          });
+          dropdown.setValue(currentParentId);
+          dropdown.onChange((value) => {
+            const parentTaskId = value || null;
+            state.viewState = withMindmapParent(state.viewState, parentTaskId);
+            const parent = parentTaskId ? parentOptions.find((task) => task.id === parentTaskId) : void 0;
+            if (parent) {
+              state.projectId = parent.projectId;
+              projectDropdown?.setValue(parent.projectId ?? "");
+              applyParentSchedule(parent);
+              renderParentField();
+            }
+          });
+        });
+      };
+      renderParentField();
+      new import_obsidian9.Setting(relationGrid).setName("\u72B6\u6001").addDropdown((dropdown) => {
+        const labels = {
+          todo: "\u5F85\u529E",
+          doing: "\u8FDB\u884C\u4E2D",
+          blocked: "\u963B\u585E",
+          done: "\u5DF2\u5B8C\u6210"
+        };
+        Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
+        dropdown.setValue(state.status ?? "todo");
+        dropdown.onChange((value) => {
+          state.status = value;
+        });
       });
-    });
-    const recurrenceFields = recurrenceSection.createDiv({ cls: "pm-task-nested-fields" });
-    const subtaskFields = subtaskSection.createDiv({ cls: "pm-task-nested-fields" });
+      new import_obsidian9.Setting(relationGrid).setName("\u4F18\u5148\u7EA7").addDropdown((dropdown) => {
+        dropdown.addOption("", "\u65E0");
+        const labels = {
+          low: "\u4F4E",
+          medium: "\u4E2D",
+          high: "\u9AD8",
+          urgent: "\u7D27\u6025"
+        };
+        Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
+        dropdown.setValue(state.priority ?? "");
+        dropdown.onChange((value) => {
+          state.priority = value || void 0;
+        });
+      });
+      new import_obsidian9.Setting(relationSection).setName("\u6807\u7B7E").setDesc("\u591A\u4E2A\u6807\u7B7E\u7528\u9017\u53F7\u5206\u9694").addText(
+        (text) => text.setPlaceholder("\u4F8B\u5982 parser, ui").setValue((state.tags ?? []).join(", ")).onChange((value) => {
+          state.tags = value.split(",").map((item) => item.trim()).filter(Boolean);
+        })
+      );
+      new import_obsidian9.Setting(recurrenceSection).setName("\u91CD\u590D\u7C7B\u578B").setDesc("\u5355\u6B21\u3001\u6BCF\u65E5\u91CD\u590D\u3001\u6BCF\u5468\u6B64\u65F6\u91CD\u590D").addDropdown((dropdown) => {
+        const labels = [
+          ["once", "\u5355\u6B21\u4EFB\u52A1"],
+          ["daily", "\u6BCF\u65E5\u91CD\u590D"],
+          ["weekly", "\u6BCF\u5468\u6B64\u65F6\u91CD\u590D"]
+        ];
+        labels.forEach(([key, label]) => dropdown.addOption(key, label));
+        dropdown.setValue(state.recurrence);
+        dropdown.onChange((value) => {
+          state.recurrence = value;
+          if (state.recurrence === "once") {
+            state.recurrenceCount = null;
+            state.recurrenceUntil = null;
+          }
+          renderRecurrenceFields();
+        });
+      });
+    }
+    const recurrenceFields = recurrenceSection?.createDiv({ cls: "pm-task-nested-fields" }) ?? null;
+    const subtaskFields = subtaskSection?.createDiv({ cls: "pm-task-nested-fields" }) ?? null;
     const renderRecurrenceFields = () => {
+      if (!recurrenceFields) {
+        return;
+      }
       recurrenceFields.empty();
       if (state.recurrence === "once") {
         return;
@@ -4881,6 +4637,9 @@ var TaskModal = class extends import_obsidian9.Modal {
     };
     renderRecurrenceFields();
     const renderSubtaskFields = () => {
+      if (!subtaskFields || !subtaskSection) {
+        return;
+      }
       subtaskFields.empty();
       if (state.kind !== "composite") {
         subtaskSection.addClass("is-hidden");
@@ -4947,22 +4706,18 @@ var TaskModal = class extends import_obsidian9.Modal {
     };
     renderSubtaskFields();
     const footer = contentEl.createDiv({ cls: "pm-modal-actions" });
-    new import_obsidian9.ButtonComponent(footer).setButtonText(this.options.occurrenceContext ? "\u4FDD\u5B58\u6574\u6761\u7CFB\u5217" : "\u4FDD\u5B58").setCta().onClick(async () => {
+    new import_obsidian9.ButtonComponent(footer).setButtonText(isOccurrenceEditor ? "\u4FDD\u5B58\u672C\u6B21" : "\u4FDD\u5B58").setCta().onClick(async () => {
       try {
-        await this.options.onSubmit(state, "series");
+        await this.options.onSubmit(state, isOccurrenceEditor ? "occurrence" : "series");
         this.close();
       } catch (error) {
         new import_obsidian9.Notice(error instanceof Error ? error.message : "\u4FDD\u5B58\u5931\u8D25");
       }
     });
-    if (this.options.occurrenceContext && this.options.existingTask?.occurrenceDates.length && this.options.existingTask.occurrenceDates.length > 1) {
-      new import_obsidian9.ButtonComponent(footer).setButtonText("\u4EC5\u4FDD\u5B58\u672C\u6B21\u65F6\u95F4").onClick(async () => {
-        try {
-          await this.options.onSubmit(state, "occurrence");
-          this.close();
-        } catch (error) {
-          new import_obsidian9.Notice(error instanceof Error ? error.message : "\u4FDD\u5B58\u5931\u8D25");
-        }
+    if (isOccurrenceEditor && this.options.onOpenSeriesEditor) {
+      new import_obsidian9.ButtonComponent(footer).setButtonText("\u7F16\u8F91\u6574\u6761\u7CFB\u5217").onClick(() => {
+        this.close();
+        this.options.onOpenSeriesEditor?.();
       });
     }
     if (this.options.onDelete) {
@@ -5192,7 +4947,7 @@ var OverviewView = class extends BaseProjectView {
       this.weekAnchor = addDays(this.weekAnchor, 7);
       this.render();
     });
-    this.renderWeekBoard(weekSection, tasks, projects, seriesTasks);
+    this.renderWeekCompactBoard(weekSection, tasks, projects, seriesTasks);
     const trendSection = container.createDiv({ cls: "pm-section" });
     const trendHeader = trendSection.createDiv({ cls: "pm-page-header" });
     trendHeader.createEl("h3", { text: "\u6700\u8FD1 30 \u5929\u4EFB\u52A1\u8D8B\u52BF" });
@@ -5308,73 +5063,47 @@ var OverviewView = class extends BaseProjectView {
       label.title = `${item.key}\uFF1A\u4EFB\u52A1 ${item.total}\uFF0C\u5B8C\u6210 ${item.completed}`;
     });
   }
-  renderWeekBoard(container, tasks, projects, seriesTasks) {
+  renderWeekCompactBoard(container, tasks, projects, seriesTasks) {
     const weekDates = getWeekDates(this.weekAnchor);
-    const weekStart = toDateKey(weekDates[0]);
-    const weekEnd = toDateKey(weekDates[6]);
-    const weekTasks = tasks.filter((task) => compareDateKeys(task.date, weekStart) >= 0 && compareDateKeys(task.date, weekEnd) <= 0);
-    const timelineRange = buildWeekTimelineRange(weekTasks);
-    const baseTimelineHeight = (timelineRange.endHour - timelineRange.startHour) * WEEK_TIMELINE_HOUR_HEIGHT;
-    const boardShell = container.createDiv({ cls: "pm-week-timeline-shell" });
-    boardShell.style.setProperty("--pm-week-hour-height", `${WEEK_TIMELINE_HOUR_HEIGHT}px`);
-    boardShell.style.setProperty("--pm-week-hour-count", String(timelineRange.endHour - timelineRange.startHour));
-    const axis = boardShell.createDiv({ cls: "pm-week-time-axis" });
-    axis.createDiv({ cls: "pm-week-axis-header", text: "\u65F6\u95F4" });
-    for (let hour = timelineRange.startHour; hour < timelineRange.endHour; hour += 1) {
-      axis.createDiv({ cls: "pm-week-axis-label", text: `${String(hour).padStart(2, "0")}:00` });
-    }
-    const board = boardShell.createDiv({ cls: "pm-week-board pm-week-timeline-board" });
+    const board = container.createDiv({ cls: "pm-week-board pm-week-compact-board" });
     weekDates.forEach((date) => {
-      const key = toDateKey(date);
-      const column = board.createDiv({
-        cls: [
-          "pm-week-day",
-          isToday(key) ? "is-today" : "",
-          isPastDateKey(key) ? "is-past" : "",
-          isWeekend(date) ? "is-weekend" : ""
-        ].filter(Boolean).join(" ")
-      });
-      const header = column.createDiv({ cls: "pm-week-day-header" });
-      const title = header.createDiv({ cls: "pm-week-day-title" });
-      title.createSpan({ text: getChineseWeekday(date), cls: "pm-week-day-weekday" });
-      title.createSpan({ text: key, cls: "pm-week-day-date" });
-      header.createEl("button", { text: "\u65B0\u589E", cls: "mod-cta pm-week-day-add" }).addEventListener("click", () => {
-        this.openCreateTaskModal("\u65B0\u589E\u4EFB\u52A1", projects, {
-          title: "",
-          description: "",
-          date: key,
-          status: "todo",
-          tags: [],
-          recurrence: "once",
-          completed: false,
-          ...this.plugin.store.getSuggestedTaskWindow(key)
-        });
-      });
+      const { key, column } = this.createWeekDayColumn(board, date, projects);
       const dayTasks = buildCompositeDisplayOccurrences(tasks.filter((task) => task.date === key), seriesTasks);
       if (dayTasks.length === 0) {
-        const emptyLane = column.createDiv({ cls: "pm-week-day-timeline" });
-        emptyLane.style.height = `${baseTimelineHeight}px`;
-        emptyLane.createDiv({ cls: "pm-empty pm-week-day-empty", text: "\u6682\u65E0\u4EFB\u52A1" });
+        column.createDiv({ cls: "pm-empty pm-week-day-empty", text: "\u6682\u65E0\u4EFB\u52A1" });
         return;
       }
-      const untimed = dayTasks.filter((item) => !getOccurrenceTimelinePosition(item.occurrence, timelineRange));
-      if (untimed.length > 0) {
-        const untimedList = column.createDiv({ cls: "pm-week-untimed-list" });
-        untimed.forEach((item) => this.renderWeekTaskCard(untimedList, item.occurrence, item.childOccurrences));
-      }
-      const lane = column.createDiv({ cls: "pm-week-day-timeline" });
-      const timelineLayouts = layoutWeekTimelineItems(dayTasks, timelineRange);
-      const dayTimelineHeight = Math.max(baseTimelineHeight, ...timelineLayouts.map((layout) => layout.position.top + layout.position.height + WEEK_TIMELINE_CARD_GAP));
-      lane.style.height = `${dayTimelineHeight}px`;
-      timelineLayouts.forEach((layout) => {
-        const card = this.renderWeekTaskCard(lane, layout.item.occurrence, layout.item.childOccurrences);
-        card.addClass("is-positioned");
-        card.style.top = `${layout.position.top}px`;
-        card.style.height = `${layout.position.height}px`;
-        card.style.setProperty("--pm-week-lane-left", String(layout.leftRatio));
-        card.style.setProperty("--pm-week-lane-width", String(layout.widthRatio));
+      const list = column.createDiv({ cls: "pm-week-compact-list" });
+      dayTasks.forEach((item) => this.renderWeekTaskCard(list, item.occurrence, item.childOccurrences));
+    });
+  }
+  createWeekDayColumn(container, date, projects) {
+    const key = toDateKey(date);
+    const column = container.createDiv({
+      cls: [
+        "pm-week-day",
+        isToday(key) ? "is-today" : "",
+        isPastDateKey(key) ? "is-past" : "",
+        isWeekend(date) ? "is-weekend" : ""
+      ].filter(Boolean).join(" ")
+    });
+    const header = column.createDiv({ cls: "pm-week-day-header" });
+    const title = header.createDiv({ cls: "pm-week-day-title" });
+    title.createSpan({ text: getChineseWeekday(date), cls: "pm-week-day-weekday" });
+    title.createSpan({ text: key, cls: "pm-week-day-date" });
+    header.createEl("button", { text: "\u65B0\u589E", cls: "mod-cta pm-week-day-add" }).addEventListener("click", () => {
+      this.openCreateTaskModal("\u65B0\u589E\u4EFB\u52A1", projects, {
+        title: "",
+        description: "",
+        date: key,
+        status: "todo",
+        tags: [],
+        recurrence: "once",
+        completed: false,
+        ...this.plugin.store.getSuggestedTaskWindow(key)
       });
     });
+    return { key, column };
   }
   renderWeekTaskCard(container, task, childOccurrences = []) {
     const project = this.plugin.store.getProject(task.projectId);
@@ -6885,15 +6614,15 @@ var OverviewView = class extends BaseProjectView {
       existingTask: seriesTask,
       occurrenceContext: task,
       initial: {
-        title: seriesTask.title,
-        description: seriesTask.description,
+        title: task.title,
+        description: task.description,
         projectId: seriesTask.projectId,
         status: seriesTask.status,
         priority: seriesTask.priority,
         tags: seriesTask.tags,
-        date: seriesTask.date,
-        startTime: seriesTask.startTime,
-        endTime: seriesTask.endTime,
+        date: task.date,
+        startTime: task.startTime,
+        endTime: task.endTime,
         recurrence: seriesTask.recurrence,
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
@@ -6904,7 +6633,12 @@ var OverviewView = class extends BaseProjectView {
       },
       onSubmit: async (input, scope) => {
         if (scope === "occurrence") {
-          await this.plugin.store.updateTaskOccurrenceWindow(seriesTask.id, task.date, input.startTime, input.endTime);
+          await this.plugin.store.updateTaskOccurrenceDetails(seriesTask.id, task.date, {
+            title: input.title,
+            description: input.description,
+            startTime: input.startTime,
+            endTime: input.endTime
+          });
           return;
         }
         await this.plugin.store.updateTask(seriesTask.id, input, "series");
@@ -6918,6 +6652,9 @@ var OverviewView = class extends BaseProjectView {
       },
       onCompleteSeries: async () => {
         await this.plugin.store.completeTaskSeries(seriesTask.id, task.date);
+      },
+      onOpenSeriesEditor: () => {
+        this.openEditTaskModal(seriesTask);
       },
       allowSingleDelete: true
     }).open();
@@ -6938,8 +6675,6 @@ var GANTT_LEFT_WIDTH = 360;
 var GANTT_MIN_ZOOM = 0.4;
 var GANTT_MAX_ZOOM = 2;
 var GANTT_ZOOM_STEP = 0.1;
-var WEEK_TIMELINE_HOUR_HEIGHT = 72;
-var WEEK_TIMELINE_CARD_GAP = 6;
 function buildProjectTaskHierarchy(tasks) {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const hiddenTaskIds = /* @__PURE__ */ new Set();
@@ -7370,96 +7105,6 @@ function compareWeekTasks(a, b) {
   }
   return startA - startB;
 }
-function buildWeekTimelineRange(tasks) {
-  const timed = tasks.map((task) => ({ start: parseTimeToMinutes(task.startTime), end: parseTimeToMinutes(task.endTime) })).filter((item) => item.start !== null && item.end !== null);
-  if (timed.length === 0) {
-    return { startHour: 7, endHour: 22 };
-  }
-  const minStart = Math.min(...timed.map((item) => item.start));
-  const maxEnd = Math.max(...timed.map((item) => item.end));
-  const startHour = Math.max(0, Math.floor(minStart / 60) - 1);
-  const endHour = Math.min(24, Math.ceil(maxEnd / 60) + 1);
-  if (endHour - startHour >= 6) {
-    return { startHour, endHour };
-  }
-  return { startHour, endHour: Math.min(24, startHour + 6) };
-}
-function getOccurrenceTimelinePosition(task, range) {
-  const start = parseTimeToMinutes(task.startTime);
-  const end = parseTimeToMinutes(task.endTime);
-  if (start === null || end === null) {
-    return null;
-  }
-  const rangeStart = range.startHour * 60;
-  const rangeEnd = range.endHour * 60;
-  const top = (Math.max(start, rangeStart) - rangeStart) / 60 * WEEK_TIMELINE_HOUR_HEIGHT;
-  const height = (Math.min(end, rangeEnd) - Math.max(start, rangeStart)) / 60 * WEEK_TIMELINE_HOUR_HEIGHT;
-  return {
-    top,
-    height: Math.max(44, height)
-  };
-}
-function layoutWeekTimelineItems(items, range) {
-  const seeds = items.map((item) => {
-    const start = parseTimeToMinutes(item.occurrence.startTime);
-    const end = parseTimeToMinutes(item.occurrence.endTime);
-    const position = getOccurrenceTimelinePosition(item.occurrence, range);
-    return start !== null && end !== null && position ? { item, start, end, position } : null;
-  }).filter((item) => Boolean(item)).sort((left, right) => left.start - right.start || left.end - right.end || compareWeekTasks(left.item.occurrence, right.item.occurrence));
-  const clusters = [];
-  let current = [];
-  let clusterEnd = -1;
-  seeds.forEach((seed) => {
-    if (current.length === 0 || seed.start < clusterEnd) {
-      current.push(seed);
-      clusterEnd = Math.max(clusterEnd, seed.end);
-      return;
-    }
-    clusters.push(current);
-    current = [seed];
-    clusterEnd = seed.end;
-  });
-  if (current.length > 0) {
-    clusters.push(current);
-  }
-  const layouts = [];
-  let previousClusterBottom = -WEEK_TIMELINE_CARD_GAP;
-  clusters.forEach((cluster) => {
-    const laneEnds = [];
-    const assigned = cluster.map((seed) => {
-      const laneIndex = findAvailableLane(laneEnds, seed.start);
-      laneEnds[laneIndex] = seed.end;
-      return { ...seed, laneIndex };
-    });
-    const laneCount = Math.max(1, laneEnds.length);
-    const clusterRawTop = Math.min(...assigned.map((seed) => seed.position.top));
-    const clusterOffset = Math.max(0, previousClusterBottom + WEEK_TIMELINE_CARD_GAP - clusterRawTop);
-    const laneVisualBottoms = Array.from({ length: laneCount }, () => -WEEK_TIMELINE_CARD_GAP);
-    let clusterVisualBottom = previousClusterBottom;
-    assigned.forEach((seed) => {
-      const rawTop = seed.position.top + clusterOffset;
-      const top = Math.max(rawTop, laneVisualBottoms[seed.laneIndex] + WEEK_TIMELINE_CARD_GAP);
-      const position = {
-        ...seed.position,
-        top
-      };
-      laneVisualBottoms[seed.laneIndex] = top + position.height;
-      clusterVisualBottom = Math.max(clusterVisualBottom, top + position.height);
-      layouts.push({
-        item: seed.item,
-        position,
-        leftRatio: seed.laneIndex / laneCount,
-        widthRatio: 1 / laneCount
-      });
-    });
-    previousClusterBottom = clusterVisualBottom;
-  });
-  return layouts;
-}
-function findAvailableLane(laneEnds, start) {
-  const laneIndex = laneEnds.findIndex((end) => end <= start);
-  return laneIndex >= 0 ? laneIndex : laneEnds.length;
-}
 function buildCompositeDisplayOccurrences(occurrences, seriesTasks) {
   const taskById = new Map(seriesTasks.map((task) => [task.id, task]));
   const childrenByParent = /* @__PURE__ */ new Map();
@@ -7843,15 +7488,14 @@ var TodayTasksView = class extends BaseProjectView {
     if (!seriesTask) {
       return;
     }
-    this.openSeriesEditor(seriesTask, task);
+    this.openOccurrenceEditor(seriesTask, task);
   }
-  openSeriesEditor(seriesTask, task) {
+  openSeriesEditor(seriesTask) {
     new TaskModal(this.app, {
       title: "\u7F16\u8F91\u4EFB\u52A1",
       projects: this.plugin.store.getProjects(),
       compositeParents: this.plugin.store.getCompositeTasks(),
       existingTask: seriesTask,
-      occurrenceContext: task,
       initial: {
         title: seriesTask.title,
         description: seriesTask.description,
@@ -7870,24 +7514,69 @@ var TodayTasksView = class extends BaseProjectView {
         viewState: seriesTask.viewState,
         completed: isTaskSeriesCompleted2(seriesTask)
       },
+      onSubmit: async (input) => {
+        await this.plugin.store.updateTask(seriesTask.id, input, "series");
+      },
+      onDelete: async (scope) => {
+        await this.plugin.store.deleteTask(seriesTask.id, "series");
+      },
+      onCompleteSeries: async () => {
+        await this.plugin.store.completeTaskSeries(seriesTask.id);
+      },
+      allowSingleDelete: false
+    }).open();
+  }
+  openOccurrenceEditor(seriesTask, task) {
+    new TaskModal(this.app, {
+      title: "\u7F16\u8F91\u4EFB\u52A1",
+      projects: this.plugin.store.getProjects(),
+      compositeParents: this.plugin.store.getCompositeTasks(),
+      existingTask: seriesTask,
+      occurrenceContext: task,
+      initial: {
+        title: task.title,
+        description: task.description,
+        projectId: seriesTask.projectId,
+        status: seriesTask.status,
+        priority: seriesTask.priority,
+        tags: seriesTask.tags,
+        date: task.date,
+        startTime: task.startTime,
+        endTime: task.endTime,
+        recurrence: seriesTask.recurrence,
+        recurrenceCount: seriesTask.recurrenceCount ?? null,
+        recurrenceUntil: seriesTask.recurrenceUntil ?? null,
+        kind: seriesTask.kind,
+        subtasks: seriesTask.subtasks,
+        viewState: seriesTask.viewState,
+        completed: task.completed
+      },
       onSubmit: async (input, scope) => {
-        if (scope === "occurrence" && task) {
-          await this.plugin.store.updateTaskOccurrenceWindow(seriesTask.id, task.date, input.startTime, input.endTime);
+        if (scope === "occurrence") {
+          await this.plugin.store.updateTaskOccurrenceDetails(seriesTask.id, task.date, {
+            title: input.title,
+            description: input.description,
+            startTime: input.startTime,
+            endTime: input.endTime
+          });
           return;
         }
         await this.plugin.store.updateTask(seriesTask.id, input, "series");
       },
       onDelete: async (scope) => {
-        if (scope === "single" && task) {
+        if (scope === "single") {
           await this.plugin.store.deleteTaskOccurrence(seriesTask.id, task.date);
           return;
         }
         await this.plugin.store.deleteTask(seriesTask.id, "series");
       },
       onCompleteSeries: async () => {
-        await this.plugin.store.completeTaskSeries(seriesTask.id, task?.date);
+        await this.plugin.store.completeTaskSeries(seriesTask.id, task.date);
       },
-      allowSingleDelete: Boolean(task)
+      onOpenSeriesEditor: () => {
+        this.openSeriesEditor(seriesTask);
+      },
+      allowSingleDelete: true
     }).open();
   }
   renderSubtasks(container, task, childOccurrences = []) {

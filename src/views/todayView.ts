@@ -210,16 +210,15 @@ export class TodayTasksView extends BaseProjectView {
     if (!seriesTask) {
       return;
     }
-    this.openSeriesEditor(seriesTask, task);
+    this.openOccurrenceEditor(seriesTask, task);
   }
 
-  private openSeriesEditor(seriesTask: Task, task?: TaskOccurrence): void {
+  private openSeriesEditor(seriesTask: Task): void {
     new TaskModal(this.app, {
       title: "编辑任务",
       projects: this.plugin.store.getProjects(),
       compositeParents: this.plugin.store.getCompositeTasks(),
       existingTask: seriesTask,
-      occurrenceContext: task,
       initial: {
         title: seriesTask.title,
         description: seriesTask.description,
@@ -238,24 +237,70 @@ export class TodayTasksView extends BaseProjectView {
         viewState: seriesTask.viewState,
         completed: isTaskSeriesCompleted(seriesTask)
       },
+      onSubmit: async (input) => {
+        await this.plugin.store.updateTask(seriesTask.id, input, "series");
+      },
+      onDelete: async (scope) => {
+        await this.plugin.store.deleteTask(seriesTask.id, "series");
+      },
+      onCompleteSeries: async () => {
+        await this.plugin.store.completeTaskSeries(seriesTask.id);
+      },
+      allowSingleDelete: false
+    }).open();
+  }
+
+  private openOccurrenceEditor(seriesTask: Task, task: TaskOccurrence): void {
+    new TaskModal(this.app, {
+      title: "编辑任务",
+      projects: this.plugin.store.getProjects(),
+      compositeParents: this.plugin.store.getCompositeTasks(),
+      existingTask: seriesTask,
+      occurrenceContext: task,
+      initial: {
+        title: task.title,
+        description: task.description,
+        projectId: seriesTask.projectId,
+        status: seriesTask.status,
+        priority: seriesTask.priority,
+        tags: seriesTask.tags,
+        date: task.date,
+        startTime: task.startTime,
+        endTime: task.endTime,
+        recurrence: seriesTask.recurrence,
+        recurrenceCount: seriesTask.recurrenceCount ?? null,
+        recurrenceUntil: seriesTask.recurrenceUntil ?? null,
+        kind: seriesTask.kind,
+        subtasks: seriesTask.subtasks,
+        viewState: seriesTask.viewState,
+        completed: task.completed
+      },
       onSubmit: async (input, scope) => {
-        if (scope === "occurrence" && task) {
-          await this.plugin.store.updateTaskOccurrenceWindow(seriesTask.id, task.date, input.startTime, input.endTime);
+        if (scope === "occurrence") {
+          await this.plugin.store.updateTaskOccurrenceDetails(seriesTask.id, task.date, {
+            title: input.title,
+            description: input.description,
+            startTime: input.startTime,
+            endTime: input.endTime
+          });
           return;
         }
         await this.plugin.store.updateTask(seriesTask.id, input, "series");
       },
       onDelete: async (scope) => {
-        if (scope === "single" && task) {
+        if (scope === "single") {
           await this.plugin.store.deleteTaskOccurrence(seriesTask.id, task.date);
           return;
         }
         await this.plugin.store.deleteTask(seriesTask.id, "series");
       },
       onCompleteSeries: async () => {
-        await this.plugin.store.completeTaskSeries(seriesTask.id, task?.date);
+        await this.plugin.store.completeTaskSeries(seriesTask.id, task.date);
       },
-      allowSingleDelete: Boolean(task)
+      onOpenSeriesEditor: () => {
+        this.openSeriesEditor(seriesTask);
+      },
+      allowSingleDelete: true
     }).open();
   }
 

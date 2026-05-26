@@ -64,24 +64,6 @@ export class BulkImportModal extends Modal {
         cls: "pm-muted",
         text: `解析 ${preview.summary.total} 条，问题 ${preview.issues.length} 条`
       });
-      if (preview.transferPackage) {
-        const summaryGrid = previewEl.createDiv({ cls: "pm-import-summary-grid" });
-        [
-          ["恢复模式", "替换全部"],
-          ["项目 / 进度页", `${preview.transferPackage.projectCount} / ${preview.transferPackage.progressPageCount}`],
-          ["任务系列", String(preview.transferPackage.taskCount)],
-          ["历史 / 索引", `${preview.transferPackage.writeHistoryCount} / ${preview.transferPackage.noteTaskIndexCount}`]
-        ].forEach(([label, value]) => {
-          const card = summaryGrid.createDiv({ cls: "pm-import-summary-card" });
-          card.createDiv({ cls: "pm-muted", text: label });
-          card.createEl("strong", { text: value });
-        });
-        previewEl.createDiv({
-          cls: "pm-import-project-hint",
-          text: `检测到完整迁移包，导出时间 ${preview.transferPackage.exportedAt}。提交后会替换当前项目管理数据。`
-        });
-        return;
-      }
       const summaryGrid = previewEl.createDiv({ cls: "pm-import-summary-grid" });
       [
         ["新增任务", String(preview.summary.createCount)],

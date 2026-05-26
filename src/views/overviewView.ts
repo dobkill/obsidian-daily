@@ -162,7 +162,7 @@ export class OverviewView extends BaseProjectView {
       this.weekAnchor = addDays(this.weekAnchor, 7);
       this.render();
     });
-    this.renderWeekBoard(weekSection, tasks, projects, seriesTasks);
+    this.renderWeekCompactBoard(weekSection, tasks, projects, seriesTasks);
 
     const trendSection = container.createDiv({ cls: "pm-section" });
     const trendHeader = trendSection.createDiv({ cls: "pm-page-header" });
@@ -289,80 +289,50 @@ export class OverviewView extends BaseProjectView {
     });
   }
 
-  private renderWeekBoard(container: HTMLElement, tasks: TaskOccurrence[], projects: Project[], seriesTasks: Task[]): void {
+  private renderWeekCompactBoard(container: HTMLElement, tasks: TaskOccurrence[], projects: Project[], seriesTasks: Task[]): void {
     const weekDates = getWeekDates(this.weekAnchor);
-    const weekStart = toDateKey(weekDates[0]);
-    const weekEnd = toDateKey(weekDates[6]);
-    const weekTasks = tasks.filter((task) => compareDateKeys(task.date, weekStart) >= 0 && compareDateKeys(task.date, weekEnd) <= 0);
-    const timelineRange = buildWeekTimelineRange(weekTasks);
-    const baseTimelineHeight = (timelineRange.endHour - timelineRange.startHour) * WEEK_TIMELINE_HOUR_HEIGHT;
-    const boardShell = container.createDiv({ cls: "pm-week-timeline-shell" });
-    boardShell.style.setProperty("--pm-week-hour-height", `${WEEK_TIMELINE_HOUR_HEIGHT}px`);
-    boardShell.style.setProperty("--pm-week-hour-count", String(timelineRange.endHour - timelineRange.startHour));
-
-    const axis = boardShell.createDiv({ cls: "pm-week-time-axis" });
-    axis.createDiv({ cls: "pm-week-axis-header", text: "时间" });
-    for (let hour = timelineRange.startHour; hour < timelineRange.endHour; hour += 1) {
-      axis.createDiv({ cls: "pm-week-axis-label", text: `${String(hour).padStart(2, "0")}:00` });
-    }
-
-    const board = boardShell.createDiv({ cls: "pm-week-board pm-week-timeline-board" });
-
+    const board = container.createDiv({ cls: "pm-week-board pm-week-compact-board" });
     weekDates.forEach((date) => {
-      const key = toDateKey(date);
-      const column = board.createDiv({
-        cls: [
-          "pm-week-day",
-          isToday(key) ? "is-today" : "",
-          isPastDateKey(key) ? "is-past" : "",
-          isWeekend(date) ? "is-weekend" : ""
-        ]
-          .filter(Boolean)
-          .join(" ")
-      });
-      const header = column.createDiv({ cls: "pm-week-day-header" });
-      const title = header.createDiv({ cls: "pm-week-day-title" });
-      title.createSpan({ text: getChineseWeekday(date), cls: "pm-week-day-weekday" });
-      title.createSpan({ text: key, cls: "pm-week-day-date" });
-      header.createEl("button", { text: "新增", cls: "mod-cta pm-week-day-add" }).addEventListener("click", () => {
-        this.openCreateTaskModal("新增任务", projects, {
-          title: "",
-          description: "",
-          date: key,
-          status: "todo",
-          tags: [],
-          recurrence: "once",
-          completed: false,
-          ...this.plugin.store.getSuggestedTaskWindow(key)
-        });
-      });
-
+      const { key, column } = this.createWeekDayColumn(board, date, projects);
       const dayTasks = buildCompositeDisplayOccurrences(tasks.filter((task) => task.date === key), seriesTasks);
       if (dayTasks.length === 0) {
-        const emptyLane = column.createDiv({ cls: "pm-week-day-timeline" });
-        emptyLane.style.height = `${baseTimelineHeight}px`;
-        emptyLane.createDiv({ cls: "pm-empty pm-week-day-empty", text: "暂无任务" });
+        column.createDiv({ cls: "pm-empty pm-week-day-empty", text: "暂无任务" });
         return;
       }
+      const list = column.createDiv({ cls: "pm-week-compact-list" });
+      dayTasks.forEach((item) => this.renderWeekTaskCard(list, item.occurrence, item.childOccurrences));
+    });
+  }
 
-      const untimed = dayTasks.filter((item) => !getOccurrenceTimelinePosition(item.occurrence, timelineRange));
-      if (untimed.length > 0) {
-        const untimedList = column.createDiv({ cls: "pm-week-untimed-list" });
-        untimed.forEach((item) => this.renderWeekTaskCard(untimedList, item.occurrence, item.childOccurrences));
-      }
-      const lane = column.createDiv({ cls: "pm-week-day-timeline" });
-      const timelineLayouts = layoutWeekTimelineItems(dayTasks, timelineRange);
-      const dayTimelineHeight = Math.max(baseTimelineHeight, ...timelineLayouts.map((layout) => layout.position.top + layout.position.height + WEEK_TIMELINE_CARD_GAP));
-      lane.style.height = `${dayTimelineHeight}px`;
-      timelineLayouts.forEach((layout) => {
-        const card = this.renderWeekTaskCard(lane, layout.item.occurrence, layout.item.childOccurrences);
-        card.addClass("is-positioned");
-        card.style.top = `${layout.position.top}px`;
-        card.style.height = `${layout.position.height}px`;
-        card.style.setProperty("--pm-week-lane-left", String(layout.leftRatio));
-        card.style.setProperty("--pm-week-lane-width", String(layout.widthRatio));
+  private createWeekDayColumn(container: HTMLElement, date: Date, projects: Project[]): { key: string; column: HTMLElement } {
+    const key = toDateKey(date);
+    const column = container.createDiv({
+      cls: [
+        "pm-week-day",
+        isToday(key) ? "is-today" : "",
+        isPastDateKey(key) ? "is-past" : "",
+        isWeekend(date) ? "is-weekend" : ""
+      ]
+        .filter(Boolean)
+        .join(" ")
+    });
+    const header = column.createDiv({ cls: "pm-week-day-header" });
+    const title = header.createDiv({ cls: "pm-week-day-title" });
+    title.createSpan({ text: getChineseWeekday(date), cls: "pm-week-day-weekday" });
+    title.createSpan({ text: key, cls: "pm-week-day-date" });
+    header.createEl("button", { text: "新增", cls: "mod-cta pm-week-day-add" }).addEventListener("click", () => {
+      this.openCreateTaskModal("新增任务", projects, {
+        title: "",
+        description: "",
+        date: key,
+        status: "todo",
+        tags: [],
+        recurrence: "once",
+        completed: false,
+        ...this.plugin.store.getSuggestedTaskWindow(key)
       });
     });
+    return { key, column };
   }
 
   private renderWeekTaskCard(container: HTMLElement, task: TaskOccurrence, childOccurrences: TaskOccurrence[] = []): HTMLElement {
@@ -1999,15 +1969,15 @@ export class OverviewView extends BaseProjectView {
       existingTask: seriesTask,
       occurrenceContext: task,
       initial: {
-        title: seriesTask.title,
-        description: seriesTask.description,
+        title: task.title,
+        description: task.description,
         projectId: seriesTask.projectId,
         status: seriesTask.status,
         priority: seriesTask.priority,
         tags: seriesTask.tags,
-        date: seriesTask.date,
-        startTime: seriesTask.startTime,
-        endTime: seriesTask.endTime,
+        date: task.date,
+        startTime: task.startTime,
+        endTime: task.endTime,
         recurrence: seriesTask.recurrence,
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
@@ -2018,7 +1988,12 @@ export class OverviewView extends BaseProjectView {
       },
       onSubmit: async (input, scope) => {
         if (scope === "occurrence") {
-          await this.plugin.store.updateTaskOccurrenceWindow(seriesTask.id, task.date, input.startTime, input.endTime);
+          await this.plugin.store.updateTaskOccurrenceDetails(seriesTask.id, task.date, {
+            title: input.title,
+            description: input.description,
+            startTime: input.startTime,
+            endTime: input.endTime
+          });
           return;
         }
         await this.plugin.store.updateTask(seriesTask.id, input, "series");
@@ -2032,6 +2007,9 @@ export class OverviewView extends BaseProjectView {
       },
       onCompleteSeries: async () => {
         await this.plugin.store.completeTaskSeries(seriesTask.id, task.date);
+      },
+      onOpenSeriesEditor: () => {
+        this.openEditTaskModal(seriesTask);
       },
       allowSingleDelete: true
     }).open();
@@ -2053,8 +2031,6 @@ const GANTT_LEFT_WIDTH = 360;
 const GANTT_MIN_ZOOM = 0.4;
 const GANTT_MAX_ZOOM = 2;
 const GANTT_ZOOM_STEP = 0.1;
-const WEEK_TIMELINE_HOUR_HEIGHT = 72;
-const WEEK_TIMELINE_CARD_GAP = 6;
 
 type GanttScale = "day" | "week" | "month";
 
@@ -2596,121 +2572,6 @@ function compareWeekTasks(a: TaskOccurrence, b: TaskOccurrence): number {
     return -1;
   }
   return startA - startB;
-}
-
-function buildWeekTimelineRange(tasks: TaskOccurrence[]): { startHour: number; endHour: number } {
-  const timed = tasks
-    .map((task) => ({ start: parseTimeToMinutes(task.startTime), end: parseTimeToMinutes(task.endTime) }))
-    .filter((item): item is { start: number; end: number } => item.start !== null && item.end !== null);
-  if (timed.length === 0) {
-    return { startHour: 7, endHour: 22 };
-  }
-  const minStart = Math.min(...timed.map((item) => item.start));
-  const maxEnd = Math.max(...timed.map((item) => item.end));
-  const startHour = Math.max(0, Math.floor(minStart / 60) - 1);
-  const endHour = Math.min(24, Math.ceil(maxEnd / 60) + 1);
-  if (endHour - startHour >= 6) {
-    return { startHour, endHour };
-  }
-  return { startHour, endHour: Math.min(24, startHour + 6) };
-}
-
-function getOccurrenceTimelinePosition(
-  task: TaskOccurrence,
-  range: { startHour: number; endHour: number }
-): { top: number; height: number } | null {
-  const start = parseTimeToMinutes(task.startTime);
-  const end = parseTimeToMinutes(task.endTime);
-  if (start === null || end === null) {
-    return null;
-  }
-  const rangeStart = range.startHour * 60;
-  const rangeEnd = range.endHour * 60;
-  const top = ((Math.max(start, rangeStart) - rangeStart) / 60) * WEEK_TIMELINE_HOUR_HEIGHT;
-  const height = ((Math.min(end, rangeEnd) - Math.max(start, rangeStart)) / 60) * WEEK_TIMELINE_HOUR_HEIGHT;
-  return {
-    top,
-    height: Math.max(44, height)
-  };
-}
-
-type WeekTimelineLayout = {
-  item: CompositeDisplayOccurrence;
-  position: { top: number; height: number };
-  leftRatio: number;
-  widthRatio: number;
-};
-
-function layoutWeekTimelineItems(items: CompositeDisplayOccurrence[], range: { startHour: number; endHour: number }): WeekTimelineLayout[] {
-  const seeds = items
-    .map((item) => {
-      const start = parseTimeToMinutes(item.occurrence.startTime);
-      const end = parseTimeToMinutes(item.occurrence.endTime);
-      const position = getOccurrenceTimelinePosition(item.occurrence, range);
-      return start !== null && end !== null && position ? { item, start, end, position } : null;
-    })
-    .filter((item): item is { item: CompositeDisplayOccurrence; start: number; end: number; position: { top: number; height: number } } => Boolean(item))
-    .sort((left, right) => left.start - right.start || left.end - right.end || compareWeekTasks(left.item.occurrence, right.item.occurrence));
-
-  const clusters: typeof seeds[] = [];
-  let current: typeof seeds = [];
-  let clusterEnd = -1;
-  seeds.forEach((seed) => {
-    if (current.length === 0 || seed.start < clusterEnd) {
-      current.push(seed);
-      clusterEnd = Math.max(clusterEnd, seed.end);
-      return;
-    }
-    clusters.push(current);
-    current = [seed];
-    clusterEnd = seed.end;
-  });
-  if (current.length > 0) {
-    clusters.push(current);
-  }
-
-  const layouts: WeekTimelineLayout[] = [];
-  let previousClusterBottom = -WEEK_TIMELINE_CARD_GAP;
-
-  clusters.forEach((cluster) => {
-    const laneEnds: number[] = [];
-    const assigned = cluster.map((seed) => {
-      const laneIndex = findAvailableLane(laneEnds, seed.start);
-      laneEnds[laneIndex] = seed.end;
-      return { ...seed, laneIndex };
-    });
-    const laneCount = Math.max(1, laneEnds.length);
-    const clusterRawTop = Math.min(...assigned.map((seed) => seed.position.top));
-    const clusterOffset = Math.max(0, previousClusterBottom + WEEK_TIMELINE_CARD_GAP - clusterRawTop);
-    const laneVisualBottoms = Array.from({ length: laneCount }, () => -WEEK_TIMELINE_CARD_GAP);
-    let clusterVisualBottom = previousClusterBottom;
-
-    assigned.forEach((seed) => {
-      const rawTop = seed.position.top + clusterOffset;
-      const top = Math.max(rawTop, laneVisualBottoms[seed.laneIndex] + WEEK_TIMELINE_CARD_GAP);
-      const position = {
-        ...seed.position,
-        top
-      };
-      laneVisualBottoms[seed.laneIndex] = top + position.height;
-      clusterVisualBottom = Math.max(clusterVisualBottom, top + position.height);
-      layouts.push({
-        item: seed.item,
-        position,
-        leftRatio: seed.laneIndex / laneCount,
-        widthRatio: 1 / laneCount
-      });
-    });
-
-    previousClusterBottom = clusterVisualBottom;
-  });
-
-  return layouts;
-}
-
-function findAvailableLane(laneEnds: number[], start: number): number {
-  const laneIndex = laneEnds.findIndex((end) => end <= start);
-  return laneIndex >= 0 ? laneIndex : laneEnds.length;
 }
 
 function buildCompositeDisplayOccurrences(occurrences: TaskOccurrence[], seriesTasks: Task[]): CompositeDisplayOccurrence[] {

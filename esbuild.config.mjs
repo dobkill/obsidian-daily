@@ -6,6 +6,7 @@ import process from "node:process";
 const prod = process.argv.includes("--watch") === false;
 const watch = process.argv.includes("--watch");
 const outdir = "project-manager";
+const bundledMain = path.join(outdir, "main.js");
 
 async function prepareOutputFiles() {
   await mkdir(outdir, { recursive: true });
@@ -13,6 +14,10 @@ async function prepareOutputFiles() {
     copyFile("manifest.json", path.join(outdir, "manifest.json")),
     copyFile("styles.css", path.join(outdir, "styles.css"))
   ]);
+}
+
+async function syncRootMain() {
+  await copyFile(bundledMain, "main.js");
 }
 
 const ctx = await esbuild.context({
@@ -24,7 +29,17 @@ const ctx = await esbuild.context({
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
-  outfile: path.join(outdir, "main.js")
+  outfile: bundledMain,
+  plugins: [{
+    name: "sync-root-main",
+    setup(build) {
+      build.onEnd(async (result) => {
+        if (result.errors.length === 0) {
+          await syncRootMain();
+        }
+      });
+    }
+  }]
 });
 
 if (watch) {
