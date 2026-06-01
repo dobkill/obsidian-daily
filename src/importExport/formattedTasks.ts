@@ -53,11 +53,6 @@ export function parseFormattedTaskText(
     const projectMatch = /^\s*#项目[:：]\s*(.*?)\s*$/.exec(line);
     if (projectMatch) {
       flushCurrent();
-      if (options.projectId) {
-        currentProjectId = options.projectId;
-        currentProjectName = options.projects.find((project) => project.id === options.projectId)?.name;
-        return;
-      }
       const projectName = projectMatch[1].trim() || UNASSIGNED_PROJECT_LABEL;
       if (projectName === UNASSIGNED_PROJECT_LABEL) {
         currentProjectId = undefined;

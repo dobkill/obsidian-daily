@@ -136,11 +136,6 @@ function parseFormattedTaskText(text, options) {
     const projectMatch = /^\s*#项目[:：]\s*(.*?)\s*$/.exec(line);
     if (projectMatch) {
       flushCurrent();
-      if (options.projectId) {
-        currentProjectId = options.projectId;
-        currentProjectName = options.projects.find((project) => project.id === options.projectId)?.name;
-        return;
-      }
       const projectName = projectMatch[1].trim() || UNASSIGNED_PROJECT_LABEL;
       if (projectName === UNASSIGNED_PROJECT_LABEL) {
         currentProjectId = void 0;
@@ -5073,9 +5068,10 @@ var BulkImportModal = class extends import_obsidian7.Modal {
     contentEl.addClass("pm-modal", "pm-bulk-import-modal");
     contentEl.createEl("h2", { text: this.options.title });
     const projectName = this.options.projectId ? this.options.store.getProject(this.options.projectId)?.name ?? "\u5F53\u524D\u9879\u76EE" : "";
+    const guideText = this.options.allowedFormats?.length === 1 && this.options.allowedFormats[0] === "markdown-planned" ? `\u5F53\u524D\u5904\u4E8E\u9879\u76EE\u5BFC\u5165\u6A21\u5F0F\uFF1A\u4EC5\u652F\u6301\u300C\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\u300D\u683C\u5F0F\u3002\u8BF7\u4F7F\u7528\u300C+ \u4EFB\u52A1\uFF1A\u300D\u6216\u300C+ \u7EC4\u5408\uFF1A\u300D\u8BED\u6CD5\u3002` : this.options.projectId ? `\u5F53\u524D\u5904\u4E8E\u9879\u76EE\u5BFC\u5165\u6A21\u5F0F\uFF1A\u672A\u663E\u5F0F\u5207\u6362\u9879\u76EE\u65F6\uFF0C\u4EFB\u52A1\u4F1A\u6309\u300C${projectName}\u300D\u5904\u7406\u3002\u4E5F\u53EF\u7C98\u8D34\u300C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u300D\u7684\u6570\u636E\u8FC1\u79FB JSON\u3002` : `\u652F\u6301 #\u9879\u76EE\uFF1A\u65B0\u9879\u76EE\u540D \u81EA\u52A8\u5EFA\u9879\u76EE\uFF0C\u4E5F\u652F\u6301\u672A\u5F52\u5C5E\u4EFB\u52A1\uFF1B\u4E5F\u53EF\u7C98\u8D34\u300C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u300D\u7684\u6570\u636E\u8FC1\u79FB JSON\u3002`;
     contentEl.createDiv({
       cls: "pm-import-guide",
-      text: this.options.projectId ? `\u5F53\u524D\u5904\u4E8E\u9879\u76EE\u5BFC\u5165\u6A21\u5F0F\uFF1A\u672A\u663E\u5F0F\u5207\u6362\u9879\u76EE\u65F6\uFF0C\u4EFB\u52A1\u4F1A\u6309\u201C${projectName}\u201D\u5904\u7406\u3002\u4E5F\u53EF\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u6570\u636E\u8FC1\u79FB JSON\u3002` : "\u652F\u6301 #\u9879\u76EE\uFF1A\u65B0\u9879\u76EE\u540D \u81EA\u52A8\u5EFA\u9879\u76EE\uFF0C\u4E5F\u652F\u6301\u672A\u5F52\u5C5E\u4EFB\u52A1\uFF1B\u4E5F\u53EF\u7C98\u8D34\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u7684\u6570\u636E\u8FC1\u79FB JSON\u3002"
+      text: guideText
     });
     const state = {
       text: "",
@@ -5095,6 +5091,7 @@ var BulkImportModal = class extends import_obsidian7.Modal {
       state.text = input.value;
       renderPreview();
     });
+    let currentFormatBlocked = false;
     const previewEl = contentEl.createDiv({ cls: "pm-import-preview" });
     const renderPreview = () => {
       previewEl.empty();
@@ -5102,6 +5099,13 @@ var BulkImportModal = class extends import_obsidian7.Modal {
         projectId: this.options.projectId,
         defaultDate: state.defaultDate
       });
+      currentFormatBlocked = this.isFormatBlocked(preview.sourceFormat);
+      if (currentFormatBlocked) {
+        previewEl.createDiv({
+          cls: "pm-import-format-warning",
+          text: this.getFormatBlockedMessage()
+        });
+      }
       previewEl.createDiv({
         cls: "pm-muted",
         text: `\u89E3\u6790 ${preview.summary.total} \u6761\uFF0C\u95EE\u9898 ${preview.issues.length} \u6761`
@@ -5154,10 +5158,15 @@ var BulkImportModal = class extends import_obsidian7.Modal {
           issueList.createEl("li", { text: `\u7B2C ${issue.line} \u884C\uFF1A${issue.message}${issue.blocking ? "\uFF08\u963B\u6B62\u5BFC\u5165\uFF09" : ""}` });
         });
       }
+      importButton.setDisabled(currentFormatBlocked);
     };
     const footer = contentEl.createDiv({ cls: "pm-modal-actions" });
-    new import_obsidian7.ButtonComponent(footer).setButtonText("\u5BFC\u5165").setCta().onClick(async () => {
+    const importButton = new import_obsidian7.ButtonComponent(footer).setButtonText("\u5BFC\u5165").setCta().onClick(async () => {
       try {
+        if (currentFormatBlocked) {
+          new import_obsidian7.Notice(this.getFormatBlockedMessage());
+          return;
+        }
         const created = await this.options.store.importFormattedTasks(state.text, {
           projectId: this.options.projectId,
           defaultDate: state.defaultDate
@@ -5170,6 +5179,18 @@ var BulkImportModal = class extends import_obsidian7.Modal {
     });
     new import_obsidian7.ButtonComponent(footer).setButtonText("\u53D6\u6D88").onClick(() => this.close());
     renderPreview();
+  }
+  isFormatBlocked(sourceFormat) {
+    if (!this.options.allowedFormats) {
+      return false;
+    }
+    return !this.options.allowedFormats.includes(sourceFormat);
+  }
+  getFormatBlockedMessage() {
+    if (this.options.allowedFormats?.length === 1 && this.options.allowedFormats[0] === "markdown-planned") {
+      return "\u5F53\u524D\u4EC5\u652F\u6301\u300C\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\u300D\u683C\u5F0F\uFF0C\u8BF7\u4F7F\u7528 + \u4EFB\u52A1\uFF1A\u6216 + \u7EC4\u5408\uFF1A\u8BED\u6CD5";
+    }
+    return "\u5F53\u524D\u4E0D\u652F\u6301\u6B64\u5BFC\u5165\u683C\u5F0F";
   }
 };
 function importActionText2(action) {
@@ -6020,7 +6041,7 @@ var OverviewView = class extends BaseProjectView {
     const heatmapTitle = heatmapHeader.createDiv({ cls: "pm-heatmap-title" });
     const heatmapIcon = heatmapTitle.createSpan({ cls: "pm-heatmap-title-icon" });
     (0, import_obsidian12.setIcon)(heatmapIcon, "flame");
-    heatmapTitle.createEl("h3", { text: "\u9879\u76EE\u70ED\u529B\u8D8B\u52BF\uFF08\u8FD1 30 \u5929\uFF09" });
+    heatmapTitle.createEl("h3", { text: "\u9879\u76EE\u70ED\u529B\u8D8B\u52BF\uFF08\u8FD1 1 \u5E74\uFF09" });
     this.renderHeatmap(heatmapSection, tasks);
   }
   renderOverviewMetrics(container, tasks, seriesTasks, todayItems) {
@@ -6058,7 +6079,8 @@ var OverviewView = class extends BaseProjectView {
     });
   }
   renderHeatmap(container, tasks) {
-    const days = Array.from({ length: 30 }, (_, index) => addDays(now(), -(29 - index)));
+    const today = now();
+    const todayKey = toDateKey(today);
     const counts = /* @__PURE__ */ new Map();
     tasks.forEach((task) => {
       if (!task.completed || !task.completedAt) {
@@ -6067,59 +6089,100 @@ var OverviewView = class extends BaseProjectView {
       const key = task.completedAt.slice(0, 10);
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
-    const maxCount = Math.max(1, ...days.map((date) => counts.get(toDateKey(date)) ?? 0));
-    const dailyStats = days.map((date) => {
+    const startDate = startOfWeek(addDays(today, -364));
+    const totalDays = Math.round((today.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1e3)) + 1;
+    const weekCount = Math.ceil(totalDays / 7);
+    const dailyStats = /* @__PURE__ */ new Map();
+    let maxCount = 1;
+    for (let i = 0; i < totalDays; i++) {
+      const date = addDays(startDate, i);
       const key = toDateKey(date);
       const count = counts.get(key) ?? 0;
-      return {
-        date,
-        key,
-        count,
-        level: heatLevel(count, maxCount),
-        filledCells: heatmapFilledCells(count)
-      };
+      if (count > maxCount) {
+        maxCount = count;
+      }
+      dailyStats.set(key, { date, key, count, level: 0 });
+    }
+    dailyStats.forEach((stat) => {
+      stat.level = heatLevel(stat.count, maxCount);
+    });
+    const columns = [];
+    for (let week = 0; week < weekCount; week++) {
+      const column = [];
+      for (let day = 0; day < 7; day++) {
+        const date = addDays(startDate, week * 7 + day);
+        const key = toDateKey(date);
+        if (dailyStats.has(key)) {
+          column.push({ key, date });
+        } else {
+          column.push(null);
+        }
+      }
+      columns.push(column);
+    }
+    const monthLabels = [];
+    let lastMonth = -1;
+    columns.forEach((column, colIndex) => {
+      for (const cell of column) {
+        if (cell) {
+          const month = cell.date.getMonth();
+          if (month !== lastMonth) {
+            monthLabels.push({ label: HEATMAP_MONTH_LABELS[month], colIndex });
+            lastMonth = month;
+          }
+          break;
+        }
+      }
     });
     const heatmap = container.createDiv({
       cls: "pm-contribution-heatmap pm-project-heatmap",
-      attr: { "aria-label": "\u8FD1 30 \u5929\u9879\u76EE\u5B8C\u6210\u70ED\u529B\u8D8B\u52BF" }
+      attr: { "aria-label": "\u8FD1 1 \u5E74\u9879\u76EE\u5B8C\u6210\u70ED\u529B\u8D8B\u52BF" }
     });
     const graph = heatmap.createDiv({ cls: "pm-contribution-graph" });
-    graph.style.setProperty("--pm-heatmap-days", String(dailyStats.length));
-    graph.style.setProperty("--pm-heatmap-rows", String(HEATMAP_ROW_LABELS.length));
+    graph.style.setProperty("--pm-heatmap-cols", String(weekCount));
     const dateHeader = graph.createDiv({ cls: "pm-contribution-date-header" });
     dateHeader.createDiv({ cls: "pm-contribution-corner" });
-    dailyStats.forEach((item) => {
+    let nextMonthIdx = 0;
+    for (let col = 0; col < weekCount; col++) {
+      const label = nextMonthIdx < monthLabels.length && monthLabels[nextMonthIdx].colIndex === col ? monthLabels[nextMonthIdx++].label : "";
       dateHeader.createDiv({
-        cls: `pm-contribution-date-label ${isToday(item.key) ? "is-today" : ""}`,
-        text: formatHeatmapDate(item.date)
+        cls: `pm-contribution-date-label`,
+        text: label
       });
-    });
+    }
     const body = graph.createDiv({ cls: "pm-contribution-body" });
     const axis = body.createDiv({ cls: "pm-contribution-weekday-axis" });
     HEATMAP_ROW_LABELS.forEach((label) => axis.createDiv({ cls: "pm-contribution-weekday-label", text: label }));
     const grid = body.createDiv({ cls: "pm-contribution-grid" });
-    HEATMAP_ROW_LABELS.forEach((_, rowIndex) => {
-      dailyStats.forEach((item) => {
-        const isFilled = rowIndex >= HEATMAP_ROW_LABELS.length - item.filledCells;
-        const level = isFilled ? item.level : 0;
-        const cell = grid.createEl("button", {
-          cls: `pm-contribution-cell level-${level} ${isToday(item.key) ? "is-today" : ""}`,
+    for (let row = 0; row < 7; row++) {
+      for (let col = 0; col < weekCount; col++) {
+        const cell = columns[col][row];
+        if (!cell) {
+          grid.createDiv({ cls: "pm-contribution-cell is-empty" });
+          continue;
+        }
+        const stat = dailyStats.get(cell.key);
+        const count = stat?.count ?? 0;
+        const level = stat?.level ?? 0;
+        const isTodayCell = cell.key === todayKey;
+        const el = grid.createEl("button", {
+          cls: `pm-contribution-cell level-${level}${isTodayCell ? " is-today" : ""}`,
           attr: {
             type: "button",
-            "aria-label": `${item.key}: ${item.count} \u4E2A\u5B8C\u6210\u4EFB\u52A1`
+            "aria-label": `${cell.key}: ${count} \u4E2A\u5B8C\u6210\u4EFB\u52A1`
           }
         });
-        cell.title = `${item.key}: ${item.count} \u4E2A\u5B8C\u6210\u4EFB\u52A1`;
-        cell.addEventListener("click", () => {
-          const dayTasks = tasks.filter((task) => task.completedAt?.slice(0, 10) === item.key || task.date === item.key);
+        el.title = `${cell.key}: ${count} \u4E2A\u5B8C\u6210\u4EFB\u52A1`;
+        el.addEventListener("click", () => {
+          const dayTasks = tasks.filter((task) => task.completedAt?.slice(0, 10) === cell.key || task.date === cell.key);
           new DayTasksModal(this.app, {
-            date: item.key,
+            date: cell.key,
             tasks: dayTasks,
             getProject: (projectId) => this.plugin.store.getProject(projectId)
           }).open();
         });
-      });
-    });
+      }
+    }
     const legend = heatmap.createDiv({ cls: "pm-contribution-legend" });
     legend.createSpan({ text: "\u5C11" });
     [0, 1, 2, 3, 4].forEach((level) => legend.createSpan({ cls: `pm-contribution-level-swatch level-${level}` }));
@@ -6524,13 +6587,14 @@ var OverviewView = class extends BaseProjectView {
         title: "\u6279\u91CF\u5BFC\u5165\u9879\u76EE\u4EFB\u52A1",
         store: this.plugin.store,
         projectId: project.id,
-        defaultDate: toDateKey(now())
+        defaultDate: toDateKey(now()),
+        allowedFormats: ["markdown-planned"]
       }).open();
     });
     projectActions.createEl("button", { text: "\u5BFC\u51FA Markdown", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
       try {
         const text = this.plugin.store.exportProjectAsFormattedText(project.id);
-        if (!text.includes("- [")) {
+        if (!text.trim()) {
           new import_obsidian12.Notice("\u5F53\u524D\u9879\u76EE\u6682\u65E0\u4EFB\u52A1\u53EF\u5BFC\u51FA");
           return;
         }
@@ -7869,7 +7933,8 @@ var GANTT_LEFT_WIDTH = 360;
 var GANTT_MIN_ZOOM = 0.4;
 var GANTT_MAX_ZOOM = 2;
 var GANTT_ZOOM_STEP = 0.1;
-var HEATMAP_ROW_LABELS = ["\u5468\u4E00", "\u5468\u4E8C", "\u5468\u4E09", "\u5468\u56DB", "\u5468\u4E94"];
+var HEATMAP_ROW_LABELS = ["\u5468\u4E00", "\u5468\u4E8C", "\u5468\u4E09", "\u5468\u56DB", "\u5468\u4E94", "\u5468\u516D", "\u5468\u65E5"];
+var HEATMAP_MONTH_LABELS = ["1\u6708", "2\u6708", "3\u6708", "4\u6708", "5\u6708", "6\u6708", "7\u6708", "8\u6708", "9\u6708", "10\u6708", "11\u6708", "12\u6708"];
 function buildProjectTaskHierarchy(tasks) {
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const hiddenTaskIds = /* @__PURE__ */ new Set();
@@ -8222,12 +8287,6 @@ function isOccurrenceOverdue(task, today, currentMinute) {
 }
 function formatOccurrenceWindow(task) {
   return task.startTime && task.endTime ? `${task.startTime} - ${task.endTime}` : "\u672A\u6392\u671F";
-}
-function formatHeatmapDate(date) {
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-function heatmapFilledCells(count) {
-  return Math.min(HEATMAP_ROW_LABELS.length, Math.max(0, count));
 }
 function heatLevel(count, maxCount) {
   if (count <= 0) {

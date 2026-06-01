@@ -169,7 +169,7 @@ export class OverviewView extends BaseProjectView {
     const heatmapTitle = heatmapHeader.createDiv({ cls: "pm-heatmap-title" });
     const heatmapIcon = heatmapTitle.createSpan({ cls: "pm-heatmap-title-icon" });
     setIcon(heatmapIcon, "flame");
-    heatmapTitle.createEl("h3", { text: "项目热力趋势（近 30 天）" });
+    heatmapTitle.createEl("h3", { text: "项目热力趋势（近 1 年）" });
     this.renderHeatmap(heatmapSection, tasks);
   }
 
@@ -211,7 +211,10 @@ export class OverviewView extends BaseProjectView {
   }
 
   private renderHeatmap(container: HTMLElement, tasks: TaskOccurrence[]): void {
-    const days = Array.from({ length: 30 }, (_, index) => addDays(now(), -(29 - index)));
+    const today = now();
+    const todayKey = toDateKey(today);
+
+    // Build completion counts for the past 365 days
     const counts = new Map<string, number>();
     tasks.forEach((task) => {
       if (!task.completed || !task.completedAt) {
@@ -221,64 +224,118 @@ export class OverviewView extends BaseProjectView {
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
 
-    const maxCount = Math.max(1, ...days.map((date) => counts.get(toDateKey(date)) ?? 0));
-    const dailyStats = days.map((date) => {
+    // Calculate date range: align to Monday of the week containing (today - 364 days)
+    const startDate = startOfWeek(addDays(today, -364));
+    const totalDays = Math.round((today.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    const weekCount = Math.ceil(totalDays / 7);
+
+    // Build a lookup map for all dates in range
+    const dailyStats = new Map<string, { date: Date; key: string; count: number; level: number }>();
+    let maxCount = 1;
+    for (let i = 0; i < totalDays; i++) {
+      const date = addDays(startDate, i);
       const key = toDateKey(date);
       const count = counts.get(key) ?? 0;
-      return {
-        date,
-        key,
-        count,
-        level: heatLevel(count, maxCount),
-        filledCells: heatmapFilledCells(count)
-      };
+      if (count > maxCount) {
+        maxCount = count;
+      }
+      dailyStats.set(key, { date, key, count, level: 0 });
+    }
+    dailyStats.forEach((stat) => {
+      stat.level = heatLevel(stat.count, maxCount);
+    });
+
+    // Build column structure (each column = one week, 7 rows for Mon-Sun)
+    const columns: Array<Array<{ key: string; date: Date } | null>> = [];
+    for (let week = 0; week < weekCount; week++) {
+      const column: Array<{ key: string; date: Date } | null> = [];
+      for (let day = 0; day < 7; day++) {
+        const date = addDays(startDate, week * 7 + day);
+        const key = toDateKey(date);
+        if (dailyStats.has(key)) {
+          column.push({ key, date });
+        } else {
+          column.push(null);
+        }
+      }
+      columns.push(column);
+    }
+
+    // Determine month labels: show month name on the first column where a new month appears
+    const monthLabels: Array<{ label: string; colIndex: number }> = [];
+    let lastMonth = -1;
+    columns.forEach((column, colIndex) => {
+      for (const cell of column) {
+        if (cell) {
+          const month = cell.date.getMonth();
+          if (month !== lastMonth) {
+            monthLabels.push({ label: HEATMAP_MONTH_LABELS[month], colIndex });
+            lastMonth = month;
+          }
+          break;
+        }
+      }
     });
 
     const heatmap = container.createDiv({
       cls: "pm-contribution-heatmap pm-project-heatmap",
-      attr: { "aria-label": "近 30 天项目完成热力趋势" }
+      attr: { "aria-label": "近 1 年项目完成热力趋势" }
     });
 
     const graph = heatmap.createDiv({ cls: "pm-contribution-graph" });
-    graph.style.setProperty("--pm-heatmap-days", String(dailyStats.length));
-    graph.style.setProperty("--pm-heatmap-rows", String(HEATMAP_ROW_LABELS.length));
+    graph.style.setProperty("--pm-heatmap-cols", String(weekCount));
+
+    // Month header row
     const dateHeader = graph.createDiv({ cls: "pm-contribution-date-header" });
     dateHeader.createDiv({ cls: "pm-contribution-corner" });
-    dailyStats.forEach((item) => {
+    let nextMonthIdx = 0;
+    for (let col = 0; col < weekCount; col++) {
+      const label = nextMonthIdx < monthLabels.length && monthLabels[nextMonthIdx].colIndex === col
+        ? monthLabels[nextMonthIdx++].label
+        : "";
       dateHeader.createDiv({
-        cls: `pm-contribution-date-label ${isToday(item.key) ? "is-today" : ""}`,
-        text: formatHeatmapDate(item.date)
+        cls: `pm-contribution-date-label`,
+        text: label
       });
-    });
+    }
 
+    // Body: weekday axis + grid
     const body = graph.createDiv({ cls: "pm-contribution-body" });
     const axis = body.createDiv({ cls: "pm-contribution-weekday-axis" });
     HEATMAP_ROW_LABELS.forEach((label) => axis.createDiv({ cls: "pm-contribution-weekday-label", text: label }));
 
     const grid = body.createDiv({ cls: "pm-contribution-grid" });
 
-    HEATMAP_ROW_LABELS.forEach((_, rowIndex) => {
-      dailyStats.forEach((item) => {
-        const isFilled = rowIndex >= HEATMAP_ROW_LABELS.length - item.filledCells;
-        const level = isFilled ? item.level : 0;
-        const cell = grid.createEl("button", {
-          cls: `pm-contribution-cell level-${level} ${isToday(item.key) ? "is-today" : ""}`,
+    // Render grid row by row (7 rows × weekCount columns)
+    for (let row = 0; row < 7; row++) {
+      for (let col = 0; col < weekCount; col++) {
+        const cell = columns[col][row];
+        if (!cell) {
+          grid.createDiv({ cls: "pm-contribution-cell is-empty" });
+          continue;
+        }
+        const stat = dailyStats.get(cell.key);
+        const count = stat?.count ?? 0;
+        const level = stat?.level ?? 0;
+        const isTodayCell = cell.key === todayKey;
+        const el = grid.createEl("button", {
+          cls: `pm-contribution-cell level-${level}${isTodayCell ? " is-today" : ""}`,
           attr: {
             type: "button",
-            "aria-label": `${item.key}: ${item.count} 个完成任务`
+            "aria-label": `${cell.key}: ${count} 个完成任务`
           }
         });
-        cell.title = `${item.key}: ${item.count} 个完成任务`;
-        cell.addEventListener("click", () => {
-          const dayTasks = tasks.filter((task) => task.completedAt?.slice(0, 10) === item.key || task.date === item.key);
+        el.title = `${cell.key}: ${count} 个完成任务`;
+        el.addEventListener("click", () => {
+          const dayTasks = tasks.filter((task) => task.completedAt?.slice(0, 10) === cell.key || task.date === cell.key);
           new DayTasksModal(this.app, {
-            date: item.key,
+            date: cell.key,
             tasks: dayTasks,
             getProject: (projectId) => this.plugin.store.getProject(projectId)
           }).open();
         });
-      });
-    });
+      }
+    }
 
     const legend = heatmap.createDiv({ cls: "pm-contribution-legend" });
     legend.createSpan({ text: "少" });
@@ -715,13 +772,14 @@ export class OverviewView extends BaseProjectView {
         title: "批量导入项目任务",
         store: this.plugin.store,
         projectId: project.id,
-        defaultDate: toDateKey(now())
+        defaultDate: toDateKey(now()),
+        allowedFormats: ["markdown-planned"]
       }).open();
     });
     projectActions.createEl("button", { text: "导出 Markdown", cls: "pm-button pm-button-secondary" }).addEventListener("click", async () => {
       try {
         const text = this.plugin.store.exportProjectAsFormattedText(project.id);
-        if (!text.includes("- [")) {
+        if (!text.trim()) {
           new Notice("当前项目暂无任务可导出");
           return;
         }
@@ -2175,7 +2233,8 @@ const GANTT_LEFT_WIDTH = 360;
 const GANTT_MIN_ZOOM = 0.4;
 const GANTT_MAX_ZOOM = 2;
 const GANTT_ZOOM_STEP = 0.1;
-const HEATMAP_ROW_LABELS = ["周一", "周二", "周三", "周四", "周五"];
+const HEATMAP_ROW_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+const HEATMAP_MONTH_LABELS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
 
 type GanttScale = "day" | "week" | "month";
 
@@ -2630,14 +2689,6 @@ function isOccurrenceOverdue(task: TaskOccurrence, today: string, currentMinute:
 
 function formatOccurrenceWindow(task: TaskOccurrence): string {
   return task.startTime && task.endTime ? `${task.startTime} - ${task.endTime}` : "未排期";
-}
-
-function formatHeatmapDate(date: Date): string {
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-
-function heatmapFilledCells(count: number): number {
-  return Math.min(HEATMAP_ROW_LABELS.length, Math.max(0, count));
 }
 
 function heatLevel(count: number, maxCount: number): number {

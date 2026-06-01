@@ -308,10 +308,10 @@
 }
 
 .pm-contribution-heatmap {
-  --pm-contribution-cell-size: 13px;
-  --pm-contribution-column-gap: 24px;
-  --pm-contribution-row-gap: 6px;
-  --pm-contribution-axis-width: 46px;
+  --pm-contribution-cell-size: 10px;
+  --pm-contribution-column-gap: 3px;
+  --pm-contribution-row-gap: 3px;
+  --pm-contribution-axis-width: 32px;
   --pm-contribution-empty: #211936;
   --pm-contribution-level-1: #312058;
   --pm-contribution-level-2: #4b2b91;
@@ -325,26 +325,27 @@
 }
 
 .pm-contribution-graph {
-  min-width: 1120px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
 }
 
 .pm-contribution-date-header {
   display: grid;
-  grid-template-columns: var(--pm-contribution-axis-width) repeat(var(--pm-heatmap-days, 30), var(--pm-contribution-cell-size));
+  grid-template-columns: var(--pm-contribution-axis-width) repeat(var(--pm-heatmap-cols, 53), var(--pm-contribution-cell-size));
   column-gap: var(--pm-contribution-column-gap);
   align-items: end;
-  margin-bottom: 7px;
+  margin-bottom: 4px;
 }
 
 .pm-contribution-date-label {
   color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 650;
+  font-size: 0.68rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  text-align: center;
   white-space: nowrap;
-  transform: translateX(-3px);
 }
 
 .pm-contribution-date-label.is-today {
@@ -354,14 +355,14 @@
 .pm-contribution-body {
   display: grid;
   grid-template-columns: var(--pm-contribution-axis-width) auto;
-  column-gap: var(--pm-contribution-column-gap);
+  column-gap: 4px;
   align-items: start;
 }
 
 .pm-contribution-weekday-axis,
 .pm-contribution-grid {
   display: grid;
-  grid-template-rows: repeat(var(--pm-heatmap-rows, 5), var(--pm-contribution-cell-size));
+  grid-template-rows: repeat(7, var(--pm-contribution-cell-size));
   row-gap: var(--pm-contribution-row-gap);
 }
 
@@ -369,15 +370,17 @@
   display: flex;
   align-items: center;
   color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 650;
+  font-size: 0.68rem;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
 
 .pm-contribution-grid {
-  grid-template-columns: repeat(var(--pm-heatmap-days, 30), var(--pm-contribution-cell-size));
+  grid-template-columns: repeat(var(--pm-heatmap-cols, 53), var(--pm-contribution-cell-size));
+  grid-template-rows: repeat(7, var(--pm-contribution-cell-size));
   column-gap: var(--pm-contribution-column-gap);
+  row-gap: var(--pm-contribution-row-gap);
 }
 
 .pm-contribution-cell {
@@ -392,7 +395,7 @@
   margin: 0;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--pm-contribution-empty) 82%, #7255d8 18%);
-  border-radius: 4px;
+  border-radius: 2px;
   background: var(--pm-contribution-empty);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
   cursor: pointer;
@@ -401,6 +404,11 @@
     transform 120ms ease,
     border-color 120ms ease,
     filter 120ms ease;
+}
+
+.pm-contribution-cell.is-empty {
+  visibility: hidden;
+  cursor: default;
 }
 
 .pm-contribution-cell.level-1,
@@ -429,6 +437,13 @@
   transform: translateY(-1px);
 }
 
+.pm-contribution-cell.is-empty:hover,
+.pm-contribution-cell.is-empty:focus-visible {
+  transform: none;
+  filter: none;
+  border-color: color-mix(in srgb, var(--pm-contribution-empty) 82%, #7255d8 18%);
+}
+
 .pm-contribution-cell:focus-visible {
   outline: 2px solid #b99bff;
   outline-offset: 2px;
@@ -444,24 +459,34 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   width: max-content;
   min-width: 100%;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
 .pm-contribution-level-swatch {
   display: inline-block;
-  width: 13px;
-  height: 13px;
-  border-radius: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
   background: var(--pm-contribution-empty);
   border: 1px solid color-mix(in srgb, var(--pm-contribution-empty) 82%, #7255d8 18%);
 }
 
 .pm-project-heatmap {
   padding-top: 2px;
+}
+
+.pm-import-format-warning {
+  background: color-mix(in srgb, var(--background-modifier-warning) 24%, var(--background-secondary) 76%);
+  color: var(--text-warning);
+  border: 1px solid var(--background-modifier-warning);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
 }
 
 .pm-week-board {
