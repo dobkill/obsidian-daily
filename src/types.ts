@@ -293,7 +293,7 @@ export type TaskImportCompletionMode = "pending" | "today" | "series";
 
 export type TaskImportAction = "create" | "overwrite" | "complete-today" | "complete-series";
 
-export type TaskImportSourceFormat = "task-plan" | "data-migration";
+export type TaskImportSourceFormat = "markdown-planned" | "markdown-minimal" | "data-migration";
 
 export type TaskImportDataMigrationSummary = {
   version: number;
@@ -318,6 +318,8 @@ export type TaskImportPreviewTask = {
   input: TaskInput;
   projectName?: string;
   projectId?: string;
+  parentTitle?: string;
+  dependencyTitles?: string[];
   matchedTaskId?: string;
   matchedTaskTitle?: string;
   action: TaskImportAction;

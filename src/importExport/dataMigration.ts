@@ -277,7 +277,7 @@ export function taskToDataMigrationImportInput(task: Task, projectId?: string): 
     occurrenceDates: [...task.occurrenceDates],
     completedOccurrenceDates: task.occurrenceStates.filter((state) => Boolean(state.completedAt)).map((state) => state.date),
     occurrenceOverrides: task.occurrenceOverrides.map((override) => ({ ...override })),
-    subtasks: task.subtasks.map((subtask) => ({ ...subtask })),
+    subtasks: [],
     viewState: cloneViewState(task.viewState),
     sourceLinks: task.sourceLinks.map((source) => ({ ...source })),
     notes: task.notes.map((note) => ({ ...note })),
@@ -314,7 +314,7 @@ export function remapDataMigrationTask(task: Task, taskIdBySourceId: Map<string,
     id,
     projectId,
     tags: [...task.tags],
-    subtasks: task.subtasks.map((subtask) => ({ ...subtask })),
+    subtasks: [],
     occurrenceDates: [...task.occurrenceDates],
     occurrenceStates: task.occurrenceStates.map((state) => ({
       ...state,
@@ -376,9 +376,6 @@ function taskToDataMigrationRecord(task: Task): DataMigrationTaskRecord {
   if (occurrencePlan) {
     record.occurrencePlan = occurrencePlan;
   }
-  if (task.subtasks.length > 0) {
-    record.subtasks = task.subtasks.map((subtask) => ({ ...subtask }));
-  }
   if (task.occurrenceStates.length > 0) {
     record.occurrenceStates = task.occurrenceStates.map((state) => ({
       ...state,
@@ -423,7 +420,7 @@ function dataMigrationRecordToTask(record: DataMigrationTaskRecord): Task {
     recurrence,
     recurrenceCount: record.recurrenceCount ?? null,
     recurrenceUntil: record.recurrenceUntil ?? null,
-    subtasks: (record.subtasks ?? []).map((subtask, index) => ({ ...subtask, order: subtask.order ?? index })),
+    subtasks: [],
     occurrenceDates,
     occurrenceStates: (record.occurrenceStates ?? []).map((state) => ({
       ...state,

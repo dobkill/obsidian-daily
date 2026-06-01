@@ -609,13 +609,7 @@ export class OverviewView extends BaseProjectView {
     renderCompositeOccurrenceCards(container, {
       parentOccurrence: task,
       childOccurrences,
-      onToggleLightSubtask: async (subtask, completed) => {
-        try {
-          await this.plugin.store.updateTaskOccurrenceSubtaskCompletion(task.taskId, task.date, subtask.id, completed);
-        } catch (error) {
-          new Notice(error instanceof Error ? error.message : "更新失败");
-        }
-      },
+      compact: true,
       onToggleChildOccurrence: async (child) => {
         try {
           await this.plugin.store.updateTaskOccurrenceCompletion(child.taskId, child.date, !child.completed);
@@ -1483,7 +1477,7 @@ export class OverviewView extends BaseProjectView {
         appendBadge(meta, priorityLabel(node.task.priority), priorityTone(node.task.priority));
         appendBadge(meta, recurrenceLabel(node.task.recurrence), "repeat");
         if (node.task.kind === "composite") {
-          appendBadge(meta, `${node.task.subtasks.length + countDirectChildTasks(tasks, node.task.id)} 个子任务`, "tag");
+          appendBadge(meta, `${countDirectChildTasks(tasks, node.task.id)} 个子任务`, "tag");
         }
       } else {
         appendBadge(meta, "评语", "tag");
@@ -1551,31 +1545,16 @@ export class OverviewView extends BaseProjectView {
 
       const actions = container.createDiv({ cls: "pm-inline-actions" });
       actions.createEl("button", { text: "编辑任务", cls: "pm-button pm-button-primary" }).addEventListener("click", () => this.openEditTaskModal(node.task!));
-      actions.createEl("button", { text: "新增子任务", cls: "pm-button pm-button-secondary" }).addEventListener("click", () => {
-        this.openCreateTaskModal("新增子任务", this.plugin.store.getProjects(), {
-          title: "",
-          description: "",
-          projectId: project.id,
-          status: "todo",
-          tags: [],
-          date: toDateKey(now()),
-          recurrence: "once",
-          completed: false,
-          viewState: {
-            mindmap: {
-              parentTaskId: node.task!.id,
-              childOrder: Date.now(),
-              expanded: true
-            }
-          },
-          ...this.plugin.store.getSuggestedTaskWindow(toDateKey(now()))
+      if (node.task.kind === "composite") {
+        actions.createEl("button", { text: "新增子任务", cls: "pm-button pm-button-secondary" }).addEventListener("click", () => {
+          this.openCreateChildTaskModal(node.task!);
         });
-      });
+      }
       actions.createEl("button", { text: "新增评语", cls: "pm-button pm-button-secondary" }).addEventListener("click", () => {
         void this.addMindmapComment(node.task!.id);
       });
 
-      if (node.task.kind === "simple") {
+      if (node.task.kind === "simple" && !(node.task.viewState.mindmap.parentTaskId ?? null)) {
         container.createEl("button", { text: "转为组合任务", cls: "pm-button pm-button-ghost" }).addEventListener("click", async () => {
           await this.plugin.store.updateTask(node.task!.id, {
             kind: "composite"
@@ -1583,16 +1562,17 @@ export class OverviewView extends BaseProjectView {
           this.openEditTaskModal(this.plugin.store.getTask(node.task!.id) ?? node.task!);
         });
       } else {
-        container.createDiv({ cls: "pm-muted", text: `当前为组合任务，共 ${node.task.subtasks.length + countDirectChildTasks(tasks, node.task.id)} 个子任务。` });
+        container.createDiv({ cls: "pm-muted", text: `当前为组合任务，共 ${countDirectChildTasks(tasks, node.task.id)} 个子任务。` });
       }
 
       const relationCard = container.createDiv({ cls: "pm-input-card" });
       relationCard.createEl("strong", { text: "上级任务" });
       const parentSelect = relationCard.createEl("select");
       parentSelect.createEl("option", { value: "", text: "挂到项目根节点" });
+      parentSelect.disabled = node.task.kind === "composite";
       const descendants = collectTaskDescendantIds(tasks, node.task.id);
       tasks
-        .filter((task) => task.id !== node.task!.id && !descendants.has(task.id))
+        .filter((task) => task.kind === "composite" && task.id !== node.task!.id && !descendants.has(task.id))
         .forEach((task) => parentSelect.createEl("option", { value: task.id, text: task.title }));
       parentSelect.value = node.task.viewState.mindmap.parentTaskId ?? "";
       parentSelect.addEventListener("change", async () => {
@@ -2139,7 +2119,7 @@ export class OverviewView extends BaseProjectView {
         recurrenceCount: task.recurrenceCount ?? null,
         recurrenceUntil: task.recurrenceUntil ?? null,
         kind: task.kind,
-        subtasks: task.subtasks,
+        subtasks: [],
         viewState: task.viewState,
         completed: isTaskSeriesCompleted(task)
       },
@@ -2155,8 +2135,34 @@ export class OverviewView extends BaseProjectView {
       onOpenChildTask: (childTask) => {
         this.openEditTaskModal(childTask);
       },
+      onCreateChildTask: (parent) => {
+        this.openCreateChildTaskModal(parent);
+      },
       allowSingleDelete: false
     }).open();
+  }
+
+  private openCreateChildTaskModal(parent: Task): void {
+    this.openCreateTaskModal("新增子任务", this.plugin.store.getProjects(), {
+      title: "",
+      description: "",
+      projectId: parent.projectId,
+      status: "todo",
+      tags: [],
+      date: parent.date,
+      startTime: parent.startTime,
+      endTime: parent.endTime,
+      recurrence: "once",
+      kind: "simple",
+      completed: false,
+      viewState: {
+        mindmap: {
+          parentTaskId: parent.id,
+          childOrder: Date.now(),
+          expanded: true
+        }
+      }
+    });
   }
 
   private openEditOccurrenceModal(task: TaskOccurrence): void {
@@ -2184,7 +2190,7 @@ export class OverviewView extends BaseProjectView {
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
         kind: seriesTask.kind,
-        subtasks: seriesTask.subtasks,
+        subtasks: [],
         viewState: seriesTask.viewState,
         completed: isTaskSeriesCompleted(seriesTask)
       },

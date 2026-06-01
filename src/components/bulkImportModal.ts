@@ -54,7 +54,7 @@ export class BulkImportModal extends Modal {
     const input = contentEl.createEl("textarea", {
       cls: "pm-bulk-import-input",
       placeholder:
-        "#项目：插件体验示例\n+ 组合：开发任务解析器 @2026-05-18 09:00-10:30 #parser !high status:doing\n  - 解析标题\n  - 解析日期\n+ 任务：每日回顾输入流程 @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n+ 任务：每周复盘导入流程 @2026-05-18 20:30-21:00 #review status:todo repeat:weekly count:4"
+        "#项目：插件体验示例\n+ 组合：开发任务解析器 @2026-05-18 09:00-10:30 #parser !high status:doing\n  + 子任务：解析标题 @2026-05-18 09:05-09:30 #parser status:todo\n  + 子任务：解析日期 @2026-05-18 09:30-10:00 #parser status:todo\n+ 任务：每日回顾输入流程 @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n+ 任务：每周复盘导入流程 @2026-05-18 20:30-21:00 #review status:todo repeat:weekly count:4"
     });
     input.addEventListener("input", () => {
       state.text = input.value;
@@ -67,6 +67,7 @@ export class BulkImportModal extends Modal {
       previewEl.empty();
       const preview = this.options.store.previewFormattedTasks(state.text, {
         projectId: this.options.projectId,
+        strictProjectId: this.isProjectMarkdownOnlyMode() ? this.options.projectId : undefined,
         defaultDate: state.defaultDate
       });
 
@@ -150,6 +151,7 @@ export class BulkImportModal extends Modal {
           }
           const created = await this.options.store.importFormattedTasks(state.text, {
             projectId: this.options.projectId,
+            strictProjectId: this.isProjectMarkdownOnlyMode() ? this.options.projectId : undefined,
             defaultDate: state.defaultDate
           });
           new Notice(`已处理 ${created.length} 条任务`);
@@ -167,6 +169,10 @@ export class BulkImportModal extends Modal {
       return false;
     }
     return !this.options.allowedFormats.includes(sourceFormat as ImportSourceFormat);
+  }
+
+  private isProjectMarkdownOnlyMode(): boolean {
+    return this.options.allowedFormats?.length === 1 && this.options.allowedFormats[0] === "markdown-planned" && Boolean(this.options.projectId);
   }
 
   private getFormatBlockedMessage(): string {

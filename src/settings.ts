@@ -65,8 +65,8 @@ const TASK_PLAN_SAMPLE_TEXT = [
   "#项目：英语四级冲刺",
   "+ 任务：搭建复习看板 @2026-05-27 09:00-10:30 #planning !high status:doing",
   "+ 组合：拆解每日背词 @2026-05-27 12:00-12:40 #vocab !medium status:todo repeat:daily count:5",
-  "  - 复习昨天错词 @12:00-12:10",
-  "  - 新增 30 个高频词 @12:10-12:30",
+  "  + 子任务：复习昨天错词 @2026-05-27 12:00-12:10 #vocab status:todo repeat:daily count:5",
+  "  + 子任务：新增 30 个高频词 @2026-05-27 12:10-12:30 #vocab status:todo repeat:daily count:5",
   "  > 每天完成后可在今日任务页勾选。",
   "+ 任务：模考复盘 @2026-05-29 19:30-21:00 #mock status:todo repeat:weekly count:4"
 ].join("\n");
@@ -104,8 +104,8 @@ const FORMAT_GUIDE_SECTIONS: FormatGuideSection[] = [
     desc: "用于制定新计划或覆盖已有任务，语法与今日完成格式明显分离。",
     points: [
       "任务行使用 + 任务：或 + 组合：开头，创建 / 覆盖必须提供 @YYYY-MM-DD HH:mm-HH:mm，时间范围为 00:00 至 23:59。",
-      "支持 #标签、!优先级、status、repeat、count、until、dates、done 和缩进描述。",
-      "组合任务可在下方缩进写轻量项。"
+      "支持 #标签、!优先级、status、repeat、count、until、dates、board、gantt、deps、mindmap 和缩进描述。",
+      "组合任务的子任务使用缩进的 + 子任务：，子任务是独立普通任务，不能是组合任务。"
     ],
     sample: TASK_PLAN_SAMPLE_TEXT
   }

@@ -1,5 +1,5 @@
 import { App, ButtonComponent, DropdownComponent, Modal, Notice, Setting, TextComponent } from "obsidian";
-import { Project, Task, TaskDeleteScope, TaskInput, TaskKind, TaskOccurrence, TaskPriority, TaskRecurrence, TaskStatus, TaskSubtaskInput, TaskUpdateScope } from "../types";
+import { Project, Task, TaskDeleteScope, TaskInput, TaskKind, TaskOccurrence, TaskPriority, TaskRecurrence, TaskStatus, TaskUpdateScope } from "../types";
 import { parseTimeToMinutes } from "../utils/date";
 import { renderAttachedCompositeTaskCards } from "./compositeTaskCards";
 
@@ -16,6 +16,7 @@ type TaskModalOptions = {
   onDelete?: (scope: TaskDeleteScope) => Promise<void>;
   onCompleteSeries?: () => Promise<void>;
   onOpenSeriesEditor?: () => void;
+  onCreateChildTask?: (parent: Task) => void;
   onOpenChildTask?: (task: Task) => void;
 };
 
@@ -35,7 +36,7 @@ export class TaskModal extends Modal {
 
     const state: TaskInput = { ...this.options.initial };
     state.kind = state.kind ?? "simple";
-    state.subtasks = [...(state.subtasks ?? [])];
+    state.subtasks = [];
     state.viewState = cloneTaskInputViewState(state.viewState);
     const isOccurrenceEditor = Boolean(this.options.occurrenceContext);
 
@@ -44,7 +45,7 @@ export class TaskModal extends Modal {
     const scheduleSection = createTaskModalSection(form, "时间安排");
     const relationSection = isOccurrenceEditor ? null : createTaskModalSection(form, "归属与状态");
     const recurrenceSection = isOccurrenceEditor ? null : createTaskModalSection(form, "重复规则");
-    const subtaskSection = isOccurrenceEditor ? null : createTaskModalSection(form, "组合项");
+    const subtaskSection = isOccurrenceEditor ? null : createTaskModalSection(form, "子任务");
 
     if (this.options.occurrenceContext) {
       basicSection.createDiv({
@@ -69,11 +70,13 @@ export class TaskModal extends Modal {
           })
       );
 
+    let taskTypeDropdown: DropdownComponent | null = null;
     if (!isOccurrenceEditor) {
       new Setting(basicSection)
         .setName("任务类型")
-        .setDesc("组合任务可作为容器，挂载单次、每日或每周子任务")
+        .setDesc("组合任务可作为容器，子任务通过“挂入组合任务”创建")
         .addDropdown((dropdown) => {
+          taskTypeDropdown = dropdown;
           const labels: Record<TaskKind, string> = {
             simple: "普通任务",
             composite: "组合任务"
@@ -82,7 +85,11 @@ export class TaskModal extends Modal {
           dropdown.setValue(state.kind ?? "simple");
           dropdown.onChange((value) => {
             state.kind = value as TaskKind;
-            state.subtasks = state.kind === "composite" ? state.subtasks ?? [] : [];
+            state.subtasks = [];
+            if (state.kind === "composite") {
+              state.viewState = withMindmapParent(state.viewState, null);
+              renderParentField();
+            }
             renderSubtaskFields();
           });
         });
@@ -220,9 +227,13 @@ export class TaskModal extends Modal {
               state.viewState = withMindmapParent(state.viewState, parentTaskId);
               const parent = parentTaskId ? parentOptions.find((task) => task.id === parentTaskId) : undefined;
               if (parent) {
+                state.kind = "simple";
+                state.subtasks = [];
+                taskTypeDropdown?.setValue("simple");
                 state.projectId = parent.projectId;
                 projectDropdown?.setValue(parent.projectId ?? "");
                 applyParentSchedule(parent);
+                renderSubtaskFields();
                 renderParentField();
               }
             });
@@ -340,62 +351,22 @@ export class TaskModal extends Modal {
       subtaskFields.addClass("pm-subtask-editor");
       subtaskFields.createDiv({
         cls: "pm-muted",
-        text: "轻量项可只写标题；如填写时间，必须落在组合任务的开始与结束时间内。需要独立重复规则时，请新建任务并挂入组合任务。"
-      });
-
-      const list = subtaskFields.createDiv({ cls: "pm-subtask-editor-list" });
-      const subtasks = state.subtasks ?? [];
-      subtasks.forEach((subtask, index) => {
-        const row = list.createDiv({ cls: "pm-subtask-editor-row" });
-        row.createSpan({ cls: "pm-subtask-editor-index", text: `${index + 1}.` });
-        const titleInput = row.createEl("input", {
-          type: "text",
-          placeholder: `子任务 ${index + 1}`
-        });
-        titleInput.value = subtask.title;
-        titleInput.addEventListener("input", () => {
-          subtasks[index] = {
-            ...subtasks[index],
-            title: titleInput.value
-          };
-          state.subtasks = [...subtasks];
-        });
-        const startInput = row.createEl("input", {
-          type: "text",
-          placeholder: "开始"
-        });
-        startInput.value = subtask.startTime ?? "";
-        startInput.addEventListener("input", () => {
-          subtasks[index] = {
-            ...subtasks[index],
-            startTime: startInput.value.trim() || undefined
-          };
-          state.subtasks = [...subtasks];
-        });
-        const endInput = row.createEl("input", {
-          type: "text",
-          placeholder: "结束"
-        });
-        endInput.value = subtask.endTime ?? "";
-        endInput.addEventListener("input", () => {
-          subtasks[index] = {
-            ...subtasks[index],
-            endTime: endInput.value.trim() || undefined
-          };
-          state.subtasks = [...subtasks];
-        });
-        row.createEl("button", { text: "删除", cls: "mod-warning" }).addEventListener("click", () => {
-          subtasks.splice(index, 1);
-          state.subtasks = [...subtasks];
-          renderSubtaskFields();
-        });
+        text: "子任务是独立任务，会保留自己的重复规则、完成记录与项目视图状态。"
       });
 
       const actions = subtaskFields.createDiv({ cls: "pm-inline-actions" });
-      actions.createEl("button", { text: "新增轻量检查项" }).addEventListener("click", () => {
-        state.subtasks = [...(state.subtasks ?? []), { title: "" } satisfies TaskSubtaskInput];
-        renderSubtaskFields();
+      const childButton = actions.createEl("button", { text: "添加子任务", cls: "pm-button pm-button-secondary" });
+      childButton.disabled = !this.options.existingTask || !this.options.onCreateChildTask;
+      childButton.addEventListener("click", () => {
+        if (!this.options.existingTask || !this.options.onCreateChildTask) {
+          return;
+        }
+        this.close();
+        this.options.onCreateChildTask(this.options.existingTask);
       });
+      if (!this.options.existingTask) {
+        subtaskFields.createDiv({ cls: "pm-muted", text: "保存组合任务后即可添加子任务。" });
+      }
 
       const childTasks = this.options.childTasks ?? [];
       if (childTasks.length === 0) {

@@ -44,7 +44,12 @@ export class TodayTasksView extends BaseProjectView {
     const totalSteps = tasks.reduce((sum, task) => sum + task.totalSteps, 0);
     const completedSteps = tasks.reduce((sum, task) => sum + task.completedSteps, 0);
     const progress = totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100);
-    const rawIncomplete = tasks.filter((task) => !task.completed);
+    const rawIncomplete = displayTasks.flatMap((item) => {
+      if (item.occurrence.kind === "composite" && item.childOccurrences.length > 0) {
+        return item.childOccurrences.filter((task) => !task.completed);
+      }
+      return summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed ? [] : [item.occurrence];
+    });
 
     const header = container.createDiv({ cls: "pm-page-header" });
     const title = header.createDiv();
@@ -241,7 +246,7 @@ export class TodayTasksView extends BaseProjectView {
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
         kind: seriesTask.kind,
-        subtasks: seriesTask.subtasks,
+        subtasks: [],
         viewState: seriesTask.viewState,
         completed: isTaskSeriesCompleted(seriesTask)
       },
@@ -257,7 +262,41 @@ export class TodayTasksView extends BaseProjectView {
       onOpenChildTask: (childTask) => {
         this.openSeriesEditor(childTask);
       },
+      onCreateChildTask: (parent) => {
+        this.openCreateChildTaskModal(parent);
+      },
       allowSingleDelete: false
+    }).open();
+  }
+
+  private openCreateChildTaskModal(parent: Task): void {
+    new TaskModal(this.app, {
+      title: "新增子任务",
+      projects: this.plugin.store.getProjects(),
+      compositeParents: this.plugin.store.getCompositeTasks(),
+      initial: {
+        title: "",
+        description: "",
+        projectId: parent.projectId,
+        status: "todo",
+        tags: [],
+        date: parent.date,
+        startTime: parent.startTime,
+        endTime: parent.endTime,
+        recurrence: "once",
+        kind: "simple",
+        completed: false,
+        viewState: {
+          mindmap: {
+            parentTaskId: parent.id,
+            childOrder: Date.now(),
+            expanded: true
+          }
+        }
+      },
+      onSubmit: async (input) => {
+        await this.plugin.store.createTask(input);
+      }
     }).open();
   }
 
@@ -282,7 +321,7 @@ export class TodayTasksView extends BaseProjectView {
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
         kind: seriesTask.kind,
-        subtasks: seriesTask.subtasks,
+        subtasks: [],
         viewState: seriesTask.viewState,
         completed: task.completed
       },
@@ -322,13 +361,6 @@ export class TodayTasksView extends BaseProjectView {
     renderCompositeOccurrenceCards(container, {
       parentOccurrence: task,
       childOccurrences,
-      onToggleLightSubtask: async (subtask, completed) => {
-        try {
-          await this.plugin.store.updateTaskOccurrenceSubtaskCompletion(task.taskId, task.date, subtask.id, completed);
-        } catch (error) {
-          new Notice(error instanceof Error ? error.message : "更新失败");
-        }
-      },
       onToggleChildOccurrence: async (child) => {
         try {
           await this.plugin.store.updateTaskOccurrenceCompletion(child.taskId, child.date, !child.completed);

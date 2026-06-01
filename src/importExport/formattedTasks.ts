@@ -8,9 +8,7 @@ import {
   TaskPriority,
   TaskRecurrence,
   TaskSourceLink,
-  TaskStatus,
-  TaskSubtask,
-  TaskSubtaskInput
+  TaskStatus
 } from "../types";
 import { compareDateKeys } from "../utils/date";
 
@@ -21,6 +19,8 @@ export type ParsedImportTask = {
   raw: string;
   input: TaskInput;
   projectName?: string;
+  parentTitle?: string;
+  dependencyTitles?: string[];
   completionMode: TaskImportCompletionMode;
   createReady: boolean;
 };
@@ -30,6 +30,7 @@ export function parseFormattedTaskText(
   options: {
     projects: Project[];
     projectId?: string;
+    strictProjectId?: string;
     defaultDate: string;
     source?: TaskSourceLink;
   }
@@ -40,6 +41,7 @@ export function parseFormattedTaskText(
   let currentProjectId = options.projectId;
   let currentProjectName = options.projectId ? options.projects.find((project) => project.id === options.projectId)?.name : undefined;
   let currentTask: ParsedImportTask | null = null;
+  let currentCompositeParentTitle: string | undefined;
 
   const flushCurrent = (): void => {
     if (currentTask) {
@@ -54,14 +56,29 @@ export function parseFormattedTaskText(
     if (projectMatch) {
       flushCurrent();
       const projectName = projectMatch[1].trim() || UNASSIGNED_PROJECT_LABEL;
+      const strictProject = options.strictProjectId ? options.projects.find((project) => project.id === options.strictProjectId) : undefined;
+      if (strictProject && projectName !== strictProject.name && projectName !== strictProject.id) {
+        issues.push({
+          line: index + 1,
+          raw,
+          blocking: true,
+          message: `导入项目名必须是「${strictProject.name}」`
+        });
+        currentProjectId = strictProject.id;
+        currentProjectName = strictProject.name;
+        currentCompositeParentTitle = undefined;
+        return;
+      }
       if (projectName === UNASSIGNED_PROJECT_LABEL) {
-        currentProjectId = undefined;
-        currentProjectName = UNASSIGNED_PROJECT_LABEL;
+        currentProjectId = strictProject?.id;
+        currentProjectName = strictProject?.name ?? UNASSIGNED_PROJECT_LABEL;
+        currentCompositeParentTitle = undefined;
         return;
       }
       const existingProject = options.projects.find((project) => project.name === projectName || project.id === projectName);
-      currentProjectId = existingProject?.id;
-      currentProjectName = existingProject?.name ?? projectName;
+      currentProjectId = strictProject?.id ?? existingProject?.id;
+      currentProjectName = strictProject?.name ?? existingProject?.name ?? projectName;
+      currentCompositeParentTitle = undefined;
       return;
     }
 
@@ -83,6 +100,42 @@ export function parseFormattedTaskText(
           raw,
           input: parsed.input,
           projectName: parsed.projectName,
+          parentTitle: parsed.parentTitle,
+          dependencyTitles: parsed.dependencyTitles,
+          completionMode: parsed.completionMode,
+          createReady: parsed.createReady
+        };
+        currentCompositeParentTitle = currentTask.input.kind === "composite" ? currentTask.input.title : undefined;
+      } catch (error) {
+        issues.push({ line: index + 1, message: error instanceof Error ? error.message : "任务解析失败", raw });
+      }
+      return;
+    }
+
+    const childTaskMatch = /^(\s{2,})\+\s*(子任务|child)[:：]\s+(.+)$/.exec(line);
+    if (childTaskMatch) {
+      if (!currentCompositeParentTitle) {
+        issues.push({ line: index + 1, message: "子任务必须写在组合任务下方", raw, blocking: true });
+        return;
+      }
+      flushCurrent();
+      try {
+        const parsed = parseTaskLine(childTaskMatch[3], {
+          completed: false,
+          forcedKind: "simple",
+          parentTitle: currentCompositeParentTitle,
+          projectId: currentProjectId,
+          projectName: currentProjectName,
+          defaultDate: options.defaultDate,
+          source: options.source
+        });
+        currentTask = {
+          line: index + 1,
+          raw,
+          input: parsed.input,
+          projectName: parsed.projectName,
+          parentTitle: parsed.parentTitle,
+          dependencyTitles: parsed.dependencyTitles,
           completionMode: parsed.completionMode,
           createReady: parsed.createReady
         };
@@ -108,9 +161,12 @@ export function parseFormattedTaskText(
           raw,
           input: parsed.input,
           projectName: parsed.projectName,
+          parentTitle: parsed.parentTitle,
+          dependencyTitles: parsed.dependencyTitles,
           completionMode: parsed.completionMode,
           createReady: parsed.createReady
         };
+        currentCompositeParentTitle = undefined;
       } catch (error) {
         issues.push({ line: index + 1, message: error instanceof Error ? error.message : "任务解析失败", raw });
       }
@@ -119,12 +175,7 @@ export function parseFormattedTaskText(
 
     const subtaskMatch = /^\s{2,}-\s+(.+)$/.exec(line);
     if (subtaskMatch && currentTask) {
-      currentTask.input.kind = "composite";
-      const subtask = parseSubtaskLine(subtaskMatch[1]);
-      currentTask.input.subtasks = [
-        ...(currentTask.input.subtasks ?? []),
-        { ...subtask, order: currentTask.input.subtasks?.length ?? 0 }
-      ];
+      issues.push({ line: index + 1, message: "组合任务不再支持轻量项，请改用「  + 子任务：...」", raw, blocking: true });
       return;
     }
 
@@ -156,31 +207,29 @@ export function renderTaskListForImport(tasks: Task[], projectNameForId: (projec
     }
     sections.push(`#项目：${projectKey === UNASSIGNED_PROJECT_LABEL ? UNASSIGNED_PROJECT_LABEL : projectNameForId(projectKey) ?? UNASSIGNED_PROJECT_LABEL}`);
     projectTasks.slice().sort(compareSeriesTasksForExport).forEach((task) => {
-      sections.push(renderTaskSeriesForExport(task));
+      sections.push(renderTaskSeriesForExport(task, { dependencyTitleForId: (taskId) => projectTasks.find((item) => item.id === taskId)?.title }));
       renderDescriptionForExport(task.description).forEach((line) => {
         sections.push(line);
       });
-      if (task.kind === "composite") {
-        task.subtasks.forEach((subtask) => {
-          sections.push(renderSubtaskForExport(subtask));
-        });
-      }
     });
   });
 
   return sections.join("\n").trim();
 }
 
-export function renderTaskSeriesForExport(task: Task): string {
-  const completedOccurrenceDates = getCompletedOccurrenceDates(task);
-  const parts = buildFormattedTaskParts({ ...task, completedOccurrenceDates }, { includeKind: false });
-  const prefix = task.kind === "composite" ? "组合" : "任务";
-  return `+ ${prefix}：${parts.join(" ")}`.trim();
-}
-
-export function renderSubtaskForExport(subtask: TaskSubtask): string {
-  const time = subtask.startTime && subtask.endTime ? ` @${subtask.startTime}-${subtask.endTime}` : "";
-  return `  - ${subtask.title}${time}`;
+export function renderTaskSeriesForExport(
+  task: Task,
+  options: {
+    child?: boolean;
+    dependencyTitleForId?: (taskId: string) => string | undefined;
+  } = {}
+): string {
+  const parts = buildFormattedTaskParts(task, {
+    includeKind: false,
+    dependencyTitleForId: options.dependencyTitleForId
+  });
+  const prefix = options.child ? "  + 子任务" : task.kind === "composite" ? "+ 组合" : "+ 任务";
+  return `${prefix}：${parts.join(" ")}`.trimEnd();
 }
 
 export function renderDescriptionForExport(description?: string): string[] {
@@ -196,27 +245,25 @@ export function extractProjectTaskBlocks(text: string): string {
   return blocks.length > 0 ? blocks.join("\n") : "";
 }
 
-function parseSubtaskLine(raw: string): TaskSubtaskInput {
-  const match = /\s@(\d{2}:\d{2})-(\d{2}:\d{2})\s*$/.exec(raw);
-  const title = raw.replace(/\s@\d{2}:\d{2}-\d{2}:\d{2}\s*$/, "").trim();
-  return {
-    title,
-    startTime: match?.[1],
-    endTime: match?.[2]
-  };
-}
-
 function parseTaskLine(
   rawTitle: string,
   context: {
     completed: boolean;
     forcedKind?: TaskKind;
+    parentTitle?: string;
     projectId?: string;
     projectName?: string;
     defaultDate: string;
     source?: TaskSourceLink;
   }
-): { input: TaskInput; projectName?: string; completionMode: TaskImportCompletionMode; createReady: boolean } {
+): {
+  input: TaskInput;
+  projectName?: string;
+  parentTitle?: string;
+  dependencyTitles?: string[];
+  completionMode: TaskImportCompletionMode;
+  createReady: boolean;
+} {
   let title = rawTitle.trim();
   const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
   const kindMatch = /\b(?:kind|type):(simple|composite)\b/.exec(title);
@@ -224,13 +271,25 @@ function parseTaskLine(
   const countMatch = /\bcount:(\d+)\b/.exec(title);
   const untilMatch = /\buntil:(\d{4}-\d{2}-\d{2})\b/.exec(title);
   const datesMatch = /\bdates:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
-  const doneMatch = /\bdone:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
   const statusMatch = /\bstatus:(todo|doing|blocked|done)\b/.exec(title);
   const finishMatch = /\bfinish:(today|series)\b/.exec(title);
   const priorityMatch = /!(low|medium|high|urgent)\b/.exec(title);
+  const boardMatch = /\bboard:(todo|doing|blocked|done)(?::(-?\d+))?\b/.exec(title);
+  const ganttMatch = /\bgantt:([^\s]+)/.exec(title);
+  const mindmapMatch = /\bmindmap:([^\s]+)/.exec(title);
+  const parentMatch = /\bparent:([^\s]+)/.exec(title);
+  const depsMatch = /\bdeps:([^\s]+)/.exec(title);
   const tags = [...title.matchAll(/#([^\s#]+)/g)].map((match) => match[1]).filter((tag) => !tag.startsWith("项目"));
   const customDates = datesMatch?.[1].split(",").filter(Boolean) ?? [];
-  const completedDates = doneMatch?.[1].split(",").filter(Boolean) ?? [];
+  const viewState = buildViewStatePatchFromTokens({
+    status: (statusMatch?.[1] as TaskStatus | undefined) ?? (context.completed ? "done" : "todo"),
+    board: boardMatch?.[1] as TaskStatus | undefined,
+    boardOrder: boardMatch?.[2] ? Number(boardMatch[2]) : undefined,
+    gantt: ganttMatch?.[1],
+    mindmap: mindmapMatch?.[1]
+  });
+  const parentTitle = context.parentTitle ?? (parentMatch ? decodeReferenceToken(parentMatch[1]) : undefined);
+  const dependencyTitles = depsMatch ? depsMatch[1].split("|").map(decodeReferenceToken).filter(Boolean) : [];
 
   title = title
     .replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "")
@@ -239,9 +298,13 @@ function parseTaskLine(
     .replace(/\bcount:\d+\b/g, "")
     .replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "")
     .replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "")
-    .replace(/\bdone:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "")
     .replace(/\bstatus:(todo|doing|blocked|done)\b/g, "")
     .replace(/\bfinish:(today|series)\b/g, "")
+    .replace(/\bboard:(todo|doing|blocked|done)(?::[-]?\d+)?\b/g, "")
+    .replace(/\bgantt:[^\s]+/g, "")
+    .replace(/\bmindmap:[^\s]+/g, "")
+    .replace(/\bparent:[^\s]+/g, "")
+    .replace(/\bdeps:[^\s]+/g, "")
     .replace(/!(low|medium|high|urgent)\b/g, "")
     .replace(/#[^\s#]+/g, "")
     .trim();
@@ -262,15 +325,17 @@ function parseTaskLine(
       recurrenceCount: countMatch ? Number(countMatch[1]) : null,
       recurrenceUntil: untilMatch?.[1] ?? null,
       occurrenceDates: customDates.length > 0 ? customDates : undefined,
-      completedOccurrenceDates: completedDates.length > 0 ? completedDates : undefined,
       status: (statusMatch?.[1] as TaskStatus | undefined) ?? (context.completed ? "done" : "todo"),
       priority: priorityMatch?.[1] as TaskPriority | undefined,
       tags,
+      viewState,
       sourceLinks: context.source ? [context.source] : [],
-      completed: context.completed && completedDates.length === 0
+      completed: context.completed
     },
     projectName: context.projectName,
-    completionMode: context.completed && completedDates.length === 0 ? ((finishMatch?.[1] as TaskImportCompletionMode | undefined) ?? "today") : "pending",
+    parentTitle,
+    dependencyTitles,
+    completionMode: context.completed ? ((finishMatch?.[1] as TaskImportCompletionMode | undefined) ?? "today") : "pending",
     createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
   };
 }
@@ -288,10 +353,16 @@ type FormattedTaskSource = {
   recurrenceCount?: number | null;
   recurrenceUntil?: string | null;
   occurrenceDates?: string[];
-  completedOccurrenceDates?: string[];
+  viewState?: Task["viewState"];
 };
 
-function buildFormattedTaskParts(task: FormattedTaskSource, options: { includeKind?: boolean } = {}): string[] {
+function buildFormattedTaskParts(
+  task: FormattedTaskSource,
+  options: {
+    includeKind?: boolean;
+    dependencyTitleForId?: (taskId: string) => string | undefined;
+  } = {}
+): string[] {
   const parts = [task.title];
   if (options.includeKind !== false) {
     parts.push(`kind:${task.kind}`);
@@ -314,26 +385,35 @@ function buildFormattedTaskParts(task: FormattedTaskSource, options: { includeKi
   if (task.recurrence === "custom" && task.occurrenceDates?.length) {
     parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
   }
-  if (task.completedOccurrenceDates?.length) {
-    parts.push(`done:${[...new Set(task.completedOccurrenceDates)].sort(compareDateKeys).join(",")}`);
+  if (task.viewState) {
+    parts.push(`board:${task.viewState.board.columnId}:${task.viewState.board.order}`);
+    const ganttParts = [`order=${task.viewState.gantt.rowOrder}`];
+    if (task.viewState.gantt.locked) {
+      ganttParts.push("locked");
+    }
+    if (task.viewState.gantt.milestone) {
+      ganttParts.push("milestone");
+    }
+    parts.push(`gantt:${ganttParts.join(",")}`);
+    const dependencyTitles = task.viewState.gantt.dependencyIds
+      .map((id) => options.dependencyTitleForId?.(id))
+      .filter((title): title is string => Boolean(title));
+    if (dependencyTitles.length > 0) {
+      parts.push(`deps:${dependencyTitles.map(encodeReferenceToken).join("|")}`);
+    }
+    const mindmapParts = [
+      `order=${task.viewState.mindmap.childOrder}`,
+      task.viewState.mindmap.expanded ? "expanded" : "collapsed"
+    ];
+    if (Number.isFinite(task.viewState.mindmap.x)) {
+      mindmapParts.push(`x=${task.viewState.mindmap.x}`);
+    }
+    if (Number.isFinite(task.viewState.mindmap.y)) {
+      mindmapParts.push(`y=${task.viewState.mindmap.y}`);
+    }
+    parts.push(`mindmap:${mindmapParts.join(",")}`);
   }
   return parts;
-}
-
-function getCompletedOccurrenceDates(task: Task): string[] {
-  return task.occurrenceDates.filter((date) => isOccurrenceCompleted(task, date));
-}
-
-function isOccurrenceCompleted(task: Task, date: string): boolean {
-  const state = task.occurrenceStates.find((item) => item.date === date);
-  if (task.kind === "simple") {
-    return Boolean(state);
-  }
-  if (task.subtasks.length === 0) {
-    return Boolean(state?.completedAt);
-  }
-  const completedIds = new Set(state?.completedSubtaskIds ?? []);
-  return task.subtasks.every((subtask) => completedIds.has(subtask.id));
 }
 
 function compareSeriesTasksForExport(a: Task, b: Task): number {
@@ -343,4 +423,57 @@ function compareSeriesTasksForExport(a: Task, b: Task): number {
     (a.endTime ?? "").localeCompare(b.endTime ?? "") ||
     a.title.localeCompare(b.title)
   );
+}
+
+function buildViewStatePatchFromTokens(input: {
+  status: TaskStatus;
+  board?: TaskStatus;
+  boardOrder?: number;
+  gantt?: string;
+  mindmap?: string;
+}): TaskInput["viewState"] {
+  const viewState: TaskInput["viewState"] = {
+    board: {
+      columnId: input.board ?? input.status,
+      order: Number.isFinite(input.boardOrder) ? input.boardOrder! : 0
+    }
+  };
+  if (input.gantt) {
+    const parts = input.gantt.split(",").map((part) => part.trim()).filter(Boolean);
+    const orderPart = parts.find((part) => part.startsWith("order="));
+    viewState.gantt = {
+      rowOrder: orderPart ? Number(orderPart.slice("order=".length)) || 0 : 0,
+      dependencyIds: [],
+      locked: parts.includes("locked"),
+      milestone: parts.includes("milestone")
+    };
+  }
+  if (input.mindmap) {
+    const parts = input.mindmap.split(",").map((part) => part.trim()).filter(Boolean);
+    const orderPart = parts.find((part) => part.startsWith("order="));
+    const xPart = parts.find((part) => part.startsWith("x="));
+    const yPart = parts.find((part) => part.startsWith("y="));
+    const x = xPart ? Number(xPart.slice("x=".length)) : undefined;
+    const y = yPart ? Number(yPart.slice("y=".length)) : undefined;
+    viewState.mindmap = {
+      parentTaskId: null,
+      childOrder: orderPart ? Number(orderPart.slice("order=".length)) || 0 : 0,
+      expanded: !parts.includes("collapsed"),
+      x: Number.isFinite(x) ? x : undefined,
+      y: Number.isFinite(y) ? y : undefined
+    };
+  }
+  return viewState;
+}
+
+function encodeReferenceToken(value: string): string {
+  return encodeURIComponent(value.trim());
+}
+
+function decodeReferenceToken(value: string): string {
+  try {
+    return decodeURIComponent(value).trim();
+  } catch {
+    return value.trim();
+  }
 }

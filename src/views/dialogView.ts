@@ -129,10 +129,10 @@ export class QuickDialogView extends BaseProjectView {
         "支持粘贴“导出全部记录”的数据迁移 JSON；提交后会恢复项目、项目页、任务视图状态和导图关系。",
         "新任务计划使用 + 任务：或 + 组合：开头，必须写完整日期和时间段。",
         "今日完成只使用极简 - [x] 标题；找不到今日已有任务会报错，不会创建新任务。",
-        "组合计划可直接在下一行缩进写轻量项。",
+        "组合计划可在下方缩进写 + 子任务：，子任务会作为独立普通任务挂入组合任务。",
         "任务行下缩进 > 描述 可写入任务描述，多行描述会按换行合并。",
         "支持单次、每日、每周此时：repeat:once / daily / weekly；需要限制次数可继续写 count:4 或 until:2026-06-30。",
-        "支持 done:2026-05-25,2026-05-26 标记已完成发生日期，用于计划文本中的局部完成记录。"
+        "计划文本支持 board、gantt、deps、mindmap 视图状态；完成记录请使用数据迁移 JSON。"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
     }
 
@@ -467,8 +467,8 @@ export class QuickDialogView extends BaseProjectView {
         "#项目：新的学习计划",
         "+ 任务：普通任务 @2026-05-18 09:00-10:00 #tag !high status:doing",
         "+ 组合：组合任务 @2026-05-18 14:00-15:00 #plan !medium status:todo",
-        "  - 子任务一",
-        "  - 子任务二",
+        "  + 子任务：子任务一 @2026-05-18 14:05-14:25 #plan status:todo",
+        "  + 子任务：子任务二 @2026-05-18 14:25-14:45 #plan status:todo",
         "+ 任务：每日复习 @2026-05-18 20:00-20:30 #review repeat:daily count:5",
         "+ 任务：每周回顾 @2026-05-18 21:00-21:30 #review status:todo repeat:weekly count:4"
       ].join("\n");
@@ -815,7 +815,7 @@ function buildQuickTaskShortcuts(): QuickTaskShortcut[] {
     {
       label: "组合任务",
       hint: "插入组合任务模板和两个子任务",
-      snippet: `+ 组合：组合任务 @${today} 10:00-11:00 status:todo\n  - 子任务一\n  - 子任务二`
+      snippet: `+ 组合：组合任务 @${today} 10:00-11:00 status:todo\n  + 子任务：子任务一 @${today} 10:05-10:25 status:todo\n  + 子任务：子任务二 @${today} 10:25-10:45 status:todo`
     },
     {
       label: "单次",

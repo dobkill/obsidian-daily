@@ -1,15 +1,15 @@
 import { setIcon } from "obsidian";
-import { Task, TaskOccurrence, TaskRecurrence, TaskStatus, TaskSubtask } from "../types";
+import { Task, TaskOccurrence, TaskRecurrence, TaskStatus } from "../types";
 
 type MaybePromise = void | Promise<void>;
 
 type CompositeOccurrenceCardsOptions = {
   parentOccurrence: TaskOccurrence;
   childOccurrences: TaskOccurrence[];
-  onToggleLightSubtask: (subtask: TaskSubtask, completed: boolean) => MaybePromise;
   onToggleChildOccurrence: (child: TaskOccurrence) => MaybePromise;
   onEditChildOccurrence: (child: TaskOccurrence) => MaybePromise;
   onDeleteChildTask: (child: TaskOccurrence) => MaybePromise;
+  compact?: boolean;
 };
 
 type AttachedCompositeTaskCardsOptions = {
@@ -18,29 +18,24 @@ type AttachedCompositeTaskCardsOptions = {
 };
 
 export function renderCompositeOccurrenceCards(container: HTMLElement, options: CompositeOccurrenceCardsOptions): void {
-  const grid = container.createDiv({ cls: "pm-subtask-grid pm-subtask-card-grid" });
-
-  options.parentOccurrence.subtasks.forEach((subtask) => {
-    const completed = options.parentOccurrence.completedSubtaskIds.includes(subtask.id);
-    const card = grid.createEl("button", {
-      cls: `pm-subtask-card pm-subtask-light is-interactive ${completed ? "is-complete" : ""}`,
-      attr: { type: "button" }
-    });
-    card.addEventListener("click", () => {
-      void options.onToggleLightSubtask(subtask, !completed);
-    });
-    renderSubtaskCardBody(card, subtask.title, ["每日重复", formatOptionalTimeRange(subtask)]);
-  });
+  if (options.childOccurrences.length === 0) {
+    return;
+  }
+  const grid = container.createDiv({ cls: `pm-subtask-grid pm-subtask-card-grid ${options.compact ? "is-compact" : ""}` });
 
   options.childOccurrences.forEach((child) => {
     const card = grid.createDiv({
-      cls: `pm-subtask-card pm-subtask-task is-interactive ${child.completed ? "is-complete" : ""}`
+      cls: `pm-subtask-card pm-subtask-task is-interactive ${options.compact ? "is-compact" : ""} ${child.completed ? "is-complete" : ""}`
     });
     card.setAttribute("role", "button");
     card.tabIndex = 0;
+    card.title = child.title;
     bindActivation(card, () => options.onToggleChildOccurrence(child));
-    renderSubtaskCardBody(card, child.title, [formatTaskRecurrenceLabel(child.recurrence), formatOptionalTimeRange(child)]);
+    renderSubtaskCardBody(card, child.title, options.compact ? [] : [formatTaskRecurrenceLabel(child.recurrence), formatOptionalTimeRange(child)]);
 
+    if (options.compact) {
+      return;
+    }
     const actions = card.createDiv({ cls: "pm-subtask-actions" });
     appendIconAction(actions, "square-pen", "编辑", "", () => options.onEditChildOccurrence(child));
     appendIconAction(actions, "trash-2", "删除", "mod-warning", () => options.onDeleteChildTask(child));
@@ -59,7 +54,7 @@ export function renderAttachedCompositeTaskCards(container: HTMLElement, options
   });
 }
 
-export function formatOptionalTimeRange(item: Pick<Task | TaskOccurrence | TaskSubtask, "startTime" | "endTime">): string {
+export function formatOptionalTimeRange(item: Pick<Task | TaskOccurrence, "startTime" | "endTime">): string {
   return item.startTime && item.endTime ? `${item.startTime}-${item.endTime}` : "";
 }
 

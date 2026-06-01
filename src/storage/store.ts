@@ -42,7 +42,6 @@ import {
   extractProjectTaskBlocks,
   parseFormattedTaskText,
   renderDescriptionForExport,
-  renderSubtaskForExport,
   renderTaskSeriesForExport
 } from "../importExport/formattedTasks";
 import {
@@ -723,7 +722,7 @@ export class ProjectManagementStore extends Events {
     await this.patchTask(taskId, { notes: [...task.notes, note] });
   }
 
-  previewFormattedTasks(text: string, options: { projectId?: string; defaultDate?: string; source?: TaskSourceLink } = {}): TaskImportPreview {
+  previewFormattedTasks(text: string, options: { projectId?: string; strictProjectId?: string; defaultDate?: string; source?: TaskSourceLink } = {}): TaskImportPreview {
     const migration = parseDataMigrationText(text);
     if (migration.kind === "invalid") {
       return {
@@ -739,13 +738,17 @@ export class ProjectManagementStore extends Events {
     const parsed = parseFormattedTaskText(text, {
       projects: this.projects,
       projectId: options.projectId,
+      strictProjectId: options.strictProjectId,
       defaultDate: options.defaultDate ?? toDateKey(now()),
       source: options.source
     });
     return this.buildTaskImportPreview(parsed.tasks, parsed.issues);
   }
 
-  async importFormattedTasks(text: string, options: { projectId?: string; defaultDate?: string; source?: TaskSourceLink; historySummary?: string } = {}): Promise<Task[]> {
+  async importFormattedTasks(
+    text: string,
+    options: { projectId?: string; strictProjectId?: string; defaultDate?: string; source?: TaskSourceLink; historySummary?: string } = {}
+  ): Promise<Task[]> {
     this.assertWritable();
     const migration = parseDataMigrationText(text);
     if (migration.kind === "invalid") {
@@ -765,9 +768,31 @@ export class ProjectManagementStore extends Events {
       throw new Error(preview.issues[0]?.message ?? "没有可导入的任务");
     }
     const changed: Task[] = [];
+    const applied: Array<{ entry: TaskImportPreviewTask; task: Task }> = [];
     for (const entry of preview.tasks) {
       const task = await this.applyImportTask(entry);
       changed.push(task);
+      applied.push({ entry, task });
+    }
+    for (const item of applied) {
+      if (!item.entry.dependencyTitles?.length) {
+        continue;
+      }
+      const current = this.getTask(item.task.id);
+      if (!current) {
+        continue;
+      }
+      const dependencyIds = item.entry.dependencyTitles
+        .map((title) => this.findTaskByTitle(title, current.projectId)?.id)
+        .filter((id): id is string => Boolean(id));
+      await this.patchTask(current.id, {
+        viewState: {
+          gantt: {
+            ...current.viewState.gantt,
+            dependencyIds
+          }
+        }
+      });
     }
     await this.recordWriteHistory({
       type: options.source?.type === "note" ? "note-sync" : "import",
@@ -811,17 +836,33 @@ export class ProjectManagementStore extends Events {
       throw new Error("项目不存在");
     }
     const tasks = this.getTasksForProject(projectId);
-    const lines = [`#项目：${project.name}`];
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const childrenByParent = new Map<string, Task[]>();
+    const childTaskIds = new Set<string>();
     tasks.forEach((task) => {
-      lines.push(renderTaskSeriesForExport(task));
+      const parentId = task.viewState.mindmap.parentTaskId ?? null;
+      const parent = parentId ? taskById.get(parentId) : undefined;
+      if (parent?.kind !== "composite") {
+        return;
+      }
+      childTaskIds.add(task.id);
+      childrenByParent.set(parent.id, [...(childrenByParent.get(parent.id) ?? []), task]);
+    });
+    childrenByParent.forEach((children, parentId) => childrenByParent.set(parentId, children.slice().sort(compareSeriesTasks)));
+    const topLevelTasks = tasks.filter((task) => !childTaskIds.has(task.id)).sort(compareSeriesTasks);
+    const dependencyTitleForId = (taskId: string): string | undefined => tasks.find((task) => task.id === taskId)?.title;
+    const lines = [`#项目：${project.name}`];
+    topLevelTasks.forEach((task) => {
+      lines.push(renderTaskSeriesForExport(task, { dependencyTitleForId }));
       renderDescriptionForExport(task.description).forEach((line) => {
         lines.push(line);
       });
-      if (task.kind === "composite") {
-        task.subtasks.forEach((subtask) => {
-          lines.push(renderSubtaskForExport(subtask));
+      (childrenByParent.get(task.id) ?? []).forEach((child) => {
+        lines.push(renderTaskSeriesForExport(child, { child: true, dependencyTitleForId }));
+        renderDescriptionForExport(child.description).forEach((line) => {
+          lines.push(`  ${line}`);
         });
-      }
+      });
     });
     return lines.join("\n").trim();
   }
@@ -1244,8 +1285,10 @@ export class ProjectManagementStore extends Events {
     const previewTasks: TaskImportPreviewTask[] = [];
     tasks.forEach((entry) => {
       const projectResolution = this.resolveImportProject(entry);
-      const matched = this.findTaskByImportIdentity(entry.input.title, projectResolution.projectId, entry.input.date);
       const isCompletionInput = entry.input.completed === true;
+      const matched = isCompletionInput
+        ? this.findTaskByCompletionIdentity(entry.input.title, projectResolution.projectId, entry.input.date)
+        : this.findTaskByImportIdentity(entry.input.title, projectResolution.projectId, entry.input.date);
       if (!matched && !entry.createReady) {
         issues.push({
           line: entry.line,
@@ -1274,10 +1317,13 @@ export class ProjectManagementStore extends Events {
         raw: entry.raw,
         input: {
           ...entry.input,
-          projectId: projectResolution.projectId
+          projectId: projectResolution.projectId,
+          viewState: applyMarkdownReferencePreview(entry.input.viewState, entry.parentTitle)
         },
         projectId: projectResolution.projectId,
         projectName: projectResolution.projectName,
+        parentTitle: entry.parentTitle,
+        dependencyTitles: entry.dependencyTitles,
         matchedTaskId: matched?.id,
         matchedTaskTitle: matched?.title,
         action: resolveTaskImportAction(Boolean(matched), entry.completionMode, isCompletionInput),
@@ -1285,8 +1331,9 @@ export class ProjectManagementStore extends Events {
       });
     });
 
+    const isPlannedMarkdown = previewTasks.length > 0 && tasks.every((task) => task.createReady && task.input.completed !== true);
     return {
-      sourceFormat: "task-plan",
+      sourceFormat: isPlannedMarkdown ? "markdown-planned" : "markdown-minimal",
       tasks: previewTasks,
       issues,
       summary: {
@@ -1364,9 +1411,6 @@ export class ProjectManagementStore extends Events {
   }
 
   private findTaskByImportIdentity(title: string, projectId: string | undefined, date: string): Task | undefined {
-    if (compareDateKeys(date, toDateKey(now())) < 0) {
-      return undefined;
-    }
     const sameProject = this.getAllTasks().filter(
       (task) => normalizeImportIdentity(task.title) === normalizeImportIdentity(title) && (task.projectId ?? undefined) === projectId
     );
@@ -1375,6 +1419,55 @@ export class ProjectManagementStore extends Events {
       return sameDate;
     }
     return sameProject.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  }
+
+  private findTaskByCompletionIdentity(title: string, projectId: string | undefined, date: string): Task | undefined {
+    return this.getAllTasks().find(
+      (task) =>
+        normalizeImportIdentity(task.title) === normalizeImportIdentity(title) &&
+        (task.projectId ?? undefined) === projectId &&
+        task.occurrenceDates.includes(date)
+    );
+  }
+
+  private findTaskByTitle(title: string, projectId: string | undefined): Task | undefined {
+    return this.getAllTasks()
+      .filter((task) => normalizeImportIdentity(task.title) === normalizeImportIdentity(title) && (task.projectId ?? undefined) === projectId)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  }
+
+  private findCompositeTaskByTitle(title: string, projectId: string | undefined): Task | undefined {
+    return this.getAllTasks()
+      .filter((task) => task.kind === "composite")
+      .filter((task) => normalizeImportIdentity(task.title) === normalizeImportIdentity(title) && (task.projectId ?? undefined) === projectId)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+  }
+
+  private resolveMarkdownViewState(
+    viewState: TaskInput["viewState"],
+    parentTaskId: string | null,
+    dependencyTitles: string[],
+    projectId: string | undefined
+  ): TaskInput["viewState"] {
+    const dependencyIds = dependencyTitles
+      .map((title) => this.findTaskByTitle(title, projectId)?.id)
+      .filter((id): id is string => Boolean(id));
+    return {
+      ...(viewState ?? {}),
+      gantt: {
+        ...(viewState?.gantt ?? {}),
+        rowOrder: viewState?.gantt?.rowOrder ?? 0,
+        dependencyIds,
+        locked: viewState?.gantt?.locked ?? false,
+        milestone: viewState?.gantt?.milestone ?? false
+      },
+      mindmap: {
+        ...(viewState?.mindmap ?? {}),
+        parentTaskId,
+        childOrder: viewState?.mindmap?.childOrder ?? Date.now(),
+        expanded: viewState?.mindmap?.expanded ?? true
+      }
+    };
   }
 
   private async ensureImportProject(projectName?: string): Promise<string | undefined> {
@@ -1391,11 +1484,21 @@ export class ProjectManagementStore extends Events {
 
   private async applyImportTask(entry: TaskImportPreviewTask): Promise<Task> {
     const projectId = entry.input.projectId ?? (await this.ensureImportProject(entry.projectName));
+    const parent = entry.parentTitle ? this.findCompositeTaskByTitle(entry.parentTitle, projectId) : undefined;
+    if (entry.parentTitle && !parent) {
+      throw new Error(`未找到组合任务「${entry.parentTitle}」，无法挂入子任务`);
+    }
     const input: TaskInput = {
       ...entry.input,
-      projectId
+      projectId,
+      kind: parent ? "simple" : entry.input.kind,
+      subtasks: [],
+      viewState: this.resolveMarkdownViewState(entry.input.viewState, parent?.id ?? null, entry.dependencyTitles ?? [], projectId)
     };
-    const existing = this.findTaskByImportIdentity(input.title, projectId, input.date);
+    const existing =
+      entry.action === "complete-today" || entry.action === "complete-series"
+        ? this.findTaskByCompletionIdentity(input.title, projectId, input.date)
+        : this.findTaskByImportIdentity(input.title, projectId, input.date);
 
     if (existing) {
       if (entry.action === "complete-today") {
@@ -2290,7 +2393,7 @@ type DataFolderUsage = {
 };
 
 function normalizeStoredTask(task: Task): Task {
-  const kind: TaskKind = task.kind ?? ((task.subtasks?.length ?? 0) > 0 ? "composite" : "simple");
+  const kind: TaskKind = task.kind ?? "simple";
   const status = normalizeTaskStatus(task.status);
   const startTime = normalizeClockTime(task.startTime, "开始时间");
   const endTime = normalizeClockTime(task.endTime, "结束时间");
@@ -2302,23 +2405,7 @@ function normalizeStoredTask(task: Task): Task {
   if (start !== null && end !== null && start >= end) {
     throw new Error("结束时间必须晚于开始时间");
   }
-  const subtasks = (task.subtasks ?? []).map((item, index) => ({
-    id: item.id,
-    title: item.title,
-    startTime: normalizeClockTime(item.startTime, `轻量项「${item.title || index + 1}」开始时间`),
-    endTime: normalizeClockTime(item.endTime, `轻量项「${item.title || index + 1}」结束时间`),
-    order: item.order ?? index
-  }));
-  subtasks.forEach((item) => {
-    if ((item.startTime && !item.endTime) || (!item.startTime && item.endTime)) {
-      throw new Error(`轻量项「${item.title}」开始时间和结束时间必须同时填写`);
-    }
-    const subtaskStart = parseTimeToMinutes(item.startTime);
-    const subtaskEnd = parseTimeToMinutes(item.endTime);
-    if (subtaskStart !== null && subtaskEnd !== null && subtaskStart >= subtaskEnd) {
-      throw new Error(`轻量项「${item.title}」结束时间必须晚于开始时间`);
-    }
-  });
+  const subtasks: TaskSubtask[] = [];
   const occurrenceStates = (task.occurrenceStates ?? []).map((item) =>
     buildNormalizedOccurrenceState(item.date, kind, subtasks, item.completedSubtaskIds ?? subtasks.map((subtask) => subtask.id), item.completedAt ?? null)
   );
@@ -2397,7 +2484,7 @@ function isOccurrenceStateRecord(value: unknown): value is TaskOccurrenceState {
 
 function createEmptyTaskImportPreview(): TaskImportPreview {
   return {
-    sourceFormat: "task-plan",
+    sourceFormat: "markdown-planned",
     tasks: [],
     issues: [],
     summary: {
@@ -2409,6 +2496,21 @@ function createEmptyTaskImportPreview(): TaskImportPreview {
       completeTodayCount: 0,
       completeSeriesCount: 0,
       newProjectNames: []
+    }
+  };
+}
+
+function applyMarkdownReferencePreview(viewState: TaskInput["viewState"], parentTitle?: string): TaskInput["viewState"] {
+  if (!parentTitle) {
+    return viewState;
+  }
+  return {
+    ...(viewState ?? {}),
+    mindmap: {
+      ...(viewState?.mindmap ?? {}),
+      parentTaskId: null,
+      childOrder: viewState?.mindmap?.childOrder ?? Date.now(),
+      expanded: viewState?.mindmap?.expanded ?? true
     }
   };
 }
@@ -2544,60 +2646,24 @@ function resolveOccurrenceStates(params: {
   if (completedPatch === false) {
     return [];
   }
-  return occurrenceDates
-    .map((date) => {
-      const existing = getOccurrenceState(original, date);
-      if (!existing) {
-        return null;
-      }
-      return buildNormalizedOccurrenceState(
-        date,
+  return (original?.occurrenceStates ?? [])
+    .map((existing) =>
+      buildNormalizedOccurrenceState(
+        existing.date,
         input.kind ?? "simple",
         subtasks,
         existing.completedSubtaskIds ?? (original ? getAllSubtaskIds(original) : []),
         existing.completedAt ?? null
-      );
-    })
-    .filter((item): item is TaskOccurrenceState => Boolean(item));
+      )
+    );
 }
 
 function normalizeSubtaskInputs(subtasks: TaskSubtaskInput[] | undefined, kind: TaskKind): TaskSubtaskInput[] {
-  if (kind === "simple") {
-    return [];
-  }
-  const normalized = (subtasks ?? [])
-    .map((item, index) => {
-      const label = item.title.trim() || String(index + 1);
-      const startTime = normalizeClockTime(item.startTime, `轻量项「${label}」开始时间`);
-      const endTime = normalizeClockTime(item.endTime, `轻量项「${label}」结束时间`);
-      if ((startTime && !endTime) || (!startTime && endTime)) {
-        throw new Error("轻量项开始时间和结束时间必须同时填写");
-      }
-      const start = parseTimeToMinutes(startTime);
-      const end = parseTimeToMinutes(endTime);
-      if (start !== null && end !== null && start >= end) {
-        throw new Error("轻量项结束时间必须晚于开始时间");
-      }
-      return { id: item.id, title: item.title.trim(), startTime, endTime, order: item.order ?? index };
-    })
-    .filter((item) => item.title.length > 0);
-  return normalized;
+  return [];
 }
 
 function resolveTaskSubtasks(inputSubtasks: TaskSubtaskInput[] | undefined, kind: TaskKind, originalSubtasks: TaskSubtask[]): TaskSubtask[] {
-  if (kind === "simple") {
-    return [];
-  }
-  return (inputSubtasks ?? []).map((item, index) => {
-    const original = item.id ? originalSubtasks.find((entry) => entry.id === item.id) : undefined;
-    return {
-      id: original?.id ?? item.id ?? crypto.randomUUID(),
-      title: item.title.trim(),
-      startTime: normalizeClockTime(item.startTime, `轻量项「${item.title.trim() || index + 1}」开始时间`),
-      endTime: normalizeClockTime(item.endTime, `轻量项「${item.title.trim() || index + 1}」结束时间`),
-      order: item.order ?? original?.order ?? index
-    };
-  });
+  return [];
 }
 
 function getOccurrenceState(task: Task | undefined, date: string): TaskOccurrenceState | undefined {
@@ -2642,22 +2708,12 @@ function assertCompositeDefinitionValid(task: Task): void {
   if (parentStart === null || parentEnd === null) {
     throw new Error("组合任务必须填写开始时间和结束时间");
   }
-  task.subtasks.forEach((subtask) => {
-    const start = parseTimeToMinutes(subtask.startTime);
-    const end = parseTimeToMinutes(subtask.endTime);
-    if (start === null && end === null) {
-      return;
-    }
-    if (start === null || end === null) {
-      throw new Error(`轻量项「${subtask.title}」开始时间和结束时间必须同时填写`);
-    }
-    if (start < parentStart || end > parentEnd) {
-      throw new Error(`轻量项「${subtask.title}」必须在组合任务时间范围内`);
-    }
-  });
 }
 
 function assertChildTaskWithinComposite(child: Task, parent: Task): void {
+  if (child.kind === "composite") {
+    throw new Error(`子任务「${child.title}」不能是组合任务`);
+  }
   const parentOccurrences = expandTask(parent);
   const childOccurrences = expandTask(child);
   childOccurrences.forEach((childOccurrence) => {
@@ -2692,6 +2748,13 @@ function buildNormalizedOccurrenceState(
     return {
       date,
       completedAt: completedAt ?? toIsoLocal(now())
+    };
+  }
+  if (subtasks.length === 0) {
+    return {
+      date,
+      completedSubtaskIds: [],
+      completedAt
     };
   }
   const allowedIds = new Set(subtasks.map((item) => item.id));
@@ -2997,8 +3060,15 @@ function assertValidTaskMindmapParent(task: Task, tasks: Task[]): void {
   if (parentTaskId === task.id) {
     throw new Error("任务不能指向自己");
   }
-  if (!tasks.some((item) => item.id === parentTaskId)) {
+  const parent = tasks.find((item) => item.id === parentTaskId);
+  if (!parent) {
     throw new Error("父级任务不存在");
+  }
+  if (parent.kind !== "composite") {
+    throw new Error("子任务只能挂入组合任务");
+  }
+  if (task.kind === "composite") {
+    throw new Error("子任务不能是组合任务");
   }
   const descendants = collectTaskDescendants(tasks, task.id);
   if (descendants.has(parentTaskId)) {
