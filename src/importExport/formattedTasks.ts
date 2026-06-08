@@ -22,7 +22,9 @@ export type ParsedImportTask = {
   parentTitle?: string;
   dependencyTitles?: string[];
   completionMode: TaskImportCompletionMode;
+  syntax: "planned" | "minimal";
   createReady: boolean;
+  hasTimeRange: boolean;
 };
 
 export function parseFormattedTaskText(
@@ -82,7 +84,7 @@ export function parseFormattedTaskText(
       return;
     }
 
-    const plannedTaskMatch = /^(\s*)\+\s*(任务|task|组合|composite)[:：]\s+(.+)$/.exec(line);
+    const plannedTaskMatch = /^(\s*)\+\s*(任务|task|组合|composite)[:：]\s*(.+)$/.exec(line);
     if (plannedTaskMatch && plannedTaskMatch[1].length === 0) {
       flushCurrent();
       try {
@@ -103,7 +105,9 @@ export function parseFormattedTaskText(
           parentTitle: parsed.parentTitle,
           dependencyTitles: parsed.dependencyTitles,
           completionMode: parsed.completionMode,
-          createReady: parsed.createReady
+          syntax: "planned",
+          createReady: parsed.hasExplicitDate,
+          hasTimeRange: parsed.hasTimeRange
         };
         currentCompositeParentTitle = currentTask.input.kind === "composite" ? currentTask.input.title : undefined;
       } catch (error) {
@@ -112,7 +116,7 @@ export function parseFormattedTaskText(
       return;
     }
 
-    const childTaskMatch = /^(\s{2,})\+\s*(子任务|child)[:：]\s+(.+)$/.exec(line);
+    const childTaskMatch = /^(\s{2,})\+\s*(子任务|child)[:：]\s*(.+)$/.exec(line);
     if (childTaskMatch) {
       if (!currentCompositeParentTitle) {
         issues.push({ line: index + 1, message: "子任务必须写在组合任务下方", raw, blocking: true });
@@ -137,7 +141,9 @@ export function parseFormattedTaskText(
           parentTitle: parsed.parentTitle,
           dependencyTitles: parsed.dependencyTitles,
           completionMode: parsed.completionMode,
-          createReady: parsed.createReady
+          syntax: "planned",
+          createReady: parsed.hasExplicitDate,
+          hasTimeRange: parsed.hasTimeRange
         };
       } catch (error) {
         issues.push({ line: index + 1, message: error instanceof Error ? error.message : "任务解析失败", raw });
@@ -164,7 +170,9 @@ export function parseFormattedTaskText(
           parentTitle: parsed.parentTitle,
           dependencyTitles: parsed.dependencyTitles,
           completionMode: parsed.completionMode,
-          createReady: parsed.createReady
+          syntax: "minimal",
+          createReady: false,
+          hasTimeRange: parsed.hasTimeRange
         };
         currentCompositeParentTitle = undefined;
       } catch (error) {
@@ -262,7 +270,8 @@ function parseTaskLine(
   parentTitle?: string;
   dependencyTitles?: string[];
   completionMode: TaskImportCompletionMode;
-  createReady: boolean;
+  hasExplicitDate: boolean;
+  hasTimeRange: boolean;
 } {
   let title = rawTitle.trim();
   const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
@@ -336,7 +345,8 @@ function parseTaskLine(
     parentTitle,
     dependencyTitles,
     completionMode: context.completed ? ((finishMatch?.[1] as TaskImportCompletionMode | undefined) ?? "today") : "pending",
-    createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
+    hasExplicitDate: Boolean(dateMatch?.[1]),
+    hasTimeRange: Boolean(dateMatch?.[2] && dateMatch?.[3])
   };
 }
 

@@ -163,7 +163,7 @@ function parseFormattedTaskText(text, options) {
       currentCompositeParentTitle = void 0;
       return;
     }
-    const plannedTaskMatch = /^(\s*)\+\s*(任务|task|组合|composite)[:：]\s+(.+)$/.exec(line);
+    const plannedTaskMatch = /^(\s*)\+\s*(任务|task|组合|composite)[:：]\s*(.+)$/.exec(line);
     if (plannedTaskMatch && plannedTaskMatch[1].length === 0) {
       flushCurrent();
       try {
@@ -184,7 +184,9 @@ function parseFormattedTaskText(text, options) {
           parentTitle: parsed.parentTitle,
           dependencyTitles: parsed.dependencyTitles,
           completionMode: parsed.completionMode,
-          createReady: parsed.createReady
+          syntax: "planned",
+          createReady: parsed.hasExplicitDate,
+          hasTimeRange: parsed.hasTimeRange
         };
         currentCompositeParentTitle = currentTask.input.kind === "composite" ? currentTask.input.title : void 0;
       } catch (error) {
@@ -192,7 +194,7 @@ function parseFormattedTaskText(text, options) {
       }
       return;
     }
-    const childTaskMatch = /^(\s{2,})\+\s*(子任务|child)[:：]\s+(.+)$/.exec(line);
+    const childTaskMatch = /^(\s{2,})\+\s*(子任务|child)[:：]\s*(.+)$/.exec(line);
     if (childTaskMatch) {
       if (!currentCompositeParentTitle) {
         issues.push({ line: index + 1, message: "\u5B50\u4EFB\u52A1\u5FC5\u987B\u5199\u5728\u7EC4\u5408\u4EFB\u52A1\u4E0B\u65B9", raw, blocking: true });
@@ -217,7 +219,9 @@ function parseFormattedTaskText(text, options) {
           parentTitle: parsed.parentTitle,
           dependencyTitles: parsed.dependencyTitles,
           completionMode: parsed.completionMode,
-          createReady: parsed.createReady
+          syntax: "planned",
+          createReady: parsed.hasExplicitDate,
+          hasTimeRange: parsed.hasTimeRange
         };
       } catch (error) {
         issues.push({ line: index + 1, message: error instanceof Error ? error.message : "\u4EFB\u52A1\u89E3\u6790\u5931\u8D25", raw });
@@ -243,7 +247,9 @@ function parseFormattedTaskText(text, options) {
           parentTitle: parsed.parentTitle,
           dependencyTitles: parsed.dependencyTitles,
           completionMode: parsed.completionMode,
-          createReady: parsed.createReady
+          syntax: "minimal",
+          createReady: false,
+          hasTimeRange: parsed.hasTimeRange
         };
         currentCompositeParentTitle = void 0;
       } catch (error) {
@@ -341,7 +347,8 @@ function parseTaskLine(rawTitle, context) {
     parentTitle,
     dependencyTitles,
     completionMode: context.completed ? finishMatch?.[1] ?? "today" : "pending",
-    createReady: Boolean(dateMatch?.[1] && dateMatch?.[2] && dateMatch?.[3])
+    hasExplicitDate: Boolean(dateMatch?.[1]),
+    hasTimeRange: Boolean(dateMatch?.[2] && dateMatch?.[3])
   };
 }
 function buildFormattedTaskParts(task, options = {}) {
@@ -1087,11 +1094,12 @@ var MARKDOWN_FORMAT_GUIDE = `# \u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u8BF4\u660E
 
 ## \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown
 
-\u65B0\u8BA1\u5212\u4F7F\u7528 \`+ \u4EFB\u52A1\uFF1A\` \u6216 \`+ \u7EC4\u5408\uFF1A\`\uFF0C\u4E0E\u4ECA\u65E5\u5B8C\u6210\u683C\u5F0F\u5206\u79BB\u3002
+\u65B0\u8BA1\u5212\u4F7F\u7528 \`+ \u4EFB\u52A1\uFF1A\`\u3001\`+ \u7EC4\u5408\uFF1A\` \u6216\u7F29\u8FDB\u7684 \`+ \u5B50\u4EFB\u52A1\uFF1A\`\uFF0C\u4E0E\u4ECA\u65E5\u5B8C\u6210\u683C\u5F0F\u5206\u79BB\u3002\u5BFC\u5165\u5668\u6309\u8FD9\u4E9B \`+\` \u884C\u8BC6\u522B\u8BA1\u5212\u683C\u5F0F\uFF0C\u4E0D\u6309\u662F\u5426\u5305\u542B\u5B8C\u6574\u65F6\u95F4\u6BB5\u6765\u5224\u65AD\u683C\u5F0F\u3002
 
 \`\`\`md
 #\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A
 + \u4EFB\u52A1\uFF1A\u642D\u5EFA\u590D\u4E60\u770B\u677F @2026-05-27 09:00-10:30 #planning !high status:doing
++ \u4EFB\u52A1\uFF1A\u6574\u7406\u9519\u9898\u7D22\u5F15 @2026-05-28 #review status:todo
 + \u7EC4\u5408\uFF1A\u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD @2026-05-27 12:00-12:40 #vocab status:todo repeat:daily count:5
   + \u5B50\u4EFB\u52A1\uFF1A\u590D\u4E60\u6628\u5929\u9519\u8BCD @2026-05-27 12:00-12:10 #vocab status:todo repeat:daily count:5
   + \u5B50\u4EFB\u52A1\uFF1A\u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD @2026-05-27 12:10-12:30 #vocab status:todo repeat:daily count:5
@@ -1100,11 +1108,16 @@ var MARKDOWN_FORMAT_GUIDE = `# \u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u8BF4\u660E
 
 \u89C4\u5219\uFF1A
 
-- \u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B \`@YYYY-MM-DD HH:mm-HH:mm\`\uFF0C\u65F6\u95F4\u8303\u56F4\u4E3A \`00:00\` \u81F3 \`23:59\`\uFF0C\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4\u3002
+- \`\u4EFB\u52A1\uFF1A\`\u3001\`\u7EC4\u5408\uFF1A\`\u3001\`\u5B50\u4EFB\u52A1\uFF1A\` \u5192\u53F7\u540E\u53EF\u4EE5\u76F4\u63A5\u5199\u6807\u9898\uFF0C\u4E5F\u53EF\u4EE5\u5148\u5199\u4E00\u4E2A\u6216\u591A\u4E2A\u7A7A\u683C\u3002
+- \u666E\u901A\u4EFB\u52A1\u5FC5\u987B\u5199\u663E\u5F0F\u65E5\u671F \`@YYYY-MM-DD\`\uFF1B\u53EF\u53EA\u5199\u65E5\u671F\u8868\u793A\u672A\u6392\u671F\uFF0C\u4E5F\u53EF\u5199\u5B8C\u6574 \`@YYYY-MM-DD HH:mm-HH:mm\`\u3002
+- \u7EC4\u5408\u4EFB\u52A1\u548C \`+ \u5B50\u4EFB\u52A1\uFF1A\` \u5FC5\u987B\u5199\u5B8C\u6574 \`@YYYY-MM-DD HH:mm-HH:mm\`\u3002
+- \u65F6\u95F4\u8303\u56F4\u4E3A \`00:00\` \u81F3 \`23:59\`\uFF0C\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4\u3002
 - \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5165\u8BE5\u9879\u76EE\uFF1B\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002
 - \`#\u9879\u76EE\uFF1A\` \u6216 \`#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE\` \u8868\u793A\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002
 - \u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u65F6\uFF0C\`#\u9879\u76EE\uFF1A\` \u5FC5\u987B\u7B49\u4E8E\u5F53\u524D\u9879\u76EE\uFF1B\u540C\u9879\u76EE\u540C\u540D\u4EFB\u52A1\u4F1A\u8986\u76D6\u8BA1\u5212\u5B57\u6BB5\uFF0C\u4F46\u4FDD\u7559\u65E2\u6709\u5B8C\u6210\u8BB0\u5F55\u3002
-- \u7EC4\u5408\u4EFB\u52A1\u4E0B\u65B9\u53EF\u7F29\u8FDB\u5199 \`+ \u5B50\u4EFB\u52A1\uFF1A\`\u3002\u5B50\u4EFB\u52A1\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\uFF0C\u4FDD\u7559\u81EA\u5DF1\u7684\u91CD\u590D\u89C4\u5219\u548C\u5B8C\u6210\u72B6\u6001\uFF0C\u4E0D\u80FD\u662F\u7EC4\u5408\u4EFB\u52A1\u3002
+- \u7EC4\u5408\u4EFB\u52A1\u4E0B\u65B9\u53EF\u7F29\u8FDB\u5199 \`+ \u5B50\u4EFB\u52A1\uFF1A\`\u3002\u5B50\u4EFB\u52A1\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\uFF0C\u4FDD\u7559\u81EA\u5DF1\u7684\u91CD\u590D\u89C4\u5219\u548C\u5B8C\u6210\u72B6\u6001\uFF0C\u4E0D\u80FD\u662F\u7EC4\u5408\u4EFB\u52A1\uFF0C\u4E14\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u65E5\u671F\u548C\u65F6\u95F4\u8303\u56F4\u5185\u3002
+- \u7F29\u8FDB\u4E24\u4E2A\u6216\u66F4\u591A\u7A7A\u683C\u7684 \`>\` \u884C\u662F\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u5F52\u5165\u5B83\u524D\u9762\u6700\u8FD1\u7684\u4EFB\u52A1\u6216\u5B50\u4EFB\u52A1\u3002
+- \`repeat:daily\` / \`repeat:weekly\` \u5FC5\u987B\u914D\u5408 \`count:N\` \u6216 \`until:YYYY-MM-DD\`\uFF1B\`repeat:custom\` \u5FC5\u987B\u914D\u5408 \`dates:...\`\u3002
 
 ## \u590D\u6742 Markdown \u53C2\u6570
 
@@ -1118,9 +1131,10 @@ var MARKDOWN_FORMAT_GUIDE = `# \u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u8BF4\u660E
 - \`board:doing:10\`\uFF1A\u770B\u677F\u5217\u4E0E\u6392\u5E8F\u3002
 - \`gantt:order=10,locked,milestone\`\uFF1A\u7518\u7279\u56FE\u6392\u5E8F\u3001\u9501\u5B9A\u548C\u91CC\u7A0B\u7891\u3002
 - \`deps:%E4%BB%BB%E5%8A%A1A|%E4%BB%BB%E5%8A%A1B\`\uFF1A\u7518\u7279\u4F9D\u8D56\uFF0C\u4EFB\u52A1\u6807\u9898\u4F7F\u7528 URL \u7F16\u7801\u3002
+- \`parent:%E7%BB%84%E5%90%88%E4%BB%BB%E5%8A%A1A\`\uFF1A\u6302\u5165\u540C\u9879\u76EE\u4E0B\u6307\u5B9A\u7EC4\u5408\u4EFB\u52A1\u3002
 - \`mindmap:order=20,expanded,x=280,y=120\`\uFF1A\u601D\u7EF4\u5BFC\u56FE\u6392\u5E8F\u3001\u5C55\u5F00\u72B6\u6001\u548C\u5750\u6807\u3002
 
-\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown \u4E0D\u4FDD\u5B58\u5B8C\u6210\u8BB0\u5F55\uFF1B\u5B8C\u6574\u6267\u884C\u8BB0\u5F55\u53EA\u901A\u8FC7\u6570\u636E\u8FC1\u79FB JSON \u4FDD\u5B58\u3002\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u6709\u5F00\u59CB\u4E0E\u7ED3\u675F\u65F6\u95F4\uFF0C\u6302\u5165\u7684\u5B50\u4EFB\u52A1\u5FC5\u987B\u843D\u5728\u7EC4\u5408\u4EFB\u52A1\u65E5\u671F\u548C\u65F6\u95F4\u8303\u56F4\u5185\u3002`;
+\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown \u4E0D\u4FDD\u5B58\u5B8C\u6210\u8BB0\u5F55\uFF1B\u5B8C\u6574\u6267\u884C\u8BB0\u5F55\u53EA\u901A\u8FC7\u6570\u636E\u8FC1\u79FB JSON \u4FDD\u5B58\u3002`;
 
 // src/storage/store.ts
 var DEFAULT_CONFIG = {
@@ -2220,13 +2234,14 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     tasks.forEach((entry) => {
       const projectResolution = this.resolveImportProject(entry);
       const isCompletionInput = entry.input.completed === true;
+      const isPlannedInput = entry.syntax === "planned";
       const matched = isCompletionInput ? this.findTaskByCompletionIdentity(entry.input.title, projectResolution.projectId, entry.input.date) : this.findTaskByImportIdentity(entry.input.title, projectResolution.projectId, entry.input.date);
       if (!matched && !entry.createReady) {
         issues.push({
           line: entry.line,
           raw: entry.raw,
           blocking: true,
-          message: isCompletionInput ? `\u6CA1\u6709\u627E\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u300C${entry.input.title}\u300D\uFF0C\u6781\u7B80\u5B8C\u6210\u8F93\u5165\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1` : "\u521B\u5EFA\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B\u5B8C\u6574\u65E5\u671F\u548C\u65F6\u95F4\uFF0C\u4F8B\u5982 @2026-05-25 09:00-09:30"
+          message: isCompletionInput ? `\u6CA1\u6709\u627E\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u300C${entry.input.title}\u300D\uFF0C\u6781\u7B80\u5B8C\u6210\u8F93\u5165\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1` : isPlannedInput ? "\u521B\u5EFA\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B\u65E5\u671F\uFF0C\u4F8B\u5982 @2026-05-25\uFF1B\u666E\u901A\u4EFB\u52A1\u7684\u65F6\u95F4\u6BB5\u53EF\u7701\u7565" : "\u6781\u7B80\u672A\u5B8C\u6210\u884C\u4E0D\u4F1A\u521B\u5EFA\u4EFB\u52A1\uFF1B\u521B\u5EFA\u4EFB\u52A1\u8BF7\u4F7F\u7528\u300C+ \u4EFB\u52A1\uFF1A\u300D\u8BA1\u5212\u8BED\u6CD5"
         });
         return;
       }
@@ -2235,7 +2250,25 @@ var ProjectManagementStore = class extends import_obsidian.Events {
           line: entry.line,
           raw: entry.raw,
           blocking: true,
-          message: "\u6781\u7B80\u672A\u5B8C\u6210\u884C\u4E0D\u4F1A\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B\u5B8C\u6574\u65E5\u671F\u548C\u65F6\u95F4"
+          message: isPlannedInput ? "\u8986\u76D6\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B\u65E5\u671F\uFF0C\u4F8B\u5982 @2026-05-25\uFF1B\u666E\u901A\u4EFB\u52A1\u7684\u65F6\u95F4\u6BB5\u53EF\u7701\u7565" : "\u6781\u7B80\u672A\u5B8C\u6210\u884C\u4E0D\u4F1A\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\uFF1B\u8986\u76D6\u4EFB\u52A1\u8BF7\u4F7F\u7528\u300C+ \u4EFB\u52A1\uFF1A\u300D\u8BA1\u5212\u8BED\u6CD5"
+        });
+        return;
+      }
+      if (isPlannedInput && entry.input.kind === "composite" && !entry.hasTimeRange) {
+        issues.push({
+          line: entry.line,
+          raw: entry.raw,
+          blocking: true,
+          message: "\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B\u5B8C\u6574\u5F00\u59CB\u65F6\u95F4\u548C\u7ED3\u675F\u65F6\u95F4\uFF0C\u4F8B\u5982 @2026-05-25 09:00-09:30"
+        });
+        return;
+      }
+      if (isPlannedInput && entry.parentTitle && !entry.hasTimeRange) {
+        issues.push({
+          line: entry.line,
+          raw: entry.raw,
+          blocking: true,
+          message: "\u7EC4\u5408\u4EFB\u52A1\u7684\u5B50\u4EFB\u52A1\u5FC5\u987B\u63D0\u4F9B\u5B8C\u6574\u5F00\u59CB\u65F6\u95F4\u548C\u7ED3\u675F\u65F6\u95F4\uFF0C\u4F8B\u5982 @2026-05-25 09:00-09:30"
         });
         return;
       }
@@ -2260,7 +2293,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
         completionMode: entry.completionMode
       });
     });
-    const isPlannedMarkdown = previewTasks.length > 0 && tasks.every((task) => task.createReady && task.input.completed !== true);
+    const isPlannedMarkdown = tasks.length > 0 && tasks.every((task) => task.syntax === "planned" && task.input.completed !== true);
     return {
       sourceFormat: isPlannedMarkdown ? "markdown-planned" : "markdown-minimal",
       tasks: previewTasks,
@@ -4140,9 +4173,9 @@ var FORMAT_GUIDE_SECTIONS = [
     title: "\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown",
     desc: "\u7528\u4E8E\u5236\u5B9A\u65B0\u8BA1\u5212\u6216\u8986\u76D6\u5DF2\u6709\u4EFB\u52A1\uFF0C\u8BED\u6CD5\u4E0E\u4ECA\u65E5\u5B8C\u6210\u683C\u5F0F\u660E\u663E\u5206\u79BB\u3002",
     points: [
-      "\u4EFB\u52A1\u884C\u4F7F\u7528 + \u4EFB\u52A1\uFF1A\u6216 + \u7EC4\u5408\uFF1A\u5F00\u5934\uFF0C\u521B\u5EFA / \u8986\u76D6\u5FC5\u987B\u63D0\u4F9B @YYYY-MM-DD HH:mm-HH:mm\uFF0C\u65F6\u95F4\u8303\u56F4\u4E3A 00:00 \u81F3 23:59\u3002",
-      "\u652F\u6301 #\u6807\u7B7E\u3001!\u4F18\u5148\u7EA7\u3001status\u3001repeat\u3001count\u3001until\u3001dates\u3001board\u3001gantt\u3001deps\u3001mindmap \u548C\u7F29\u8FDB\u63CF\u8FF0\u3002",
-      "\u7EC4\u5408\u4EFB\u52A1\u7684\u5B50\u4EFB\u52A1\u4F7F\u7528\u7F29\u8FDB\u7684 + \u5B50\u4EFB\u52A1\uFF1A\uFF0C\u5B50\u4EFB\u52A1\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\uFF0C\u4E0D\u80FD\u662F\u7EC4\u5408\u4EFB\u52A1\u3002"
+      "\u4EFB\u52A1\u884C\u4F7F\u7528 + \u4EFB\u52A1\uFF1A\u6216 + \u7EC4\u5408\uFF1A\u5F00\u5934\uFF1B\u5192\u53F7\u540E\u7A7A\u683C\u53EF\u9009\uFF0C\u666E\u901A\u4EFB\u52A1\u5FC5\u987B\u5199 @YYYY-MM-DD\uFF0C\u65F6\u95F4\u6BB5\u53EF\u9009\u3002",
+      "\u7EC4\u5408\u4EFB\u52A1\u548C\u7F29\u8FDB\u7684 + \u5B50\u4EFB\u52A1\uFF1A\u5FC5\u987B\u5199\u5B8C\u6574 @YYYY-MM-DD HH:mm-HH:mm\uFF0C\u4E14\u5B50\u4EFB\u52A1\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u8303\u56F4\u5185\u3002",
+      "\u652F\u6301 #\u6807\u7B7E\u3001!\u4F18\u5148\u7EA7\u3001status\u3001repeat\u3001count\u3001until\u3001dates\u3001board\u3001gantt\u3001deps\u3001parent\u3001mindmap \u548C\u7F29\u8FDB\u63CF\u8FF0\u3002"
     ],
     sample: TASK_PLAN_SAMPLE_TEXT
   }

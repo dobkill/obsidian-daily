@@ -1286,6 +1286,7 @@ export class ProjectManagementStore extends Events {
     tasks.forEach((entry) => {
       const projectResolution = this.resolveImportProject(entry);
       const isCompletionInput = entry.input.completed === true;
+      const isPlannedInput = entry.syntax === "planned";
       const matched = isCompletionInput
         ? this.findTaskByCompletionIdentity(entry.input.title, projectResolution.projectId, entry.input.date)
         : this.findTaskByImportIdentity(entry.input.title, projectResolution.projectId, entry.input.date);
@@ -1296,7 +1297,9 @@ export class ProjectManagementStore extends Events {
           blocking: true,
           message: isCompletionInput
             ? `没有找到今日已有任务「${entry.input.title}」，极简完成输入不会创建新任务`
-            : "创建任务必须提供完整日期和时间，例如 @2026-05-25 09:00-09:30"
+            : isPlannedInput
+              ? "创建任务必须提供日期，例如 @2026-05-25；普通任务的时间段可省略"
+              : "极简未完成行不会创建任务；创建任务请使用「+ 任务：」计划语法"
         });
         return;
       }
@@ -1305,7 +1308,27 @@ export class ProjectManagementStore extends Events {
           line: entry.line,
           raw: entry.raw,
           blocking: true,
-          message: "极简未完成行不会创建或覆盖任务；创建或覆盖任务必须提供完整日期和时间"
+          message: isPlannedInput
+            ? "覆盖任务必须提供日期，例如 @2026-05-25；普通任务的时间段可省略"
+            : "极简未完成行不会创建或覆盖任务；覆盖任务请使用「+ 任务：」计划语法"
+        });
+        return;
+      }
+      if (isPlannedInput && entry.input.kind === "composite" && !entry.hasTimeRange) {
+        issues.push({
+          line: entry.line,
+          raw: entry.raw,
+          blocking: true,
+          message: "组合任务必须提供完整开始时间和结束时间，例如 @2026-05-25 09:00-09:30"
+        });
+        return;
+      }
+      if (isPlannedInput && entry.parentTitle && !entry.hasTimeRange) {
+        issues.push({
+          line: entry.line,
+          raw: entry.raw,
+          blocking: true,
+          message: "组合任务的子任务必须提供完整开始时间和结束时间，例如 @2026-05-25 09:00-09:30"
         });
         return;
       }
@@ -1331,7 +1354,7 @@ export class ProjectManagementStore extends Events {
       });
     });
 
-    const isPlannedMarkdown = previewTasks.length > 0 && tasks.every((task) => task.createReady && task.input.completed !== true);
+    const isPlannedMarkdown = tasks.length > 0 && tasks.every((task) => task.syntax === "planned" && task.input.completed !== true);
     return {
       sourceFormat: isPlannedMarkdown ? "markdown-planned" : "markdown-minimal",
       tasks: previewTasks,
