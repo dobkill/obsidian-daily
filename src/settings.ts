@@ -1,115 +1,8 @@
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
-import { DATA_MIGRATION_SCHEMA, DATA_MIGRATION_VERSION } from "./importExport/dataMigration";
 import type ProjectManagementPlugin from "./main";
 import { AppendHeaderConfig, PluginConfig } from "./types";
 import { copyTextToClipboard } from "./utils/clipboard";
-
-const DATA_MIGRATION_SAMPLE_TEXT = JSON.stringify(
-  {
-    schema: DATA_MIGRATION_SCHEMA,
-    version: DATA_MIGRATION_VERSION,
-    exportedAt: "2026-05-26T12:00:00+08:00",
-    projects: [
-      {
-        id: "project-english",
-        name: "英语四级冲刺",
-        description: "迁移 JSON 会保留项目元数据。",
-        color: "#3d8bfd",
-        status: "active",
-        createdAt: "2026-05-26T12:00:00+08:00",
-        updatedAt: "2026-05-26T12:00:00+08:00"
-      }
-    ],
-    progressPages: [
-      {
-        id: "page-english",
-        projectId: "project-english",
-        name: "英语四级冲刺",
-        columnOrder: ["title", "status", "priority", "tags", "recurrence", "schedule", "completion", "description", "actions"],
-        createdAt: "2026-05-26T12:00:00+08:00",
-        updatedAt: "2026-05-26T12:00:00+08:00"
-      }
-    ],
-    tasks: [
-      {
-        id: "task-vocab",
-        title: "每日背词",
-        projectId: "project-english",
-        date: "2026-05-26",
-        startTime: "07:00",
-        endTime: "07:30",
-        recurrence: "daily",
-        recurrenceCount: 1000,
-        occurrenceStates: [{ date: "2026-05-26", completedAt: "2026-05-26T07:31:00+08:00" }],
-        viewState: { board: { columnId: "todo", order: 10 }, gantt: { rowOrder: 10, dependencyIds: [], locked: false, milestone: false }, mindmap: { parentTaskId: null, childOrder: 10, expanded: true } },
-        createdAt: "2026-05-26T12:00:00+08:00",
-        updatedAt: "2026-05-26T12:00:00+08:00",
-        revision: 1
-      }
-    ]
-  },
-  null,
-  2
-);
-
-const TODAY_COMPLETION_SAMPLE_TEXT = [
-  "#项目：英语四级冲刺",
-  "- [x] 每日背词",
-  "- [ ] 听力精听",
-  "",
-  "#项目：未归属项目",
-  "- [x] 购买答题卡"
-].join("\n");
-
-const TASK_PLAN_SAMPLE_TEXT = [
-  "#项目：英语四级冲刺",
-  "+ 任务：搭建复习看板 @2026-05-27 09:00-10:30 #planning !high status:doing",
-  "+ 组合：拆解每日背词 @2026-05-27 12:00-12:40 #vocab !medium status:todo repeat:daily count:5",
-  "  + 子任务：复习昨天错词 @2026-05-27 12:00-12:10 #vocab status:todo repeat:daily count:5",
-  "  + 子任务：新增 30 个高频词 @2026-05-27 12:10-12:30 #vocab status:todo repeat:daily count:5",
-  "  > 每天完成后可在今日任务页勾选。",
-  "+ 任务：模考复盘 @2026-05-29 19:30-21:00 #mock status:todo repeat:weekly count:4"
-].join("\n");
-
-type FormatGuideSection = {
-  title: string;
-  desc: string;
-  points: string[];
-  sample: string;
-};
-
-const FORMAT_GUIDE_SECTIONS: FormatGuideSection[] = [
-  {
-    title: "数据迁移 JSON",
-    desc: "用于知识库迁移和完整恢复，由“导出全部记录”生成，也可直接粘贴到快速记录-创建任务。",
-    points: [
-      "保留项目、项目页、任务、看板、甘特图、思维导图、评语、任务笔记、完成状态和单次实例覆盖。",
-      "重复日期不逐日展开；每日 / 每周任务用 recurrence + count / until 表达，异常日期才写入 occurrencePlan。",
-      "必须保持 schema 与 version 不变。"
-    ],
-    sample: DATA_MIGRATION_SAMPLE_TEXT
-  },
-  {
-    title: "今日完成极简 Markdown",
-    desc: "用于把今日任务页导出的清单粘回快速记录，只改变今天已有任务的完成状态。",
-    points: [
-      "只支持 #项目 分组和 - [x] 标题 / - [ ] 标题。",
-      "不会创建新任务，也不会覆盖任务日期、时间、标签或重复规则。",
-      "找不到同项目、同标题、今天发生的任务时会阻止导入。"
-    ],
-    sample: TODAY_COMPLETION_SAMPLE_TEXT
-  },
-  {
-    title: "新任务计划复杂 Markdown",
-    desc: "用于制定新计划或覆盖已有任务，语法与今日完成格式明显分离。",
-    points: [
-      "任务行使用 + 任务：或 + 组合：开头；冒号后空格可选，普通任务必须写 @YYYY-MM-DD，时间段可选。",
-      "组合任务和缩进的 + 子任务：必须写完整 @YYYY-MM-DD HH:mm-HH:mm，且子任务必须落在父组合任务范围内。",
-      "支持 #标签、!优先级、status、repeat、count、until、dates、board、gantt、deps、parent、mindmap 和缩进描述。"
-    ],
-    sample: TASK_PLAN_SAMPLE_TEXT
-  }
-];
+import { MARKDOWN_FORMAT_GUIDE } from "./utils/markdownGuide";
 
 export class ProjectManagementSettingTab extends PluginSettingTab {
   plugin: ProjectManagementPlugin;
@@ -125,12 +18,12 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h2", { text: "项目管理插件设置" });
     const doc = containerEl.createDiv({ cls: "pm-settings-doc" });
-    doc.createEl("h3", { text: "快速记录三种创建格式" });
+    doc.createEl("h3", { text: "快速记录格式规范" });
     doc.createDiv({
       cls: "pm-muted",
-      text: "示例窗口可编辑、可滚动、可复制，但不会保存；每次重新打开设置页都会恢复默认内容。"
+      text: "内容与 docs/markdown——type.md 和导出说明文件保持一致。"
     });
-    FORMAT_GUIDE_SECTIONS.forEach((section) => this.renderFormatGuideSection(doc, section));
+    this.renderMarkdownFormatGuide(doc);
 
     new Setting(containerEl)
       .setName("导出 Markdown 语法说明")
@@ -300,21 +193,22 @@ export class ProjectManagementSettingTab extends PluginSettingTab {
       );
   }
 
-  private renderFormatGuideSection(containerEl: HTMLElement, section: FormatGuideSection): void {
+  private renderMarkdownFormatGuide(containerEl: HTMLElement): void {
     const wrapper = containerEl.createDiv({ cls: "pm-settings-format-section" });
     const header = wrapper.createDiv({ cls: "pm-settings-format-header" });
     const copy = header.createDiv();
-    copy.createEl("h4", { text: section.title });
-    copy.createDiv({ cls: "pm-muted", text: section.desc });
-    const button = header.createEl("button", { text: "复制范例", cls: "pm-button pm-button-secondary" });
-    const textarea = wrapper.createEl("textarea", { cls: "pm-settings-format-textarea" });
-    textarea.value = section.sample;
+    copy.createEl("h4", { text: "完整 Markdown 说明" });
+    copy.createDiv({ cls: "pm-muted", text: "可滚动查看所有格式规则、参数表和示例。" });
+    const button = header.createEl("button", { text: "复制完整说明", cls: "pm-button pm-button-secondary" });
+    const textarea = wrapper.createEl("textarea", {
+      cls: "pm-settings-format-textarea pm-settings-format-guide-textarea",
+      attr: { "aria-label": "快速记录格式完整说明", readonly: "true" }
+    });
+    textarea.value = MARKDOWN_FORMAT_GUIDE;
     button.addEventListener("click", async () => {
       await copyTextToClipboard(textarea.value);
-      new Notice(`已复制${section.title}范例`);
+      new Notice("已复制完整格式说明");
     });
-    const list = wrapper.createEl("ul", { cls: "pm-settings-format-points" });
-    section.points.forEach((point) => list.createEl("li", { text: point }));
   }
 
   private renderAppendHeaderSettings(

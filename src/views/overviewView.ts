@@ -178,9 +178,12 @@ export class OverviewView extends BaseProjectView {
     const currentMinute = getCurrentTimeMinutes();
     const weekStart = toDateKey(startOfWeek(now()));
     const weekEnd = toDateKey(addDays(startOfWeek(now()), 6));
-    const todayTaskCount = todayItems.filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).length;
-    const overdueCount = tasks.filter((task) => isOccurrenceOverdue(task, today, currentMinute)).length;
+    const todayTaskCount = todayItems.filter((item) => hasDisplayOccurrenceWork(item) && !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).length;
+    const overdueCount = tasks.filter((task) => hasOccurrenceWork(task) && isOccurrenceOverdue(task, today, currentMinute)).length;
     const currentCount = todayItems.filter((item) => {
+      if (!hasDisplayOccurrenceWork(item)) {
+        return false;
+      }
       const progress = summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences);
       return !progress.completed && isOccurrenceInCurrentWindow(item.occurrence, currentMinute);
     }).length;
@@ -355,7 +358,7 @@ export class OverviewView extends BaseProjectView {
     date.createSpan({ text: `今天 ${today}` });
 
     const actionableItems = items
-      .filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed)
+      .filter((item) => hasDisplayOccurrenceWork(item) && !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed)
       .sort((left, right) => compareWeekTasks(left.occurrence, right.occurrence));
     if (actionableItems.length === 0) {
       container.createDiv({ cls: "pm-empty pm-timeline-empty", text: "今天暂无待处理任务" });
@@ -371,7 +374,7 @@ export class OverviewView extends BaseProjectView {
       const totalSteps = Math.max(progress.totalSteps, 1);
       const percent = Math.round((progress.completedSteps / totalSteps) * 100);
       const isCurrent = isOccurrenceInCurrentWindow(task, currentMinute);
-      const isOverdue = isOccurrenceOverdue(task, today, currentMinute);
+      const isOverdue = isDisplayOccurrenceOverdue(item, today, currentMinute);
       const project = this.plugin.store.getProject(task.projectId);
       const row = timeline.createDiv({ cls: `pm-timeline-row ${isCurrent ? "is-current" : ""} ${isOverdue ? "is-overdue" : ""}` });
       if (isCurrent && !currentTarget) {
@@ -1223,7 +1226,10 @@ export class OverviewView extends BaseProjectView {
       meta.createSpan({ cls: `pm-gantt-meta-item is-priority ${priorityTone(item.task.priority)}`, text: priorityLabel(item.task.priority) });
       meta.createSpan({ cls: "pm-gantt-meta-separator", text: "·" });
       meta.createSpan({ cls: "pm-gantt-meta-item", text: formatGanttPlan(item.startDate, item.endDate, item.task.startTime, item.task.endTime) });
-      this.renderChildTaskSummary(taskCell, item.childTasks, "gantt");
+      if (item.childTasks.length > 0) {
+        meta.createSpan({ cls: "pm-gantt-meta-separator", text: "·" });
+        meta.createSpan({ cls: "pm-gantt-meta-item", text: `子任务 ${item.childTasks.length} 项` });
+      }
 
       const row = rows.createDiv({ cls: "pm-gantt-bar-row tm-gantt-bar-row" });
       geometry.minorCells.forEach((cell) => {
@@ -2677,6 +2683,18 @@ function isOccurrenceInCurrentWindow(task: TaskOccurrence, currentMinute: number
   const start = parseTimeToMinutes(task.startTime);
   const end = parseTimeToMinutes(task.endTime);
   return start !== null && end !== null && start <= currentMinute && currentMinute < end;
+}
+
+function hasOccurrenceWork(task: TaskOccurrence): boolean {
+  return task.kind !== "composite" || task.totalSteps > 0;
+}
+
+function hasDisplayOccurrenceWork(item: CompositeDisplayOccurrence): boolean {
+  return hasOccurrenceWork(item.occurrence) || item.childOccurrences.length > 0;
+}
+
+function isDisplayOccurrenceOverdue(item: CompositeDisplayOccurrence, today: string, currentMinute: number): boolean {
+  return hasDisplayOccurrenceWork(item) && isOccurrenceOverdue(item.occurrence, today, currentMinute);
 }
 
 function isOccurrenceOverdue(task: TaskOccurrence, today: string, currentMinute: number): boolean {

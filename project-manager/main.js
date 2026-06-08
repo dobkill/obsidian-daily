@@ -1049,92 +1049,11 @@ function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// docs/markdown——type.md
+var markdown_type_default = '# \u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u89C4\u8303\n\n\u5F53\u524D\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u652F\u6301\u4E09\u7C7B\u8F93\u5165\u683C\u5F0F\u3002\n\n1. \u6570\u636E\u8FC1\u79FB JSON\uFF1A\u7528\u4E8E\u77E5\u8BC6\u5E93\u8FC1\u79FB\u548C\u5B8C\u6574\u6062\u590D\u3002\n2. \u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\uFF1A\u7528\u4E8E\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002\n3. \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\uFF1A\u7528\u4E8E\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u8BA1\u5212\u3002\n\n## \u6570\u636E\u8FC1\u79FB JSON\n\n\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u590D\u5236\u7684\u6570\u636E\u5C31\u662F\u6570\u636E\u8FC1\u79FB JSON\u3002\n\n```json\n{\n  "schema": "obsidian-project-management/data-migration",\n  "version": 2,\n  "exportedAt": "2026-05-26T12:00:00+08:00",\n  "projects": [],\n  "progressPages": [],\n  "tasks": []\n}\n```\n\n### \u4EFB\u52A1\u7D27\u51D1\u89C4\u5219\n\n1. `daily` / `weekly` \u91CD\u590D\u4EFB\u52A1\u4E0D\u5BFC\u51FA\u9010\u65E5 `occurrenceDates`\uFF1B\u7531 `date`\u3001`recurrence`\u3001`recurrenceCount`\u3001`recurrenceUntil` \u63A8\u5BFC\u3002\n2. \u4E0D\u89C4\u5219\u65E5\u671F\u5199\u5165 `occurrencePlan.include` \u548C `occurrencePlan.exclude`\u3002\n3. \u81EA\u5B9A\u4E49\u65E5\u671F\u5199\u5165 `occurrencePlan.dates` \u6216 `occurrencePlan.ranges`\u3002\n4. \u7A7A\u5B57\u6BB5\u548C\u9ED8\u8BA4\u89C6\u56FE\u72B6\u6001\u4E0D\u5BFC\u51FA\u3002\n5. `occurrenceStates`\u3001`occurrenceOverrides`\u3001`viewState`\u3001`mindmapComments`\u3001`notes`\u3001`sourceLinks` \u4FDD\u7559\u5B8C\u6574\u4E1A\u52A1\u72B6\u6001\u3002\n\n### \u6062\u590D\u8303\u56F4\n\n\u5BFC\u5165\u6570\u636E\u8FC1\u79FB JSON \u4F1A\u6062\u590D\u9879\u76EE\u3001\u9879\u76EE\u9875\u3001\u4EFB\u52A1\u3001\u770B\u677F\u72B6\u6001\u3001\u7518\u7279\u5C5E\u6027\u3001\u601D\u7EF4\u5BFC\u56FE\u7236\u5B50\u5173\u7CFB\u3001\u8BC4\u8BED\u3001\u4EFB\u52A1\u7B14\u8BB0\u3001\u6765\u6E90\u94FE\u63A5\u3001\u91CD\u590D\u53D1\u751F\u65E5\u671F\u3001\u5355\u6B21\u5B9E\u4F8B\u8986\u76D6\u548C\u5B8C\u6210\u72B6\u6001\u3002\n\n## \u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\n\n\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u6B64\u683C\u5F0F\uFF1A\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n- [ ] \u6BCF\u65E5\u80CC\u8BCD\n- [ ] \u542C\u529B\u7CBE\u542C\n```\n\n\u628A\u5B8C\u6210\u7684\u4EFB\u52A1\u6539\u6210 `[x]` \u540E\u7C98\u56DE\u5FEB\u901F\u8BB0\u5F55\uFF1A\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n- [x] \u6BCF\u65E5\u80CC\u8BCD\n- [ ] \u542C\u529B\u7CBE\u542C\n```\n\n\u89C4\u5219\uFF1A\n\n1. `- [x] \u6807\u9898` \u53EA\u5339\u914D\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u5E76\u5B8C\u6210\u5F53\u5929\u5B9E\u4F8B\u3002\n2. `- [ ] \u6807\u9898` \u4E0D\u521B\u5EFA\u4EFB\u52A1\uFF0C\u4E5F\u4E0D\u8986\u76D6\u4EFB\u52A1\u5B57\u6BB5\u3002\n3. \u627E\u4E0D\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u65F6\u4F1A\u963B\u6B62\u5BFC\u5165\u3002\n\n## \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\n\n\u590D\u6742 Markdown \u4F7F\u7528 `+ \u4EFB\u52A1\uFF1A`\u3001`+ \u7EC4\u5408\uFF1A` \u548C\u7F29\u8FDB\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A`\u3002\u5BFC\u5165\u5668\u4F1A\u6309\u8FD9\u4E9B `+` \u884C\u8BC6\u522B\u4E3A\u201C\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\u201D\uFF0C\u4E0D\u4F1A\u6309\u662F\u5426\u5305\u542B\u5B8C\u6574\u65F6\u95F4\u6BB5\u6765\u5224\u65AD\u683C\u5F0F\u3002\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n+ \u4EFB\u52A1\uFF1A\u642D\u5EFA\u590D\u4E60\u770B\u677F @2026-05-27 09:00-10:30 #planning !high status:doing\n+ \u4EFB\u52A1\uFF1A\u6574\u7406\u9519\u9898\u7D22\u5F15 @2026-05-28 #review status:todo\n+ \u7EC4\u5408\uFF1A\u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD @2026-05-27 12:00-12:40 #vocab !medium status:todo repeat:daily count:5\n  + \u5B50\u4EFB\u52A1\uFF1A\u590D\u4E60\u6628\u5929\u9519\u8BCD @2026-05-27 12:00-12:10 #vocab status:todo repeat:daily count:5\n  + \u5B50\u4EFB\u52A1\uFF1A\u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD @2026-05-27 12:10-12:30 #vocab status:todo repeat:daily count:5\n  > \u6BCF\u5929\u5B8C\u6210\u540E\u53EF\u5728\u4ECA\u65E5\u4EFB\u52A1\u9875\u52FE\u9009\u3002\n```\n\n\u89C4\u5219\uFF1A\n\n1. `\u4EFB\u52A1\uFF1A`\u3001`\u7EC4\u5408\uFF1A`\u3001`\u5B50\u4EFB\u52A1\uFF1A` \u5192\u53F7\u540E\u53EF\u4EE5\u76F4\u63A5\u5199\u6807\u9898\uFF0C\u4E5F\u53EF\u4EE5\u5148\u5199\u4E00\u4E2A\u6216\u591A\u4E2A\u7A7A\u683C\u3002\n2. `+ \u4EFB\u52A1\uFF1A` \u8868\u793A\u666E\u901A\u4EFB\u52A1\uFF1B\u5FC5\u987B\u5199\u663E\u5F0F\u65E5\u671F `@YYYY-MM-DD`\u3002\u53EF\u4EE5\u5199\u5B8C\u6574 `@YYYY-MM-DD HH:mm-HH:mm`\uFF0C\u4E5F\u53EF\u4EE5\u53EA\u5199\u65E5\u671F\u8868\u793A\u672A\u6392\u671F\u4EFB\u52A1\u3002\n3. `+ \u7EC4\u5408\uFF1A` \u8868\u793A\u7EC4\u5408\u4EFB\u52A1\uFF1B\u5FC5\u987B\u5199\u5B8C\u6574 `@YYYY-MM-DD HH:mm-HH:mm`\u3002\u7EC4\u5408\u4EFB\u52A1\u4E0D\u80FD\u53EA\u5199\u65E5\u671F\u3002\n4. \u7F29\u8FDB\u4E24\u4E2A\u6216\u66F4\u591A\u7A7A\u683C\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A` \u5FC5\u987B\u5199\u5728\u67D0\u4E2A `+ \u7EC4\u5408\uFF1A` \u4E0B\u65B9\uFF1B\u5B50\u4EFB\u52A1\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\uFF0C\u5FC5\u987B\u5199\u5B8C\u6574 `@YYYY-MM-DD HH:mm-HH:mm`\uFF0C\u4E14\u65E5\u671F\u548C\u65F6\u95F4\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u8303\u56F4\u5185\u3002\n5. \u65F6\u95F4\u8303\u56F4\u4E3A `00:00` \u81F3 `23:59`\uFF0C\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4\u3002\n6. `#\u9879\u76EE\uFF1A\u9879\u76EE\u540D` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5165\u8BE5\u9879\u76EE\uFF1B\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002\n7. `#\u9879\u76EE\uFF1A` \u6216 `#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE` \u8868\u793A\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002\n8. \u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u65F6\uFF0C`#\u9879\u76EE\uFF1A` \u5FC5\u987B\u7B49\u4E8E\u5F53\u524D\u9879\u76EE\uFF1B\u540C\u9879\u76EE\u540C\u540D\u4EFB\u52A1\u4F1A\u88AB\u8986\u76D6\u8BA1\u5212\u5B57\u6BB5\u5E76\u4FDD\u7559\u65E2\u6709\u5B8C\u6210\u8BB0\u5F55\uFF0C\u5426\u5219\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002\n9. \u65F6\u95F4\u51B2\u7A81\u4F1A\u81EA\u52A8\u8C03\u6574\u5230\u540C\u65E5 1 \u5206\u949F\u7A7A\u6863\u3002\n10. \u7F29\u8FDB\u4E24\u4E2A\u6216\u66F4\u591A\u7A7A\u683C\u7684 `>` \u884C\u662F\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u5F52\u5165\u5B83\u524D\u9762\u6700\u8FD1\u7684\u4EFB\u52A1\u6216\u5B50\u4EFB\u52A1\uFF1B\u591A\u884C\u63CF\u8FF0\u4F1A\u7528\u6362\u884C\u8FDE\u63A5\u3002\n11. \u53C2\u6570\u7528\u7A7A\u683C\u5206\u9694\uFF1B\u4EFB\u52A1\u6807\u9898\u662F\u79FB\u9664 `@\u65E5\u671F`\u3001`#\u6807\u7B7E`\u3001`!\u4F18\u5148\u7EA7`\u3001`status`\u3001`repeat` \u7B49\u53C2\u6570\u540E\u5269\u4E0B\u7684\u6587\u672C\u3002\n\n## \u590D\u6742 Markdown \u53C2\u6570\n\n| \u53C2\u6570 | \u793A\u4F8B | \u4F5C\u7528 |\n| --- | --- | --- |\n| `#\u6807\u7B7E` | `#planning` | \u5199\u5165\u4EFB\u52A1\u6807\u7B7E\uFF0C\u53EF\u5199\u591A\u4E2A\u3002 |\n| `!\u4F18\u5148\u7EA7` | `!low`\u3001`!medium`\u3001`!high`\u3001`!urgent` | \u5199\u5165\u4EFB\u52A1\u4F18\u5148\u7EA7\u3002 |\n| `status` | `status:todo`\u3001`status:doing`\u3001`status:blocked`\u3001`status:done` | \u5199\u5165\u4EFB\u52A1\u72B6\u6001\u3002 |\n| `repeat` | `repeat:once`\u3001`repeat:daily`\u3001`repeat:weekly`\u3001`repeat:custom` | \u91CD\u590D\u89C4\u5219\u3002 |\n| `count` | `count:5` | \u91CD\u590D\u6B21\u6570\u3002 |\n| `until` | `until:2026-06-30` | \u91CD\u590D\u7ED3\u675F\u65E5\u671F\u3002 |\n| `dates` | `dates:2026-05-27,2026-05-29` | \u81EA\u5B9A\u4E49\u53D1\u751F\u65E5\u671F\u96C6\u5408\u3002 |\n| `board` | `board:doing:10` | \u770B\u677F\u5217\u4E0E\u6392\u5E8F\u3002 |\n| `gantt` | `gantt:order=10,locked,milestone` | \u7518\u7279\u56FE\u6392\u5E8F\u3001\u9501\u5B9A\u548C\u91CC\u7A0B\u7891\u3002 |\n| `deps` | `deps:%E4%BB%BB%E5%8A%A1A|%E4%BB%BB%E5%8A%A1B` | \u7518\u7279\u4F9D\u8D56\uFF0C\u4EFB\u52A1\u6807\u9898\u4F7F\u7528 URL \u7F16\u7801\u3002 |\n| `parent` | `parent:%E7%BB%84%E5%90%88%E4%BB%BB%E5%8A%A1A` | \u6302\u5165\u540C\u9879\u76EE\u4E0B\u6307\u5B9A\u7EC4\u5408\u4EFB\u52A1\uFF1B\u901A\u5E38\u4F7F\u7528\u7F29\u8FDB\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A` \u66F4\u6E05\u6670\u3002 |\n| `mindmap` | `mindmap:order=20,expanded,x=280,y=120` | \u601D\u7EF4\u5BFC\u56FE\u6392\u5E8F\u3001\u5C55\u5F00\u72B6\u6001\u548C\u5750\u6807\u3002 |\n\n## \u7EC4\u5408\u4EFB\u52A1\n\n\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u6709\u5F00\u59CB\u4E0E\u7ED3\u675F\u65F6\u95F4\u3002\u5B50\u4EFB\u52A1\u4F7F\u7528\u7F29\u8FDB\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A`\uFF0C\u5B83\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\uFF0C\u5FC5\u987B\u5B8C\u6574\u586B\u5199 `@YYYY-MM-DD HH:mm-HH:mm`\uFF0C\u4E14\u53D1\u751F\u65E5\u671F\u548C\u65F6\u95F4\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u8303\u56F4\u5185\u3002\u590D\u6742 Markdown \u4E0D\u4FDD\u5B58\u5B8C\u6210\u8BB0\u5F55\uFF1B\u5B8C\u6574\u6267\u884C\u8BB0\u5F55\u53EA\u901A\u8FC7\u6570\u636E\u8FC1\u79FB JSON \u4FDD\u5B58\u3002\n\n\u91CD\u590D\u89C4\u5219\u8865\u5145\uFF1A\n\n1. `repeat:daily` \u548C `repeat:weekly` \u5FC5\u987B\u914D\u5408 `count:N` \u6216 `until:YYYY-MM-DD`\u3002\n2. `repeat:custom` \u5FC5\u987B\u914D\u5408 `dates:YYYY-MM-DD,YYYY-MM-DD`\u3002\n3. \u4E0D\u5199 `repeat` \u65F6\u9ED8\u8BA4\u4E3A `once`\u3002\n\n## \u7B14\u8BB0\u540C\u6B65\u5757\n\n\u5168\u5E93 Markdown \u626B\u63CF\u53EA\u8BFB\u53D6 `pm:start` \u4E0E `pm:end` \u4E4B\u95F4\u7684\u590D\u6742 Markdown\uFF1A\n\n```md\n<!-- pm:start -->\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n+ \u4EFB\u52A1\uFF1A\u542C\u529B\u7CBE\u542C @2026-05-27 20:00-20:30 #listen status:todo\n<!-- pm:end -->\n```\n';
+
 // src/utils/markdownGuide.ts
-var MARKDOWN_FORMAT_GUIDE = `# \u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u8BF4\u660E
-
-\u672C\u8BF4\u660E\u5BF9\u5E94\u5F53\u524D\u63D2\u4EF6\u5B9E\u73B0\u3002\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u53EA\u63A5\u6536\u4E09\u7C7B\u683C\u5F0F\uFF1A\u6570\u636E\u8FC1\u79FB JSON\u3001\u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\u3001\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\u3002
-
-## \u6570\u636E\u8FC1\u79FB JSON
-
-\u6570\u636E\u8FC1\u79FB JSON \u7531\u201C\u9879\u76EE\u8FDB\u5EA6 - \u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u751F\u6210\uFF0C\u7528\u4E8E\u77E5\u8BC6\u5E93\u8FC1\u79FB\u548C\u5B8C\u6574\u6062\u590D\u3002
-
-\`\`\`json
-{
-  "schema": "obsidian-project-management/data-migration",
-  "version": 2,
-  "exportedAt": "2026-05-26T12:00:00+08:00",
-  "projects": [],
-  "progressPages": [],
-  "tasks": []
-}
-\`\`\`
-
-\u89C4\u5219\uFF1A
-
-- JSON \u53EF\u76F4\u63A5\u7C98\u8D34\u5230\u201C\u5FEB\u901F\u8BB0\u5F55 - \u521B\u5EFA\u4EFB\u52A1\u201D\u3002
-- \u6BCF\u65E5 / \u6BCF\u5468\u91CD\u590D\u4EFB\u52A1\u901A\u8FC7 \`recurrence\`\u3001\`recurrenceCount\`\u3001\`recurrenceUntil\` \u8868\u8FBE\uFF0C\u4E0D\u9010\u65E5\u5BFC\u51FA\u91CD\u590D\u65E5\u671F\u3002
-- \u4E0D\u89C4\u5219\u53D1\u751F\u65E5\u671F\u5199\u5165 \`occurrencePlan.include\` / \`occurrencePlan.exclude\`\uFF0C\u81EA\u5B9A\u4E49\u91CD\u590D\u5199\u5165 \`occurrencePlan.dates\` \u6216 \`occurrencePlan.ranges\`\u3002
-- \u4EFB\u52A1\u5B8C\u6210\u3001\u7EC4\u5408\u4EFB\u52A1\u90E8\u5206\u5B8C\u6210\u3001\u5355\u6B21\u5B9E\u4F8B\u8986\u76D6\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u3001\u601D\u7EF4\u5BFC\u56FE\u3001\u8BC4\u8BED\u3001\u4EFB\u52A1\u7B14\u8BB0\u548C\u6765\u6E90\u94FE\u63A5\u90FD\u4FDD\u5B58\u5728 JSON \u5185\u3002
-
-## \u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown
-
-\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u7684\u683C\u5F0F\u53EA\u7528\u4E8E\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002
-
-\`\`\`md
-#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A
-- [x] \u6BCF\u65E5\u80CC\u8BCD
-- [ ] \u542C\u529B\u7CBE\u542C
-\`\`\`
-
-\u89C4\u5219\uFF1A
-
-- \`- [x] \u6807\u9898\` \u53EA\u5339\u914D\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u5E76\u5B8C\u6210\u5F53\u5929\u5B9E\u4F8B\u3002
-- \`- [ ] \u6807\u9898\` \u4E0D\u521B\u5EFA\u4EFB\u52A1\uFF0C\u4E5F\u4E0D\u8986\u76D6\u5B57\u6BB5\u3002
-- \u627E\u4E0D\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u65F6\u4F1A\u62A5\u9519\u3002
-
-## \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown
-
-\u65B0\u8BA1\u5212\u4F7F\u7528 \`+ \u4EFB\u52A1\uFF1A\`\u3001\`+ \u7EC4\u5408\uFF1A\` \u6216\u7F29\u8FDB\u7684 \`+ \u5B50\u4EFB\u52A1\uFF1A\`\uFF0C\u4E0E\u4ECA\u65E5\u5B8C\u6210\u683C\u5F0F\u5206\u79BB\u3002\u5BFC\u5165\u5668\u6309\u8FD9\u4E9B \`+\` \u884C\u8BC6\u522B\u8BA1\u5212\u683C\u5F0F\uFF0C\u4E0D\u6309\u662F\u5426\u5305\u542B\u5B8C\u6574\u65F6\u95F4\u6BB5\u6765\u5224\u65AD\u683C\u5F0F\u3002
-
-\`\`\`md
-#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A
-+ \u4EFB\u52A1\uFF1A\u642D\u5EFA\u590D\u4E60\u770B\u677F @2026-05-27 09:00-10:30 #planning !high status:doing
-+ \u4EFB\u52A1\uFF1A\u6574\u7406\u9519\u9898\u7D22\u5F15 @2026-05-28 #review status:todo
-+ \u7EC4\u5408\uFF1A\u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD @2026-05-27 12:00-12:40 #vocab status:todo repeat:daily count:5
-  + \u5B50\u4EFB\u52A1\uFF1A\u590D\u4E60\u6628\u5929\u9519\u8BCD @2026-05-27 12:00-12:10 #vocab status:todo repeat:daily count:5
-  + \u5B50\u4EFB\u52A1\uFF1A\u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD @2026-05-27 12:10-12:30 #vocab status:todo repeat:daily count:5
-  > \u6BCF\u5929\u5B8C\u6210\u540E\u53EF\u5728\u4ECA\u65E5\u4EFB\u52A1\u9875\u52FE\u9009\u3002
-\`\`\`
-
-\u89C4\u5219\uFF1A
-
-- \`\u4EFB\u52A1\uFF1A\`\u3001\`\u7EC4\u5408\uFF1A\`\u3001\`\u5B50\u4EFB\u52A1\uFF1A\` \u5192\u53F7\u540E\u53EF\u4EE5\u76F4\u63A5\u5199\u6807\u9898\uFF0C\u4E5F\u53EF\u4EE5\u5148\u5199\u4E00\u4E2A\u6216\u591A\u4E2A\u7A7A\u683C\u3002
-- \u666E\u901A\u4EFB\u52A1\u5FC5\u987B\u5199\u663E\u5F0F\u65E5\u671F \`@YYYY-MM-DD\`\uFF1B\u53EF\u53EA\u5199\u65E5\u671F\u8868\u793A\u672A\u6392\u671F\uFF0C\u4E5F\u53EF\u5199\u5B8C\u6574 \`@YYYY-MM-DD HH:mm-HH:mm\`\u3002
-- \u7EC4\u5408\u4EFB\u52A1\u548C \`+ \u5B50\u4EFB\u52A1\uFF1A\` \u5FC5\u987B\u5199\u5B8C\u6574 \`@YYYY-MM-DD HH:mm-HH:mm\`\u3002
-- \u65F6\u95F4\u8303\u56F4\u4E3A \`00:00\` \u81F3 \`23:59\`\uFF0C\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4\u3002
-- \`#\u9879\u76EE\uFF1A\u9879\u76EE\u540D\` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5165\u8BE5\u9879\u76EE\uFF1B\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002
-- \`#\u9879\u76EE\uFF1A\` \u6216 \`#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE\` \u8868\u793A\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002
-- \u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u65F6\uFF0C\`#\u9879\u76EE\uFF1A\` \u5FC5\u987B\u7B49\u4E8E\u5F53\u524D\u9879\u76EE\uFF1B\u540C\u9879\u76EE\u540C\u540D\u4EFB\u52A1\u4F1A\u8986\u76D6\u8BA1\u5212\u5B57\u6BB5\uFF0C\u4F46\u4FDD\u7559\u65E2\u6709\u5B8C\u6210\u8BB0\u5F55\u3002
-- \u7EC4\u5408\u4EFB\u52A1\u4E0B\u65B9\u53EF\u7F29\u8FDB\u5199 \`+ \u5B50\u4EFB\u52A1\uFF1A\`\u3002\u5B50\u4EFB\u52A1\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\uFF0C\u4FDD\u7559\u81EA\u5DF1\u7684\u91CD\u590D\u89C4\u5219\u548C\u5B8C\u6210\u72B6\u6001\uFF0C\u4E0D\u80FD\u662F\u7EC4\u5408\u4EFB\u52A1\uFF0C\u4E14\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u65E5\u671F\u548C\u65F6\u95F4\u8303\u56F4\u5185\u3002
-- \u7F29\u8FDB\u4E24\u4E2A\u6216\u66F4\u591A\u7A7A\u683C\u7684 \`>\` \u884C\u662F\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u5F52\u5165\u5B83\u524D\u9762\u6700\u8FD1\u7684\u4EFB\u52A1\u6216\u5B50\u4EFB\u52A1\u3002
-- \`repeat:daily\` / \`repeat:weekly\` \u5FC5\u987B\u914D\u5408 \`count:N\` \u6216 \`until:YYYY-MM-DD\`\uFF1B\`repeat:custom\` \u5FC5\u987B\u914D\u5408 \`dates:...\`\u3002
-
-## \u590D\u6742 Markdown \u53C2\u6570
-
-- \`#\u6807\u7B7E\`\uFF1A\u5199\u5165\u4EFB\u52A1\u6807\u7B7E\uFF0C\u53EF\u5199\u591A\u4E2A\u3002
-- \`!low | !medium | !high | !urgent\`\uFF1A\u4F18\u5148\u7EA7\u3002
-- \`status:todo | doing | blocked | done\`\uFF1A\u770B\u677F\u72B6\u6001\u3002
-- \`repeat:once | daily | weekly | custom\`\uFF1A\u91CD\u590D\u7C7B\u578B\u3002
-- \`count:N\`\uFF1A\u91CD\u590D\u6B21\u6570\u3002
-- \`until:YYYY-MM-DD\`\uFF1A\u91CD\u590D\u7ED3\u675F\u65E5\u671F\u3002
-- \`dates:YYYY-MM-DD,YYYY-MM-DD\`\uFF1A\u81EA\u5B9A\u4E49\u53D1\u751F\u65E5\u671F\u3002
-- \`board:doing:10\`\uFF1A\u770B\u677F\u5217\u4E0E\u6392\u5E8F\u3002
-- \`gantt:order=10,locked,milestone\`\uFF1A\u7518\u7279\u56FE\u6392\u5E8F\u3001\u9501\u5B9A\u548C\u91CC\u7A0B\u7891\u3002
-- \`deps:%E4%BB%BB%E5%8A%A1A|%E4%BB%BB%E5%8A%A1B\`\uFF1A\u7518\u7279\u4F9D\u8D56\uFF0C\u4EFB\u52A1\u6807\u9898\u4F7F\u7528 URL \u7F16\u7801\u3002
-- \`parent:%E7%BB%84%E5%90%88%E4%BB%BB%E5%8A%A1A\`\uFF1A\u6302\u5165\u540C\u9879\u76EE\u4E0B\u6307\u5B9A\u7EC4\u5408\u4EFB\u52A1\u3002
-- \`mindmap:order=20,expanded,x=280,y=120\`\uFF1A\u601D\u7EF4\u5BFC\u56FE\u6392\u5E8F\u3001\u5C55\u5F00\u72B6\u6001\u548C\u5750\u6807\u3002
-
-\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown \u4E0D\u4FDD\u5B58\u5B8C\u6210\u8BB0\u5F55\uFF1B\u5B8C\u6574\u6267\u884C\u8BB0\u5F55\u53EA\u901A\u8FC7\u6570\u636E\u8FC1\u79FB JSON \u4FDD\u5B58\u3002`;
+var MARKDOWN_FORMAT_GUIDE = markdown_type_default.trimEnd();
 
 // src/storage/store.ts
 var DEFAULT_CONFIG = {
@@ -4084,102 +4003,6 @@ async function copyTextToClipboard(text) {
 }
 
 // src/settings.ts
-var DATA_MIGRATION_SAMPLE_TEXT = JSON.stringify(
-  {
-    schema: DATA_MIGRATION_SCHEMA,
-    version: DATA_MIGRATION_VERSION,
-    exportedAt: "2026-05-26T12:00:00+08:00",
-    projects: [
-      {
-        id: "project-english",
-        name: "\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A",
-        description: "\u8FC1\u79FB JSON \u4F1A\u4FDD\u7559\u9879\u76EE\u5143\u6570\u636E\u3002",
-        color: "#3d8bfd",
-        status: "active",
-        createdAt: "2026-05-26T12:00:00+08:00",
-        updatedAt: "2026-05-26T12:00:00+08:00"
-      }
-    ],
-    progressPages: [
-      {
-        id: "page-english",
-        projectId: "project-english",
-        name: "\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A",
-        columnOrder: ["title", "status", "priority", "tags", "recurrence", "schedule", "completion", "description", "actions"],
-        createdAt: "2026-05-26T12:00:00+08:00",
-        updatedAt: "2026-05-26T12:00:00+08:00"
-      }
-    ],
-    tasks: [
-      {
-        id: "task-vocab",
-        title: "\u6BCF\u65E5\u80CC\u8BCD",
-        projectId: "project-english",
-        date: "2026-05-26",
-        startTime: "07:00",
-        endTime: "07:30",
-        recurrence: "daily",
-        recurrenceCount: 1e3,
-        occurrenceStates: [{ date: "2026-05-26", completedAt: "2026-05-26T07:31:00+08:00" }],
-        viewState: { board: { columnId: "todo", order: 10 }, gantt: { rowOrder: 10, dependencyIds: [], locked: false, milestone: false }, mindmap: { parentTaskId: null, childOrder: 10, expanded: true } },
-        createdAt: "2026-05-26T12:00:00+08:00",
-        updatedAt: "2026-05-26T12:00:00+08:00",
-        revision: 1
-      }
-    ]
-  },
-  null,
-  2
-);
-var TODAY_COMPLETION_SAMPLE_TEXT = [
-  "#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A",
-  "- [x] \u6BCF\u65E5\u80CC\u8BCD",
-  "- [ ] \u542C\u529B\u7CBE\u542C",
-  "",
-  "#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE",
-  "- [x] \u8D2D\u4E70\u7B54\u9898\u5361"
-].join("\n");
-var TASK_PLAN_SAMPLE_TEXT = [
-  "#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A",
-  "+ \u4EFB\u52A1\uFF1A\u642D\u5EFA\u590D\u4E60\u770B\u677F @2026-05-27 09:00-10:30 #planning !high status:doing",
-  "+ \u7EC4\u5408\uFF1A\u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD @2026-05-27 12:00-12:40 #vocab !medium status:todo repeat:daily count:5",
-  "  + \u5B50\u4EFB\u52A1\uFF1A\u590D\u4E60\u6628\u5929\u9519\u8BCD @2026-05-27 12:00-12:10 #vocab status:todo repeat:daily count:5",
-  "  + \u5B50\u4EFB\u52A1\uFF1A\u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD @2026-05-27 12:10-12:30 #vocab status:todo repeat:daily count:5",
-  "  > \u6BCF\u5929\u5B8C\u6210\u540E\u53EF\u5728\u4ECA\u65E5\u4EFB\u52A1\u9875\u52FE\u9009\u3002",
-  "+ \u4EFB\u52A1\uFF1A\u6A21\u8003\u590D\u76D8 @2026-05-29 19:30-21:00 #mock status:todo repeat:weekly count:4"
-].join("\n");
-var FORMAT_GUIDE_SECTIONS = [
-  {
-    title: "\u6570\u636E\u8FC1\u79FB JSON",
-    desc: "\u7528\u4E8E\u77E5\u8BC6\u5E93\u8FC1\u79FB\u548C\u5B8C\u6574\u6062\u590D\uFF0C\u7531\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u751F\u6210\uFF0C\u4E5F\u53EF\u76F4\u63A5\u7C98\u8D34\u5230\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u3002",
-    points: [
-      "\u4FDD\u7559\u9879\u76EE\u3001\u9879\u76EE\u9875\u3001\u4EFB\u52A1\u3001\u770B\u677F\u3001\u7518\u7279\u56FE\u3001\u601D\u7EF4\u5BFC\u56FE\u3001\u8BC4\u8BED\u3001\u4EFB\u52A1\u7B14\u8BB0\u3001\u5B8C\u6210\u72B6\u6001\u548C\u5355\u6B21\u5B9E\u4F8B\u8986\u76D6\u3002",
-      "\u91CD\u590D\u65E5\u671F\u4E0D\u9010\u65E5\u5C55\u5F00\uFF1B\u6BCF\u65E5 / \u6BCF\u5468\u4EFB\u52A1\u7528 recurrence + count / until \u8868\u8FBE\uFF0C\u5F02\u5E38\u65E5\u671F\u624D\u5199\u5165 occurrencePlan\u3002",
-      "\u5FC5\u987B\u4FDD\u6301 schema \u4E0E version \u4E0D\u53D8\u3002"
-    ],
-    sample: DATA_MIGRATION_SAMPLE_TEXT
-  },
-  {
-    title: "\u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown",
-    desc: "\u7528\u4E8E\u628A\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u7684\u6E05\u5355\u7C98\u56DE\u5FEB\u901F\u8BB0\u5F55\uFF0C\u53EA\u6539\u53D8\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u7684\u5B8C\u6210\u72B6\u6001\u3002",
-    points: [
-      "\u53EA\u652F\u6301 #\u9879\u76EE \u5206\u7EC4\u548C - [x] \u6807\u9898 / - [ ] \u6807\u9898\u3002",
-      "\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\uFF0C\u4E5F\u4E0D\u4F1A\u8986\u76D6\u4EFB\u52A1\u65E5\u671F\u3001\u65F6\u95F4\u3001\u6807\u7B7E\u6216\u91CD\u590D\u89C4\u5219\u3002",
-      "\u627E\u4E0D\u5230\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u65F6\u4F1A\u963B\u6B62\u5BFC\u5165\u3002"
-    ],
-    sample: TODAY_COMPLETION_SAMPLE_TEXT
-  },
-  {
-    title: "\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown",
-    desc: "\u7528\u4E8E\u5236\u5B9A\u65B0\u8BA1\u5212\u6216\u8986\u76D6\u5DF2\u6709\u4EFB\u52A1\uFF0C\u8BED\u6CD5\u4E0E\u4ECA\u65E5\u5B8C\u6210\u683C\u5F0F\u660E\u663E\u5206\u79BB\u3002",
-    points: [
-      "\u4EFB\u52A1\u884C\u4F7F\u7528 + \u4EFB\u52A1\uFF1A\u6216 + \u7EC4\u5408\uFF1A\u5F00\u5934\uFF1B\u5192\u53F7\u540E\u7A7A\u683C\u53EF\u9009\uFF0C\u666E\u901A\u4EFB\u52A1\u5FC5\u987B\u5199 @YYYY-MM-DD\uFF0C\u65F6\u95F4\u6BB5\u53EF\u9009\u3002",
-      "\u7EC4\u5408\u4EFB\u52A1\u548C\u7F29\u8FDB\u7684 + \u5B50\u4EFB\u52A1\uFF1A\u5FC5\u987B\u5199\u5B8C\u6574 @YYYY-MM-DD HH:mm-HH:mm\uFF0C\u4E14\u5B50\u4EFB\u52A1\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u8303\u56F4\u5185\u3002",
-      "\u652F\u6301 #\u6807\u7B7E\u3001!\u4F18\u5148\u7EA7\u3001status\u3001repeat\u3001count\u3001until\u3001dates\u3001board\u3001gantt\u3001deps\u3001parent\u3001mindmap \u548C\u7F29\u8FDB\u63CF\u8FF0\u3002"
-    ],
-    sample: TASK_PLAN_SAMPLE_TEXT
-  }
-];
 var ProjectManagementSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -4190,12 +4013,12 @@ var ProjectManagementSettingTab = class extends import_obsidian2.PluginSettingTa
     containerEl.empty();
     containerEl.createEl("h2", { text: "\u9879\u76EE\u7BA1\u7406\u63D2\u4EF6\u8BBE\u7F6E" });
     const doc = containerEl.createDiv({ cls: "pm-settings-doc" });
-    doc.createEl("h3", { text: "\u5FEB\u901F\u8BB0\u5F55\u4E09\u79CD\u521B\u5EFA\u683C\u5F0F" });
+    doc.createEl("h3", { text: "\u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u89C4\u8303" });
     doc.createDiv({
       cls: "pm-muted",
-      text: "\u793A\u4F8B\u7A97\u53E3\u53EF\u7F16\u8F91\u3001\u53EF\u6EDA\u52A8\u3001\u53EF\u590D\u5236\uFF0C\u4F46\u4E0D\u4F1A\u4FDD\u5B58\uFF1B\u6BCF\u6B21\u91CD\u65B0\u6253\u5F00\u8BBE\u7F6E\u9875\u90FD\u4F1A\u6062\u590D\u9ED8\u8BA4\u5185\u5BB9\u3002"
+      text: "\u5185\u5BB9\u4E0E docs/markdown\u2014\u2014type.md \u548C\u5BFC\u51FA\u8BF4\u660E\u6587\u4EF6\u4FDD\u6301\u4E00\u81F4\u3002"
     });
-    FORMAT_GUIDE_SECTIONS.forEach((section) => this.renderFormatGuideSection(doc, section));
+    this.renderMarkdownFormatGuide(doc);
     new import_obsidian2.Setting(containerEl).setName("\u5BFC\u51FA Markdown \u8BED\u6CD5\u8BF4\u660E").setDesc("\u751F\u6210\u4E00\u4EFD\u5F53\u524D\u63D2\u4EF6\u652F\u6301\u7684\u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u8BF4\u660E\uFF0C\u5305\u542B\u6570\u636E\u8FC1\u79FB JSON \u4E0E\u4E24\u7C7B Markdown\u3002").addButton(
       (button) => button.setButtonText("\u5BFC\u51FA\u8BF4\u660E\u6587\u4EF6").setCta().onClick(async () => {
         const path = await this.plugin.store.exportMarkdownGuide();
@@ -4297,21 +4120,22 @@ var ProjectManagementSettingTab = class extends import_obsidian2.PluginSettingTa
       })
     );
   }
-  renderFormatGuideSection(containerEl, section) {
+  renderMarkdownFormatGuide(containerEl) {
     const wrapper = containerEl.createDiv({ cls: "pm-settings-format-section" });
     const header = wrapper.createDiv({ cls: "pm-settings-format-header" });
     const copy = header.createDiv();
-    copy.createEl("h4", { text: section.title });
-    copy.createDiv({ cls: "pm-muted", text: section.desc });
-    const button = header.createEl("button", { text: "\u590D\u5236\u8303\u4F8B", cls: "pm-button pm-button-secondary" });
-    const textarea = wrapper.createEl("textarea", { cls: "pm-settings-format-textarea" });
-    textarea.value = section.sample;
+    copy.createEl("h4", { text: "\u5B8C\u6574 Markdown \u8BF4\u660E" });
+    copy.createDiv({ cls: "pm-muted", text: "\u53EF\u6EDA\u52A8\u67E5\u770B\u6240\u6709\u683C\u5F0F\u89C4\u5219\u3001\u53C2\u6570\u8868\u548C\u793A\u4F8B\u3002" });
+    const button = header.createEl("button", { text: "\u590D\u5236\u5B8C\u6574\u8BF4\u660E", cls: "pm-button pm-button-secondary" });
+    const textarea = wrapper.createEl("textarea", {
+      cls: "pm-settings-format-textarea pm-settings-format-guide-textarea",
+      attr: { "aria-label": "\u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u5B8C\u6574\u8BF4\u660E", readonly: "true" }
+    });
+    textarea.value = MARKDOWN_FORMAT_GUIDE;
     button.addEventListener("click", async () => {
       await copyTextToClipboard(textarea.value);
-      new import_obsidian2.Notice(`\u5DF2\u590D\u5236${section.title}\u8303\u4F8B`);
+      new import_obsidian2.Notice("\u5DF2\u590D\u5236\u5B8C\u6574\u683C\u5F0F\u8BF4\u660E");
     });
-    const list = wrapper.createEl("ul", { cls: "pm-settings-format-points" });
-    section.points.forEach((point) => list.createEl("li", { text: point }));
   }
   renderAppendHeaderSettings(containerEl, title, description, key) {
     const wrapper = containerEl.createDiv({ cls: "pm-settings-group" });
@@ -6204,9 +6028,12 @@ var OverviewView = class extends BaseProjectView {
     const currentMinute = getCurrentTimeMinutes();
     const weekStart = toDateKey(startOfWeek(now()));
     const weekEnd = toDateKey(addDays(startOfWeek(now()), 6));
-    const todayTaskCount = todayItems.filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).length;
-    const overdueCount = tasks.filter((task) => isOccurrenceOverdue(task, today, currentMinute)).length;
+    const todayTaskCount = todayItems.filter((item) => hasDisplayOccurrenceWork(item) && !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).length;
+    const overdueCount = tasks.filter((task) => hasOccurrenceWork(task) && isOccurrenceOverdue(task, today, currentMinute)).length;
     const currentCount = todayItems.filter((item) => {
+      if (!hasDisplayOccurrenceWork(item)) {
+        return false;
+      }
       const progress = summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences);
       return !progress.completed && isOccurrenceInCurrentWindow(item.occurrence, currentMinute);
     }).length;
@@ -6353,7 +6180,7 @@ var OverviewView = class extends BaseProjectView {
     const calendarIcon = date.createSpan({ cls: "pm-timeline-date-icon" });
     (0, import_obsidian12.setIcon)(calendarIcon, "calendar-days");
     date.createSpan({ text: `\u4ECA\u5929 ${today}` });
-    const actionableItems = items.filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).sort((left, right) => compareWeekTasks(left.occurrence, right.occurrence));
+    const actionableItems = items.filter((item) => hasDisplayOccurrenceWork(item) && !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).sort((left, right) => compareWeekTasks(left.occurrence, right.occurrence));
     if (actionableItems.length === 0) {
       container.createDiv({ cls: "pm-empty pm-timeline-empty", text: "\u4ECA\u5929\u6682\u65E0\u5F85\u5904\u7406\u4EFB\u52A1" });
       return;
@@ -6367,7 +6194,7 @@ var OverviewView = class extends BaseProjectView {
       const totalSteps = Math.max(progress.totalSteps, 1);
       const percent = Math.round(progress.completedSteps / totalSteps * 100);
       const isCurrent = isOccurrenceInCurrentWindow(task, currentMinute);
-      const isOverdue = isOccurrenceOverdue(task, today, currentMinute);
+      const isOverdue = isDisplayOccurrenceOverdue(item, today, currentMinute);
       const project = this.plugin.store.getProject(task.projectId);
       const row = timeline.createDiv({ cls: `pm-timeline-row ${isCurrent ? "is-current" : ""} ${isOverdue ? "is-overdue" : ""}` });
       if (isCurrent && !currentTarget) {
@@ -7145,7 +6972,10 @@ var OverviewView = class extends BaseProjectView {
       meta.createSpan({ cls: `pm-gantt-meta-item is-priority ${priorityTone(item.task.priority)}`, text: priorityLabel(item.task.priority) });
       meta.createSpan({ cls: "pm-gantt-meta-separator", text: "\xB7" });
       meta.createSpan({ cls: "pm-gantt-meta-item", text: formatGanttPlan(item.startDate, item.endDate, item.task.startTime, item.task.endTime) });
-      this.renderChildTaskSummary(taskCell, item.childTasks, "gantt");
+      if (item.childTasks.length > 0) {
+        meta.createSpan({ cls: "pm-gantt-meta-separator", text: "\xB7" });
+        meta.createSpan({ cls: "pm-gantt-meta-item", text: `\u5B50\u4EFB\u52A1 ${item.childTasks.length} \u9879` });
+      }
       const row = rows.createDiv({ cls: "pm-gantt-bar-row tm-gantt-bar-row" });
       geometry.minorCells.forEach((cell) => {
         const gridCell = row.createDiv({
@@ -8431,6 +8261,15 @@ function isOccurrenceInCurrentWindow(task, currentMinute) {
   const start = parseTimeToMinutes(task.startTime);
   const end = parseTimeToMinutes(task.endTime);
   return start !== null && end !== null && start <= currentMinute && currentMinute < end;
+}
+function hasOccurrenceWork(task) {
+  return task.kind !== "composite" || task.totalSteps > 0;
+}
+function hasDisplayOccurrenceWork(item) {
+  return hasOccurrenceWork(item.occurrence) || item.childOccurrences.length > 0;
+}
+function isDisplayOccurrenceOverdue(item, today, currentMinute) {
+  return hasDisplayOccurrenceWork(item) && isOccurrenceOverdue(item.occurrence, today, currentMinute);
 }
 function isOccurrenceOverdue(task, today, currentMinute) {
   if (task.completed) {

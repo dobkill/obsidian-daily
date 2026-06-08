@@ -1444,7 +1444,7 @@ button.pm-subtask-card {
   position: relative;
   overflow: hidden;
   min-width: 0;
-  height: clamp(520px, 65vh, 760px);
+  height: clamp(680px, 78vh, 1040px);
   border: 1px solid var(--background-modifier-border);
   border-radius: 16px;
   background:
@@ -1630,6 +1630,11 @@ button.pm-subtask-card {
   overflow: auto;
   font-family: var(--font-monospace);
   font-size: 0.86rem;
+}
+
+.pm-settings-format-guide-textarea {
+  min-height: 420px;
+  max-height: 70vh;
 }
 
 .pm-settings-format-points {
@@ -2849,9 +2854,11 @@ button.pm-subtask-card {
 .tm-gantt-left-row {
   display: flex;
   align-items: center;
+  height: var(--pm-gantt-row-height);
   min-height: var(--pm-gantt-row-height);
   padding: 10px 14px;
   border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 44%, transparent);
+  overflow: hidden;
 }
 
 .pm-gantt-left-row:last-child {
@@ -2873,12 +2880,18 @@ button.pm-subtask-card {
   min-width: 0;
 }
 
+.pm-gantt-task-top .pm-inline-actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+
 .pm-gantt-task-cell {
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: 8px;
   width: 100%;
+  overflow: hidden;
 }
 
 .pm-gantt-task-title-line {
@@ -3071,6 +3084,7 @@ button.pm-subtask-card {
 .pm-gantt-bar-row,
 .tm-gantt-bar-row {
   position: relative;
+  height: var(--pm-gantt-row-height);
   min-height: var(--pm-gantt-row-height);
   border-bottom: 1px solid color-mix(in srgb, var(--background-modifier-border) 44%, transparent);
 }
