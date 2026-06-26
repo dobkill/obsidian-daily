@@ -17,6 +17,12 @@ import {
   TaskViewState
 } from "../types";
 import { addDays, compareDateKeys, parseDateKey, toDateKey } from "../utils/date";
+import {
+  MAX_GENERATED_OCCURRENCES,
+  SINGLE_TASK_RECURRENCE_COUNT,
+  advanceRecurrenceDate,
+  normalizeTaskRecurrence as normalizeCoreTaskRecurrence
+} from "../domain/taskRules";
 
 export const DATA_MIGRATION_SCHEMA = "obsidian-project-management/data-migration";
 export const DATA_MIGRATION_VERSION = 2;
@@ -60,6 +66,7 @@ export type DataMigrationTaskRecord = {
   recurrence?: TaskRecurrence;
   recurrenceCount?: number | null;
   recurrenceUntil?: string | null;
+  consumeRequiresCompletion?: boolean;
   occurrencePlan?: DataMigrationOccurrencePlan;
   subtasks?: TaskSubtask[];
   occurrenceStates?: TaskOccurrenceState[];
@@ -274,6 +281,7 @@ export function taskToDataMigrationImportInput(task: Task, projectId?: string): 
     recurrence: task.recurrence,
     recurrenceCount: task.recurrenceCount ?? null,
     recurrenceUntil: task.recurrenceUntil ?? null,
+    consumeRequiresCompletion: task.consumeRequiresCompletion,
     occurrenceDates: [...task.occurrenceDates],
     completedOccurrenceDates: task.occurrenceStates.filter((state) => Boolean(state.completedAt)).map((state) => state.date),
     occurrenceOverrides: task.occurrenceOverrides.map((override) => ({ ...override })),
@@ -330,7 +338,7 @@ export function remapDataMigrationTask(task: Task, taskIdBySourceId: Map<string,
 
 function taskToDataMigrationRecord(task: Task): DataMigrationTaskRecord {
   const status = task.status ?? "todo";
-  const recurrence = task.recurrence ?? "once";
+  const recurrence = task.recurrence ?? "daily";
   const record: DataMigrationTaskRecord = {
     id: task.id,
     title: task.title,
@@ -363,14 +371,17 @@ function taskToDataMigrationRecord(task: Task): DataMigrationTaskRecord {
   if (task.endTime) {
     record.endTime = task.endTime;
   }
-  if (recurrence !== "once") {
+  if (task.kind !== "composite" && !(recurrence === "daily" && task.recurrenceCount === SINGLE_TASK_RECURRENCE_COUNT && !task.recurrenceUntil)) {
     record.recurrence = recurrence;
   }
-  if (task.recurrenceCount !== null && task.recurrenceCount !== undefined) {
+  if (task.kind !== "composite" && task.recurrenceCount !== null && task.recurrenceCount !== undefined) {
     record.recurrenceCount = task.recurrenceCount;
   }
-  if (task.recurrenceUntil) {
+  if (task.kind !== "composite" && task.recurrenceUntil) {
     record.recurrenceUntil = task.recurrenceUntil;
+  }
+  if (task.kind !== "composite" && task.consumeRequiresCompletion) {
+    record.consumeRequiresCompletion = true;
   }
   const occurrencePlan = buildOccurrencePlan(task);
   if (occurrencePlan) {
@@ -401,25 +412,27 @@ function taskToDataMigrationRecord(task: Task): DataMigrationTaskRecord {
 }
 
 function dataMigrationRecordToTask(record: DataMigrationTaskRecord): Task {
+  const kind: TaskKind = record.kind === "composite" ? "composite" : "simple";
   const status = normalizeTaskStatus(record.status);
   const recurrence = normalizeTaskRecurrence(record.recurrence, record.occurrencePlan);
   const occurrenceDates = buildOccurrenceDatesFromRecord(record, recurrence);
   const date = occurrenceDates[0] ?? record.date;
   return {
     id: record.id,
-    kind: record.kind === "composite" ? "composite" : "simple",
+    kind,
     title: record.title,
     description: record.description ?? "",
     projectId: record.projectId,
-    status,
-    priority: normalizeTaskPriority(record.priority),
-    tags: [...(record.tags ?? [])],
+    status: kind === "composite" ? "todo" : status,
+    priority: kind === "composite" ? undefined : normalizeTaskPriority(record.priority),
+    tags: kind === "composite" ? [] : [...(record.tags ?? [])],
     date,
     startTime: record.startTime,
     endTime: record.endTime,
     recurrence,
-    recurrenceCount: record.recurrenceCount ?? null,
-    recurrenceUntil: record.recurrenceUntil ?? null,
+    recurrenceCount: kind === "composite" ? SINGLE_TASK_RECURRENCE_COUNT : record.recurrenceCount ?? null,
+    recurrenceUntil: kind === "composite" ? null : record.recurrenceUntil ?? null,
+    consumeRequiresCompletion: kind === "composite" ? false : Boolean(record.consumeRequiresCompletion),
     subtasks: [],
     occurrenceDates,
     occurrenceStates: (record.occurrenceStates ?? []).map((state) => ({
@@ -427,7 +440,7 @@ function dataMigrationRecordToTask(record: DataMigrationTaskRecord): Task {
       completedSubtaskIds: [...(state.completedSubtaskIds ?? [])]
     })),
     occurrenceOverrides: (record.occurrenceOverrides ?? []).map((override) => ({ ...override })),
-    viewState: mergeViewState(record.viewState, status),
+    viewState: mergeViewState(record.viewState, kind === "composite" ? "todo" : status),
     sourceLinks: (record.sourceLinks ?? []).map((source) => ({ ...source })),
     notes: (record.notes ?? []).map((note) => ({ ...note })),
     mindmapComments: (record.mindmapComments ?? []).map((comment) => ({ ...comment })),
@@ -439,12 +452,6 @@ function dataMigrationRecordToTask(record: DataMigrationTaskRecord): Task {
 
 function buildOccurrencePlan(task: Task): DataMigrationOccurrencePlan | undefined {
   const actualDates = normalizeDateList(task.occurrenceDates);
-  if (task.recurrence === "custom") {
-    return {
-      source: "dates",
-      ...packDateSet(actualDates)
-    };
-  }
 
   const generatedDates = generateRecurrenceDates({
     date: task.date,
@@ -495,13 +502,12 @@ function generateRecurrenceDates(input: {
   recurrenceCount?: number | null;
   recurrenceUntil?: string | null;
 }): string[] {
-  if (input.recurrence === "custom") {
-    return [input.date];
-  }
-  const countLimit = input.recurrenceCount ?? (input.recurrence === "once" ? 1 : 365);
+  const recurrence = normalizeCoreTaskRecurrence(input.recurrence);
+  const countLimit = Math.min(input.recurrenceCount ?? MAX_GENERATED_OCCURRENCES, MAX_GENERATED_OCCURRENCES);
   const until = input.recurrenceUntil ?? null;
   const dates: string[] = [];
   let cursor = parseDateKey(input.date);
+  const anchorDay = cursor.getDate();
   let createdCount = 0;
 
   while (true) {
@@ -509,24 +515,14 @@ function generateRecurrenceDates(input: {
     if (until && compareDateKeys(dateKey, until) > 0) {
       break;
     }
-    if (input.recurrence !== "once" && input.recurrenceCount && createdCount >= input.recurrenceCount) {
-      break;
-    }
-    if (input.recurrence === "once" && createdCount >= 1) {
+    if (createdCount >= countLimit) {
       break;
     }
 
     dates.push(dateKey);
     createdCount += 1;
 
-    if (input.recurrence === "once") {
-      break;
-    }
-
-    cursor = addDays(cursor, input.recurrence === "daily" ? 1 : 7);
-    if (createdCount >= countLimit && !input.recurrenceCount) {
-      break;
-    }
+    cursor = advanceRecurrenceDate(cursor, recurrence, anchorDay);
   }
 
   return dates.length > 0 ? dates : [input.date];
@@ -596,10 +592,7 @@ function sameDateList(left: string[], right: string[]): boolean {
 }
 
 function normalizeTaskRecurrence(value: TaskRecurrence | undefined, occurrencePlan?: DataMigrationOccurrencePlan): TaskRecurrence {
-  if (value === "daily" || value === "weekly" || value === "custom") {
-    return value;
-  }
-  return occurrencePlan?.source === "dates" ? "custom" : "once";
+  return normalizeCoreTaskRecurrence(value);
 }
 
 function normalizeTaskStatus(value?: TaskStatus): TaskStatus {
@@ -791,7 +784,7 @@ function isDataMigrationTaskRecord(value: unknown): value is DataMigrationTaskRe
     typeof value.updatedAt === "string" &&
     (value.kind === undefined || value.kind === "simple" || value.kind === "composite") &&
     (value.status === undefined || ["todo", "doing", "blocked", "done"].includes(String(value.status))) &&
-    (value.recurrence === undefined || ["once", "daily", "weekly", "custom"].includes(String(value.recurrence))) &&
+    (value.recurrence === undefined || ["daily", "weekly", "monthly"].includes(String(value.recurrence))) &&
     (value.tags === undefined || (Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === "string"))) &&
     (value.subtasks === undefined || (Array.isArray(value.subtasks) && value.subtasks.every(isTaskSubtaskRecord))) &&
     (value.occurrenceStates === undefined || (Array.isArray(value.occurrenceStates) && value.occurrenceStates.every(isOccurrenceStateRecord))) &&

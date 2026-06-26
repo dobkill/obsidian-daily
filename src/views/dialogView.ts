@@ -4,6 +4,7 @@ import type ProjectManagementPlugin from "../main";
 import { AppendHeaderConfig, DialogTarget, Task } from "../types";
 import { formatDateTimePattern, now, toDateKey } from "../utils/date";
 import { BaseProjectView } from "./base";
+import { recurrenceLabel } from "../domain/taskRules";
 
 export const DIALOG_VIEW_TYPE = "project-management-dialog-view";
 
@@ -131,7 +132,7 @@ export class QuickDialogView extends BaseProjectView {
         "今日完成只使用极简 - [x] 标题；找不到今日已有任务会报错，不会创建新任务。",
         "组合计划可在下方缩进写 + 子任务：，子任务会作为独立普通任务挂入组合任务。",
         "任务行下缩进 > 描述 可写入任务描述，多行描述会按换行合并。",
-        "支持单次、每日、每周此时：repeat:once / daily / weekly；需要限制次数可继续写 count:4 或 until:2026-06-30。",
+        "支持每日、每周、每月此时：repeat:daily / weekly / monthly；单次任务使用 count:1。",
         "计划文本支持 board、gantt、deps、mindmap 视图状态；完成记录请使用数据迁移 JSON。"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
     }
@@ -400,7 +401,7 @@ export class QuickDialogView extends BaseProjectView {
           : [
               ["任务总数", String(preview.summary.total)],
               ["普通 / 组合", `${preview.tasks.filter((task) => task.input.kind !== "composite").length} / ${preview.summary.composite}`],
-              ["单次 / 每日 / 每周", `${preview.tasks.filter((task) => task.input.recurrence === "once").length} / ${preview.tasks.filter((task) => task.input.recurrence === "daily").length} / ${preview.tasks.filter((task) => task.input.recurrence === "weekly").length}`],
+              ["每日 / 每周 / 每月", `${preview.tasks.filter((task) => task.input.recurrence === "daily").length} / ${preview.tasks.filter((task) => task.input.recurrence === "weekly").length} / ${preview.tasks.filter((task) => task.input.recurrence === "monthly").length}`],
               ["新增 / 覆盖", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
             ];
       summaryItems.forEach(([label, value]) => {
@@ -465,12 +466,12 @@ export class QuickDialogView extends BaseProjectView {
     if (this.target === "quick-task") {
       return [
         "#项目：新的学习计划",
-        "+ 任务：普通任务 @2026-05-18 09:00-10:00 #tag !high status:doing",
-        "+ 组合：组合任务 @2026-05-18 14:00-15:00 #plan !medium status:todo",
-        "  + 子任务：子任务一 @2026-05-18 14:05-14:25 #plan status:todo",
-        "  + 子任务：子任务二 @2026-05-18 14:25-14:45 #plan status:todo",
-        "+ 任务：每日复习 @2026-05-18 20:00-20:30 #review repeat:daily count:5",
-        "+ 任务：每周回顾 @2026-05-18 21:00-21:30 #review status:todo repeat:weekly count:4"
+        "+ 任务：普通任务 @2026-05-18 09:00-10:00 !high status:doing",
+        "+ 组合：组合任务 @2026-05-18 14:00-15:00",
+        "  + 子任务：子任务一 @2026-05-18 14:05-14:25 status:todo",
+        "  + 子任务：子任务二 @2026-05-18 14:25-14:45 status:todo",
+        "+ 任务：每日复习 @2026-05-18 20:00-20:30 repeat:daily count:5",
+        "+ 任务：每月回顾 @2026-05-18 21:00-21:30 status:todo repeat:monthly count:4"
       ].join("\n");
     }
     if (this.target === "mindmap") {
@@ -815,12 +816,12 @@ function buildQuickTaskShortcuts(): QuickTaskShortcut[] {
     {
       label: "组合任务",
       hint: "插入组合任务模板和两个子任务",
-      snippet: `+ 组合：组合任务 @${today} 10:00-11:00 status:todo\n  + 子任务：子任务一 @${today} 10:05-10:25 status:todo\n  + 子任务：子任务二 @${today} 10:25-10:45 status:todo`
+      snippet: `+ 组合：组合任务 @${today} 10:00-11:00\n  + 子任务：子任务一 @${today} 10:05-10:25 status:todo\n  + 子任务：子任务二 @${today} 10:25-10:45 status:todo`
     },
     {
       label: "单次",
       hint: "插入单次任务模板",
-      snippet: `+ 任务：单次任务 @${today} 14:00-14:30 repeat:once status:todo`
+      snippet: `+ 任务：单次任务 @${today} 14:00-14:30 count:1 status:todo`
     },
     {
       label: "每日",
@@ -831,6 +832,11 @@ function buildQuickTaskShortcuts(): QuickTaskShortcut[] {
       label: "每周此时",
       hint: "插入每周重复模板",
       snippet: `+ 任务：每周任务 @${today} 21:00-21:30 repeat:weekly count:4 status:todo`
+    },
+    {
+      label: "每月此时",
+      hint: "插入每月重复模板",
+      snippet: `+ 任务：每月任务 @${today} 21:00-21:30 repeat:monthly count:6 status:todo`
     },
     {
       label: "未归属项目",
@@ -916,16 +922,7 @@ function statusText(status: Task["status"]): string {
 }
 
 function recurrenceText(recurrence: Task["recurrence"]): string {
-  if (recurrence === "daily") {
-    return "每日";
-  }
-  if (recurrence === "weekly") {
-    return "每周此时";
-  }
-  if (recurrence === "custom") {
-    return "自定义";
-  }
-  return "单次";
+  return recurrenceLabel(recurrence);
 }
 
 function importActionText(action: "create" | "overwrite" | "complete-today" | "complete-series"): string {

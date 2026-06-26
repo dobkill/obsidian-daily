@@ -1,5 +1,6 @@
 import { setIcon } from "obsidian";
 import { Task, TaskOccurrence, TaskRecurrence, TaskStatus } from "../types";
+import { recurrenceLabel, statusLabel } from "../domain/taskRules";
 
 type MaybePromise = void | Promise<void>;
 
@@ -59,29 +60,11 @@ export function formatOptionalTimeRange(item: Pick<Task | TaskOccurrence, "start
 }
 
 export function formatTaskRecurrenceLabel(recurrence: TaskRecurrence): string {
-  if (recurrence === "daily") {
-    return "每日重复";
-  }
-  if (recurrence === "weekly") {
-    return "每周此时重复";
-  }
-  if (recurrence === "custom") {
-    return "自定义重复";
-  }
-  return "单次任务";
+  return recurrenceLabel(recurrence);
 }
 
 export function formatTaskStatusLabel(status: TaskStatus): string {
-  if (status === "doing") {
-    return "进行中";
-  }
-  if (status === "blocked") {
-    return "阻塞";
-  }
-  if (status === "done") {
-    return "已完成";
-  }
-  return "待办";
+  return statusLabel(status);
 }
 
 function renderSubtaskCardBody(container: HTMLElement, title: string, metaParts: string[]): void {

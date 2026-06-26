@@ -1,5 +1,6 @@
 import { App, Modal } from "obsidian";
 import { Project, TaskOccurrence } from "../types";
+import { recurrenceLabel as formatRecurrenceLabel } from "../domain/taskRules";
 
 type DayTasksModalOptions = {
   date: string;
@@ -34,18 +35,8 @@ export class DayTasksModal extends Modal {
       copy.createEl("div", { text: `${task.completed ? "✓" : "○"} ${task.title}`, cls: `pm-task-title ${task.completed ? "is-complete" : ""}` });
       const meta = copy.createDiv({ cls: "pm-task-meta" });
       meta.createSpan({ text: task.startTime && task.endTime ? `${task.startTime} - ${task.endTime}` : "未排期" });
-      meta.createSpan({ text: recurrenceLabel(task) });
+      meta.createSpan({ text: formatRecurrenceLabel(task.recurrence) });
       meta.createSpan({ text: this.options.getProject(task.projectId)?.name ?? "未归属项目" });
     });
   }
-}
-
-function recurrenceLabel(task: TaskOccurrence): string {
-  if (task.recurrence === "daily") {
-    return "每日重复";
-  }
-  if (task.recurrence === "weekly") {
-    return "每周此时重复";
-  }
-  return "单次任务";
 }

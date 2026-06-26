@@ -7,6 +7,13 @@ import { copyTextToClipboard } from "../utils/clipboard";
 import { now, toDateKey } from "../utils/date";
 import { BaseProjectView } from "./base";
 import {
+  SINGLE_TASK_RECURRENCE_COUNT,
+  isActionableOccurrence,
+  isAttentionOccurrence,
+  recurrenceLabel as formatRecurrenceLabel,
+  statusLabel as formatStatusLabel
+} from "../domain/taskRules";
+import {
   CompositeDisplayOccurrence,
   buildCompositeDisplayOccurrences,
   isSyntheticCompositeOccurrence,
@@ -41,15 +48,11 @@ export class TodayTasksView extends BaseProjectView {
     const tasks = this.plugin.store.getTasksForDate(today);
     const displayTasks = buildCompositeDisplayOccurrences(tasks, this.plugin.store.getAllTasks());
     const projects = this.plugin.store.getProjects();
-    const totalSteps = tasks.reduce((sum, task) => sum + task.totalSteps, 0);
-    const completedSteps = tasks.reduce((sum, task) => sum + task.completedSteps, 0);
+    const todayDoingTasks = tasks.filter((task) => task.kind === "simple" && task.status === "doing");
+    const totalSteps = todayDoingTasks.reduce((sum, task) => sum + task.totalSteps, 0);
+    const completedSteps = todayDoingTasks.reduce((sum, task) => sum + task.completedSteps, 0);
     const progress = totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100);
-    const rawIncomplete = displayTasks.flatMap((item) => {
-      if (item.occurrence.kind === "composite" && item.childOccurrences.length > 0) {
-        return item.childOccurrences.filter((task) => !task.completed);
-      }
-      return summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed ? [] : [item.occurrence];
-    });
+    const rawIncomplete = tasks.filter(isActionableOccurrence);
 
     const header = container.createDiv({ cls: "pm-page-header" });
     const title = header.createDiv();
@@ -71,7 +74,8 @@ export class TodayTasksView extends BaseProjectView {
           date: today,
           status: "todo",
           tags: [],
-          recurrence: "once",
+          recurrence: "daily",
+          recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
           completed: false,
           ...suggested
         },
@@ -87,19 +91,34 @@ export class TodayTasksView extends BaseProjectView {
     const progressBody = progressCard.createDiv({ cls: "pm-today-progress-copy" });
     progressBody.createDiv({ cls: "pm-muted", text: "今日进度" });
     progressBody.createEl("strong", { text: `${completedSteps} / ${totalSteps} 步` });
-    progressBody.createDiv({ cls: "pm-muted", text: tasks.length === 0 ? "今天还没有任务，先新增一条开始吧。" : `${tasks.length} 个任务，完成率 ${progress}%` });
+    progressBody.createDiv({ cls: "pm-muted", text: todayDoingTasks.length === 0 ? "今天没有进行中的任务。" : `${todayDoingTasks.length} 个进行中任务，完成率 ${progress}%` });
     const progressBar = progressBody.createDiv({ cls: "pm-progress-bar" });
     progressBar.createDiv({
       cls: "pm-progress-bar-fill",
       attr: { style: `width: ${progress}%` }
     });
 
-    const incomplete = displayTasks.filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed);
+    const incomplete = displayTasks
+      .map((item) => ({
+        occurrence: item.occurrence,
+        childOccurrences: item.childOccurrences.filter(isActionableOccurrence)
+      }))
+      .filter((item) => isActionableOccurrence(item.occurrence) || item.childOccurrences.length > 0);
+    const attention = displayTasks
+      .map((item) => ({
+        occurrence: item.occurrence,
+        childOccurrences: item.childOccurrences.filter(isAttentionOccurrence)
+      }))
+      .filter((item) => isAttentionOccurrence(item.occurrence) || (item.occurrence.kind === "composite" && item.childOccurrences.length === 0) || item.childOccurrences.length > 0);
     const complete = displayTasks.filter((item) => summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed);
 
     this.renderTaskSection(container, "未完成", incomplete, {
       emptyTitle: "今天暂时没有未完成任务",
       emptyBody: "已经清空待办时，这里会保持专注而安静。"
+    });
+    this.renderTaskSection(container, "留意", attention, {
+      emptyTitle: "没有需要留意的任务",
+      emptyBody: "待办、阻塞和空容器会集中到这一栏。"
     });
     this.renderTaskSection(container, "已完成", complete, {
       emptyTitle: "完成任务后会显示在这里",
@@ -202,7 +221,7 @@ export class TodayTasksView extends BaseProjectView {
       menu.showAtMouseEvent(event);
       return;
     }
-    if (task.recurrence !== "once") {
+    if ((task.recurrenceCount ?? 1) > 1 || task.recurrenceUntil) {
       menu.addItem((item) =>
         item.setTitle("提前结束系列").setIcon("calendar-x").onClick(async () => {
           await this.plugin.store.completeTaskSeries(task.taskId, task.date);
@@ -245,6 +264,7 @@ export class TodayTasksView extends BaseProjectView {
         recurrence: seriesTask.recurrence,
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
+        consumeRequiresCompletion: seriesTask.consumeRequiresCompletion,
         kind: seriesTask.kind,
         subtasks: [],
         viewState: seriesTask.viewState,
@@ -283,7 +303,8 @@ export class TodayTasksView extends BaseProjectView {
         date: parent.date,
         startTime: parent.startTime,
         endTime: parent.endTime,
-        recurrence: "once",
+        recurrence: "daily",
+        recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
         kind: "simple",
         completed: false,
         viewState: {
@@ -320,6 +341,7 @@ export class TodayTasksView extends BaseProjectView {
         recurrence: seriesTask.recurrence,
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
+        consumeRequiresCompletion: seriesTask.consumeRequiresCompletion,
         kind: seriesTask.kind,
         subtasks: [],
         viewState: seriesTask.viewState,
@@ -389,29 +411,14 @@ function appendBadge(container: HTMLElement, label: string, tone: string): void 
 }
 
 function recurrenceLabel(task: TaskOccurrence): string {
-  if (task.recurrence === "daily") {
-    return "每日重复";
+  if (task.recurrence === "daily" && task.recurrenceCount === SINGLE_TASK_RECURRENCE_COUNT && !task.recurrenceUntil) {
+    return "单次任务";
   }
-  if (task.recurrence === "weekly") {
-    return "每周此时重复";
-  }
-  if (task.recurrence === "custom") {
-    return "自定义重复";
-  }
-  return "单次任务";
+  return formatRecurrenceLabel(task.recurrence);
 }
 
 function statusLabel(status: TaskOccurrence["status"]): string {
-  if (status === "doing") {
-    return "进行中";
-  }
-  if (status === "blocked") {
-    return "阻塞";
-  }
-  if (status === "done") {
-    return "已完成";
-  }
-  return "待办";
+  return formatStatusLabel(status);
 }
 
 function isTaskSeriesCompleted(task: Task): boolean {

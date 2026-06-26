@@ -25,7 +25,6 @@ import {
   TaskOccurrenceOverride,
   TaskOccurrenceState,
   TaskPriority,
-  TaskRecurrence,
   TaskSourceLink,
   TaskStatus,
   TaskSubtask,
@@ -59,6 +58,15 @@ import {
 } from "../importExport/dataMigration";
 import { addDays, addMinutes, compareDateKeys, formatMinutesToTime, now, parseDateKey, parseTimeToMinutes, toDateKey, toIsoLocal } from "../utils/date";
 import { MARKDOWN_FORMAT_GUIDE } from "../utils/markdownGuide";
+import {
+  MAX_GENERATED_OCCURRENCES,
+  SINGLE_TASK_RECURRENCE_COUNT,
+  advanceRecurrenceDate,
+  detectRecurrenceFromDates,
+  isCompositeKind,
+  normalizeTaskRecurrence,
+  shouldConsumeOccurrence
+} from "../domain/taskRules";
 
 export const DEFAULT_CONFIG: PluginConfig = {
   version: "0.3.0",
@@ -413,8 +421,10 @@ export class ProjectManagementStore extends Events {
       startTime: patch.startTime === undefined ? original.startTime : patch.startTime,
       endTime: patch.endTime === undefined ? original.endTime : patch.endTime,
       recurrence: patch.recurrence ?? original.recurrence,
-      recurrenceCount: patch.recurrenceCount ?? original.recurrenceCount ?? undefined,
-      recurrenceUntil: patch.recurrenceUntil ?? original.recurrenceUntil ?? undefined,
+      recurrenceCount: patch.recurrenceCount === undefined ? original.recurrenceCount ?? undefined : patch.recurrenceCount,
+      recurrenceUntil: patch.recurrenceUntil === undefined ? original.recurrenceUntil ?? undefined : patch.recurrenceUntil,
+      consumeRequiresCompletion:
+        patch.consumeRequiresCompletion === undefined ? original.consumeRequiresCompletion : patch.consumeRequiresCompletion,
       occurrenceDates: patch.occurrenceDates ?? original.occurrenceDates,
       occurrenceOverrides: patch.occurrenceOverrides ?? original.occurrenceOverrides,
       subtasks: patch.subtasks ?? original.subtasks,
@@ -518,7 +528,7 @@ export class ProjectManagementStore extends Events {
     if (!original.occurrenceDates.includes(date)) {
       throw new Error("任务发生日期不存在");
     }
-    if (original.recurrence === "once" && original.occurrenceDates.length === 1) {
+    if (original.occurrenceDates.length === 1) {
       await this.updateTask(
         taskId,
         {
@@ -588,16 +598,14 @@ export class ProjectManagementStore extends Events {
       throw new Error("任务不存在");
     }
     const next = cloneTask(original);
-    if (patch.status) {
+    if (patch.status && next.kind !== "composite") {
       next.status = normalizeTaskStatus(patch.status);
       next.viewState = mergeViewState(next.viewState, { board: { ...next.viewState.board, columnId: next.status } }, next.status);
     }
-    if (patch.priority !== undefined) {
+    if (patch.priority !== undefined && next.kind !== "composite") {
       next.priority = normalizeTaskPriority(patch.priority);
     }
-    if (patch.tags) {
-      next.tags = normalizeTags(patch.tags);
-    }
+    next.tags = [];
     if (patch.viewState) {
       next.viewState = mergeViewState(next.viewState, patch.viewState, next.status);
     }
@@ -1133,8 +1141,8 @@ export class ProjectManagementStore extends Events {
     if (next.occurrenceDates.length > 0) {
       next.date = next.occurrenceDates[0];
       next.recurrence = detectRecurrenceFromDates(next.occurrenceDates);
-      next.recurrenceCount = next.recurrence === "once" ? null : next.occurrenceDates.length;
-      next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
+      next.recurrenceCount = next.occurrenceDates.length;
+      next.recurrenceUntil = next.occurrenceDates.length > 1 ? next.occurrenceDates[next.occurrenceDates.length - 1] : null;
     }
     next.updatedAt = toIsoLocal(now());
     next.revision = (next.revision ?? 0) + 1;
@@ -1172,8 +1180,8 @@ export class ProjectManagementStore extends Events {
     }, []);
     next.date = next.occurrenceDates[0];
     next.recurrence = detectRecurrenceFromDates(next.occurrenceDates);
-    next.recurrenceCount = next.recurrence === "once" ? null : next.occurrenceDates.length;
-    next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
+    next.recurrenceCount = next.occurrenceDates.length;
+    next.recurrenceUntil = next.occurrenceDates.length > 1 ? next.occurrenceDates[next.occurrenceDates.length - 1] : null;
     next.updatedAt = stamp;
     next.revision = (next.revision ?? 0) + 1;
     this.assertCompositeTaskConsistency([next], new Set([task.id]));
@@ -1273,7 +1281,7 @@ export class ProjectManagementStore extends Events {
   }
 
   getProjectProgress(projectId: string): number {
-    const progress = summarizeOccurrencesProgress(this.getOccurrencesForProject(projectId));
+    const progress = summarizeOccurrencesProgress(this.getOccurrencesForProject(projectId).filter((occurrence) => occurrence.kind === "simple"));
     if (progress.totalSteps === 0) {
       return 0;
     }
@@ -1638,18 +1646,15 @@ export class ProjectManagementStore extends Events {
       }
     }
 
-    const recurrence = input.recurrence ?? "once";
     const kind = input.kind ?? "simple";
-    const recurrenceCount = recurrence === "once" ? null : normalizePositiveInteger(input.recurrenceCount);
-    const recurrenceUntil = recurrence === "once" ? null : normalizeDateOrUndefined(input.recurrenceUntil);
+    const recurrence = isCompositeKind(kind) ? "daily" : normalizeTaskRecurrence(input.recurrence);
+    const recurrenceUntil = isCompositeKind(kind) ? null : normalizeDateOrUndefined(input.recurrenceUntil);
+    const normalizedRecurrenceCount = normalizePositiveInteger(input.recurrenceCount);
+    const recurrenceCount = isCompositeKind(kind)
+      ? SINGLE_TASK_RECURRENCE_COUNT
+      : normalizedRecurrenceCount ?? (recurrenceUntil ? null : SINGLE_TASK_RECURRENCE_COUNT);
     const subtasks = normalizeSubtaskInputs(input.subtasks, kind);
 
-    if (recurrence !== "once" && recurrence !== "custom" && !recurrenceCount && !recurrenceUntil) {
-      throw new Error("重复任务必须填写重复次数或结束日期");
-    }
-    if (recurrence === "custom" && !input.occurrenceDates?.length) {
-      throw new Error("自定义重复必须提供发生日期集合");
-    }
     if (recurrenceUntil && compareDateKeys(recurrenceUntil, date) < 0) {
       throw new Error("重复结束日期不能早于首个任务日期");
     }
@@ -1661,13 +1666,14 @@ export class ProjectManagementStore extends Events {
       projectId: input.projectId || undefined,
       status: normalizeTaskStatus(input.status),
       priority: normalizeTaskPriority(input.priority),
-      tags: normalizeTags(input.tags),
+      tags: [],
       date,
       startTime,
       endTime,
       recurrence,
       recurrenceCount,
       recurrenceUntil,
+      consumeRequiresCompletion: isCompositeKind(kind) ? false : Boolean(input.consumeRequiresCompletion),
       occurrenceDates: normalizeOccurrenceDates(input.occurrenceDates),
       completedOccurrenceDates: normalizeOccurrenceDates(input.completedOccurrenceDates),
       occurrenceOverrides: normalizeOccurrenceOverrides(input.occurrenceOverrides),
@@ -1699,20 +1705,21 @@ export class ProjectManagementStore extends Events {
       title: input.title,
       description: input.description,
       projectId: input.projectId,
-      status: input.status ?? original?.status ?? "todo",
-      priority: input.priority ?? original?.priority,
-      tags: [...(input.tags ?? original?.tags ?? [])],
+      status: input.kind === "composite" ? "todo" : input.status ?? original?.status ?? "todo",
+      priority: input.kind === "composite" ? undefined : input.priority ?? original?.priority,
+      tags: [],
       date: occurrenceDates[0],
       startTime: input.startTime,
       endTime: input.endTime,
-      recurrence: input.recurrence,
-      recurrenceCount: input.recurrenceCount ?? null,
-      recurrenceUntil: input.recurrenceUntil ?? null,
+      recurrence: input.kind === "composite" ? "daily" : input.recurrence,
+      recurrenceCount: input.kind === "composite" ? SINGLE_TASK_RECURRENCE_COUNT : input.recurrenceCount ?? null,
+      recurrenceUntil: input.kind === "composite" ? null : input.recurrenceUntil ?? null,
+      consumeRequiresCompletion: input.kind === "composite" ? false : Boolean(input.consumeRequiresCompletion),
       subtasks,
       occurrenceDates,
       occurrenceStates,
       occurrenceOverrides: (input.occurrenceOverrides ?? original?.occurrenceOverrides ?? []).filter((override) => occurrenceDates.includes(override.date)),
-      viewState: mergeViewState(original?.viewState, input.viewState, input.status ?? original?.status ?? "todo"),
+      viewState: mergeViewState(original?.viewState, input.viewState, input.kind === "composite" ? "todo" : input.status ?? original?.status ?? "todo"),
       sourceLinks: input.sourceLinks ?? original?.sourceLinks ?? [],
       notes: input.notes ?? original?.notes ?? [],
       mindmapComments: normalizeMindmapComments(input.mindmapComments ?? original?.mindmapComments, id),
@@ -1907,7 +1914,8 @@ export class ProjectManagementStore extends Events {
       date: today,
       startTime: "09:00",
       endTime: "10:00",
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       viewState: {
         board: { columnId: "doing", order: 10 },
         mindmap: { parentTaskId: null, childOrder: 10, expanded: true, x: 280, y: 110 }
@@ -1952,7 +1960,8 @@ export class ProjectManagementStore extends Events {
       date: today,
       startTime: "10:30",
       endTime: "11:30",
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       kind: "composite",
       viewState: {
         board: { columnId: "todo", order: 20 },
@@ -1969,7 +1978,8 @@ export class ProjectManagementStore extends Events {
       date: today,
       startTime: "10:35",
       endTime: "10:50",
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       viewState: {
         board: { columnId: "todo", order: 21 },
         mindmap: { parentTaskId: buildTask.id, childOrder: 10, expanded: true, x: 800, y: 210 }
@@ -2019,7 +2029,8 @@ export class ProjectManagementStore extends Events {
       date: today,
       startTime: "17:00",
       endTime: "17:30",
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       completed: true,
       viewState: {
         board: { columnId: "done", order: 30 },
@@ -2417,7 +2428,8 @@ type DataFolderUsage = {
 
 function normalizeStoredTask(task: Task): Task {
   const kind: TaskKind = task.kind ?? "simple";
-  const status = normalizeTaskStatus(task.status);
+  const status = kind === "composite" ? "todo" : normalizeTaskStatus(task.status);
+  const recurrence = kind === "composite" ? "daily" : normalizeTaskRecurrence(task.recurrence);
   const startTime = normalizeClockTime(task.startTime, "开始时间");
   const endTime = normalizeClockTime(task.endTime, "结束时间");
   if ((startTime && !endTime) || (!startTime && endTime)) {
@@ -2436,8 +2448,12 @@ function normalizeStoredTask(task: Task): Task {
     ...task,
     kind,
     status,
-    priority: normalizeTaskPriority(task.priority),
-    tags: normalizeTags(task.tags),
+    priority: kind === "composite" ? undefined : normalizeTaskPriority(task.priority),
+    tags: [],
+    recurrence,
+    recurrenceCount: kind === "composite" ? SINGLE_TASK_RECURRENCE_COUNT : normalizePositiveInteger(task.recurrenceCount),
+    recurrenceUntil: kind === "composite" ? null : normalizeDateOrUndefined(task.recurrenceUntil),
+    consumeRequiresCompletion: kind === "composite" ? false : Boolean(task.consumeRequiresCompletion),
     startTime,
     endTime,
     subtasks,
@@ -2583,6 +2599,7 @@ function expandTask(task: Task): TaskOccurrence[] {
       recurrence: task.recurrence,
       recurrenceCount: task.recurrenceCount ?? null,
       recurrenceUntil: task.recurrenceUntil ?? null,
+      consumeRequiresCompletion: task.consumeRequiresCompletion,
       subtasks: task.subtasks.map((item) => ({ ...item })),
       sourceLinks: task.sourceLinks.map((item) => ({ ...item })),
       notes: task.notes.map((item) => ({ ...item })),
@@ -2600,16 +2617,12 @@ function expandTask(task: Task): TaskOccurrence[] {
 }
 
 function buildOccurrenceDates(input: TaskInput): string[] {
-  if (input.recurrence === "custom" && input.occurrenceDates?.length) {
-    return [...new Set(input.occurrenceDates)].sort(compareDateKeys);
-  }
-  if (input.recurrence === "custom") {
-    throw new Error("自定义重复必须提供发生日期集合");
-  }
-  const countLimit = input.recurrenceCount ?? (input.recurrence === "once" ? 1 : 365);
+  const recurrence = normalizeTaskRecurrence(input.recurrence);
+  const countLimit = Math.min(input.recurrenceCount ?? MAX_GENERATED_OCCURRENCES, MAX_GENERATED_OCCURRENCES);
   const until = input.recurrenceUntil ?? null;
   const dates: string[] = [];
   let cursor = parseDateKey(input.date);
+  const anchorDay = cursor.getDate();
   let createdCount = 0;
 
   while (true) {
@@ -2617,24 +2630,14 @@ function buildOccurrenceDates(input: TaskInput): string[] {
     if (until && compareDateKeys(dateKey, until) > 0) {
       break;
     }
-    if (input.recurrence !== "once" && input.recurrenceCount && createdCount >= input.recurrenceCount) {
-      break;
-    }
-    if (input.recurrence === "once" && createdCount >= 1) {
+    if (createdCount >= countLimit) {
       break;
     }
 
     dates.push(dateKey);
     createdCount += 1;
 
-    if (input.recurrence === "once") {
-      break;
-    }
-
-    cursor = addDays(cursor, input.recurrence === "daily" ? 1 : 7);
-    if (createdCount >= countLimit && !input.recurrenceCount) {
-      break;
-    }
+    cursor = advanceRecurrenceDate(cursor, recurrence, anchorDay);
   }
 
   if (dates.length === 0) {
@@ -2723,41 +2726,13 @@ function getAllSubtaskIds(task: Task): string[] {
 }
 
 function assertCompositeDefinitionValid(task: Task): void {
-  if (task.kind !== "composite") {
-    return;
-  }
-  const parentStart = parseTimeToMinutes(task.startTime);
-  const parentEnd = parseTimeToMinutes(task.endTime);
-  if (parentStart === null || parentEnd === null) {
-    throw new Error("组合任务必须填写开始时间和结束时间");
-  }
+  return;
 }
 
 function assertChildTaskWithinComposite(child: Task, parent: Task): void {
   if (child.kind === "composite") {
     throw new Error(`子任务「${child.title}」不能是组合任务`);
   }
-  const parentOccurrences = expandTask(parent);
-  const childOccurrences = expandTask(child);
-  childOccurrences.forEach((childOccurrence) => {
-    const parentOccurrence = parentOccurrences.find((occurrence) => occurrence.date === childOccurrence.date);
-    if (!parentOccurrence) {
-      throw new Error(`子任务「${child.title}」必须发生在组合任务「${parent.title}」的日期范围内`);
-    }
-    const parentStart = parseTimeToMinutes(parentOccurrence.startTime);
-    const parentEnd = parseTimeToMinutes(parentOccurrence.endTime);
-    const childStart = parseTimeToMinutes(childOccurrence.startTime);
-    const childEnd = parseTimeToMinutes(childOccurrence.endTime);
-    if (parentStart === null || parentEnd === null) {
-      throw new Error(`组合任务「${parent.title}」必须填写开始时间和结束时间`);
-    }
-    if (childStart === null || childEnd === null) {
-      throw new Error(`挂入组合任务的子任务「${child.title}」必须填写开始时间和结束时间`);
-    }
-    if (childStart < parentStart || childEnd > parentEnd) {
-      throw new Error(`子任务「${child.title}」必须在组合任务「${parent.title}」的时间范围内`);
-    }
-  });
 }
 
 function buildNormalizedOccurrenceState(
@@ -2848,6 +2823,9 @@ function getOccurrenceProgress(
 function summarizeOccurrencesProgress(occurrences: TaskOccurrence[]): { totalSteps: number; completedSteps: number } {
   return occurrences.reduce(
     (summary, occurrence) => {
+      if (!shouldConsumeOccurrence(occurrence)) {
+        return summary;
+      }
       summary.totalSteps += occurrence.totalSteps;
       summary.completedSteps += occurrence.completedSteps;
       return summary;
@@ -2872,22 +2850,6 @@ function assertMutableOccurrenceDate(date: string): void {
 
 function isTaskFullyCompleted(task: Task): boolean {
   return task.occurrenceDates.length > 0 && task.occurrenceDates.every((date) => getOccurrenceProgress(task, date).completed);
-}
-
-function detectRecurrenceFromDates(dates: string[]): TaskRecurrence {
-  if (dates.length <= 1) {
-    return "once";
-  }
-  const first = parseDateKey(dates[0]);
-  const second = parseDateKey(dates[1]);
-  const diffDays = Math.round((second.getTime() - first.getTime()) / (24 * 60 * 60 * 1000));
-  if (diffDays === 1) {
-    return "daily";
-  }
-  if (diffDays === 7) {
-    return "weekly";
-  }
-  return "custom";
 }
 
 function normalizePositiveInteger(value?: number | null): number | null {
@@ -3292,7 +3254,7 @@ function snapMinutes(value: number, slot: number): number {
 }
 
 function applyOccurrenceWindow(task: Task, date: string, startTime: string, endTime: string): void {
-  if (task.recurrence === "once" && task.occurrenceDates.length === 1 && task.date === date) {
+  if (task.occurrenceDates.length === 1 && task.date === date) {
     task.startTime = startTime;
     task.endTime = endTime;
     return;

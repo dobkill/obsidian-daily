@@ -21,17 +21,12 @@
 }
 ```
 
-### 任务紧凑规则
+任务紧凑规则：
 
-1. `daily` / `weekly` 重复任务不导出逐日 `occurrenceDates`；由 `date`、`recurrence`、`recurrenceCount`、`recurrenceUntil` 推导。
-2. 不规则日期写入 `occurrencePlan.include` 和 `occurrencePlan.exclude`。
-3. 自定义日期写入 `occurrencePlan.dates` 或 `occurrencePlan.ranges`。
-4. 空字段和默认视图状态不导出。
-5. `occurrenceStates`、`occurrenceOverrides`、`viewState`、`mindmapComments`、`notes`、`sourceLinks` 保留完整业务状态。
-
-### 恢复范围
-
-导入数据迁移 JSON 会恢复项目、项目页、任务、看板状态、甘特属性、思维导图父子关系、评语、任务笔记、来源链接、重复发生日期、单次实例覆盖和完成状态。
+1. `daily`、`weekly`、`monthly` 可由 `date + recurrence + recurrenceCount/recurrenceUntil` 推导时，不导出完整日期数组。
+2. 删除或补充过的实例写入 `occurrencePlan.include` 和 `occurrencePlan.exclude`。
+3. 空字段和默认视图状态不导出。
+4. `consumeRequiresCompletion`、`occurrenceStates`、`occurrenceOverrides`、`viewState`、`mindmapComments`、`notes`、`sourceLinks` 保留完整业务状态。
 
 ## 今日完成极简 Markdown
 
@@ -59,58 +54,51 @@
 
 ## 新任务计划复杂 Markdown
 
-复杂 Markdown 使用 `+ 任务：`、`+ 组合：` 和缩进的 `+ 子任务：`。导入器会按这些 `+` 行识别为“新任务计划复杂 Markdown”，不会按是否包含完整时间段来判断格式。
+复杂 Markdown 使用 `+ 任务：`、`+ 组合：` 和缩进的 `+ 子任务：`。
 
 ```md
 #项目：英语四级冲刺
-+ 任务：搭建复习看板 @2026-05-27 09:00-10:30 #planning !high status:doing
-+ 任务：整理错题索引 @2026-05-28 #review status:todo
-+ 组合：拆解每日背词 @2026-05-27 12:00-12:40 #vocab !medium status:todo repeat:daily count:5
-  + 子任务：复习昨天错词 @2026-05-27 12:00-12:10 #vocab status:todo repeat:daily count:5
-  + 子任务：新增 30 个高频词 @2026-05-27 12:10-12:30 #vocab status:todo repeat:daily count:5
++ 任务：搭建复习看板 @2026-05-27 09:00-10:30 !high status:doing
++ 任务：整理错题索引 @2026-05-28 status:todo
++ 组合：拆解每日背词 @2026-05-27 12:00-12:40 board:todo:0 gantt:order=20 mindmap:order=20,expanded
+  + 子任务：复习昨天错词 @2026-05-27 12:00-12:10 status:todo repeat:daily count:5
+  + 子任务：新增 30 个高频词 @2026-05-27 12:10-12:30 status:doing repeat:monthly count:5
   > 每天完成后可在今日任务页勾选。
 ```
 
 规则：
 
-1. `任务：`、`组合：`、`子任务：` 冒号后可以直接写标题，也可以先写一个或多个空格。
-2. `+ 任务：` 表示普通任务；必须写显式日期 `@YYYY-MM-DD`。可以写完整 `@YYYY-MM-DD HH:mm-HH:mm`，也可以只写日期表示未排期任务。
-3. `+ 组合：` 表示组合任务；必须写完整 `@YYYY-MM-DD HH:mm-HH:mm`。组合任务不能只写日期。
-4. 缩进两个或更多空格的 `+ 子任务：` 必须写在某个 `+ 组合：` 下方；子任务是独立普通任务，必须写完整 `@YYYY-MM-DD HH:mm-HH:mm`，且日期和时间必须落在父组合任务范围内。
-5. 时间范围为 `00:00` 至 `23:59`，结束时间必须晚于开始时间。
-6. `#项目：项目名` 表示后续任务归入该项目；项目不存在时自动创建。
-7. `#项目：` 或 `#项目：未归属项目` 表示未归属任务。
-8. 项目页批量导入时，`#项目：` 必须等于当前项目；同项目同名任务会被覆盖计划字段并保留既有完成记录，否则创建新任务。
-9. 时间冲突会自动调整到同日 1 分钟空档。
-10. 缩进两个或更多空格的 `>` 行是任务描述，归入它前面最近的任务或子任务；多行描述会用换行连接。
-11. 参数用空格分隔；任务标题是移除 `@日期`、`#标签`、`!优先级`、`status`、`repeat` 等参数后剩下的文本。
+1. `+ 任务：` 表示普通任务；必须写显式日期 `@YYYY-MM-DD`。可以写完整 `@YYYY-MM-DD HH:mm-HH:mm`，也可以只写日期表示未排期任务。
+2. `+ 组合：` 表示容器；容器不支持状态和重复规则。
+3. 缩进两个或更多空格的 `+ 子任务：` 必须写在某个 `+ 组合：` 下方；子任务是独立普通任务。
+4. 时间范围为 `00:00` 至 `23:59`，结束时间必须晚于开始时间。
+5. `#项目：项目名` 表示后续任务归入该项目；项目不存在时自动创建。
+6. `#项目：` 或 `#项目：未归属项目` 表示未归属任务。
+7. 项目页批量导入时，`#项目：` 必须等于当前项目；同项目同名任务会被覆盖计划字段并保留既有完成记录，否则创建新任务。
+8. 时间冲突会自动调整到同日 1 分钟空档。
+9. 缩进两个或更多空格的 `>` 行是任务描述，归入它前面最近的任务或子任务；多行描述会用换行连接。
+10. 参数用空格分隔；任务标题是移除 `@日期`、`!优先级`、`status`、`repeat` 等参数后剩下的文本。
 
 ## 复杂 Markdown 参数
 
 | 参数 | 示例 | 作用 |
 | --- | --- | --- |
-| `#标签` | `#planning` | 写入任务标签，可写多个。 |
 | `!优先级` | `!low`、`!medium`、`!high`、`!urgent` | 写入任务优先级。 |
-| `status` | `status:todo`、`status:doing`、`status:blocked`、`status:done` | 写入任务状态。 |
-| `repeat` | `repeat:once`、`repeat:daily`、`repeat:weekly`、`repeat:custom` | 重复规则。 |
-| `count` | `count:5` | 重复次数。 |
+| `status` | `status:todo`、`status:doing`、`status:blocked`、`status:done` | 写入普通任务或子任务状态。 |
+| `repeat` | `repeat:daily`、`repeat:weekly`、`repeat:monthly` | 重复规则。 |
+| `count` | `count:5` | 重复次数；单次任务使用 `count:1`。 |
 | `until` | `until:2026-06-30` | 重复结束日期。 |
-| `dates` | `dates:2026-05-27,2026-05-29` | 自定义发生日期集合。 |
 | `board` | `board:doing:10` | 看板列与排序。 |
 | `gantt` | `gantt:order=10,locked,milestone` | 甘特图排序、锁定和里程碑。 |
 | `deps` | `deps:%E4%BB%BB%E5%8A%A1A|%E4%BB%BB%E5%8A%A1B` | 甘特依赖，任务标题使用 URL 编码。 |
-| `parent` | `parent:%E7%BB%84%E5%90%88%E4%BB%BB%E5%8A%A1A` | 挂入同项目下指定组合任务；通常使用缩进的 `+ 子任务：` 更清晰。 |
+| `parent` | `parent:%E7%BB%84%E5%90%88%E4%BB%BB%E5%8A%A1A` | 挂入同项目下指定组合任务。 |
 | `mindmap` | `mindmap:order=20,expanded,x=280,y=120` | 思维导图排序、展开状态和坐标。 |
 
-## 组合任务
+## 重复规则补充
 
-组合任务必须有开始与结束时间。子任务使用缩进的 `+ 子任务：`，它是独立普通任务，必须完整填写 `@YYYY-MM-DD HH:mm-HH:mm`，且发生日期和时间必须落在父组合任务范围内。复杂 Markdown 不保存完成记录；完整执行记录只通过数据迁移 JSON 保存。
-
-重复规则补充：
-
-1. `repeat:daily` 和 `repeat:weekly` 必须配合 `count:N` 或 `until:YYYY-MM-DD`。
-2. `repeat:custom` 必须配合 `dates:YYYY-MM-DD,YYYY-MM-DD`。
-3. 不写 `repeat` 时默认为 `once`。
+1. 不写 `repeat` 时默认为单次任务，即 `daily + count:1`。
+2. 永久重复在弹窗中作为快捷选择保存为 `daily + count:2147483647`。
+3. `consumeRequiresCompletion` 只通过弹窗和数据迁移 JSON 保存，复杂 Markdown 不写此字段。
 
 ## 笔记同步块
 
@@ -119,6 +107,6 @@
 ```md
 <!-- pm:start -->
 #项目：英语四级冲刺
-+ 任务：听力精听 @2026-05-27 20:00-20:30 #listen status:todo
++ 任务：听力精听 @2026-05-27 20:00-20:30 status:todo
 <!-- pm:end -->
 ```

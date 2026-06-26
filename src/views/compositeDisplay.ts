@@ -95,6 +95,7 @@ function buildCompositeContainerOccurrence(parent: Task, date: string, childOccu
     recurrence: parent.recurrence,
     recurrenceCount: parent.recurrenceCount ?? null,
     recurrenceUntil: parent.recurrenceUntil ?? null,
+    consumeRequiresCompletion: parent.consumeRequiresCompletion,
     subtasks: [],
     sourceLinks: parent.sourceLinks.map((source) => ({ ...source })),
     notes: parent.notes.map((note) => ({ ...note })),

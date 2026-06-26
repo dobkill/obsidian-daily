@@ -2,6 +2,12 @@ import { App, ButtonComponent, DropdownComponent, Modal, Notice, Setting, TextCo
 import { Project, Task, TaskDeleteScope, TaskInput, TaskKind, TaskOccurrence, TaskPriority, TaskRecurrence, TaskStatus, TaskUpdateScope } from "../types";
 import { parseTimeToMinutes } from "../utils/date";
 import { renderAttachedCompositeTaskCards } from "./compositeTaskCards";
+import {
+  PERMANENT_RECURRENCE_COUNT,
+  SINGLE_TASK_RECURRENCE_COUNT,
+  recurrenceLabel,
+  statusLabel
+} from "../domain/taskRules";
 
 type TaskModalOptions = {
   title: string;
@@ -20,6 +26,8 @@ type TaskModalOptions = {
   onOpenChildTask?: (task: Task) => void;
 };
 
+type RecurrencePreset = TaskRecurrence | "single" | "permanent";
+
 export class TaskModal extends Modal {
   private options: TaskModalOptions;
 
@@ -36,6 +44,9 @@ export class TaskModal extends Modal {
 
     const state: TaskInput = { ...this.options.initial };
     state.kind = state.kind ?? "simple";
+    state.recurrence = state.recurrence ?? "daily";
+    state.recurrenceCount = state.recurrenceCount ?? SINGLE_TASK_RECURRENCE_COUNT;
+    state.consumeRequiresCompletion = Boolean(state.consumeRequiresCompletion);
     state.subtasks = [];
     state.viewState = cloneTaskInputViewState(state.viewState);
     const isOccurrenceEditor = Boolean(this.options.occurrenceContext);
@@ -88,8 +99,14 @@ export class TaskModal extends Modal {
             state.subtasks = [];
             if (state.kind === "composite") {
               state.viewState = withMindmapParent(state.viewState, null);
+              state.recurrence = "daily";
+              state.recurrenceCount = SINGLE_TASK_RECURRENCE_COUNT;
+              state.recurrenceUntil = null;
+              state.consumeRequiresCompletion = false;
               renderParentField();
             }
+            renderExecutionFields();
+            renderRecurrenceFields();
             renderSubtaskFields();
           });
         });
@@ -155,6 +172,7 @@ export class TaskModal extends Modal {
     let projectDropdown: DropdownComponent | null = null;
     let renderParentField = (): void => undefined;
     let clearParentIfDisallowed = (): void => undefined;
+    let renderExecutionFields = (): void => undefined;
     if (!isOccurrenceEditor && relationSection && recurrenceSection && subtaskSection) {
       const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
       new Setting(relationGrid)
@@ -241,67 +259,70 @@ export class TaskModal extends Modal {
       };
       renderParentField();
 
-      new Setting(relationGrid)
-        .setName("状态")
-        .addDropdown((dropdown) => {
-          const labels: Record<TaskStatus, string> = {
-            todo: "待办",
-            doing: "进行中",
-            blocked: "阻塞",
-            done: "已完成"
-          };
-          (Object.keys(labels) as TaskStatus[]).forEach((key) => dropdown.addOption(key, labels[key]));
-          dropdown.setValue(state.status ?? "todo");
-          dropdown.onChange((value) => {
-            state.status = value as TaskStatus;
-          });
-        });
+      const executionFields = relationSection.createDiv({ cls: "pm-task-nested-fields pm-task-execution-fields" });
+      renderExecutionFields = (): void => {
+        executionFields.empty();
+        if (state.kind === "composite") {
+          executionFields.createDiv({ cls: "pm-muted", text: "组合任务是容器，不设置状态、优先级或重复执行规则。" });
+          return;
+        }
 
-      new Setting(relationGrid)
-        .setName("优先级")
-        .addDropdown((dropdown) => {
-          dropdown.addOption("", "无");
-          const labels: Record<TaskPriority, string> = {
-            low: "低",
-            medium: "中",
-            high: "高",
-            urgent: "紧急"
-          };
-          (Object.keys(labels) as TaskPriority[]).forEach((key) => dropdown.addOption(key, labels[key]));
-          dropdown.setValue(state.priority ?? "");
-          dropdown.onChange((value) => {
-            state.priority = (value || undefined) as TaskPriority | undefined;
+        const executionGrid = executionFields.createDiv({ cls: "pm-task-field-grid" });
+        new Setting(executionGrid)
+          .setName("状态")
+          .addDropdown((dropdown) => {
+            (["todo", "doing", "blocked", "done"] as TaskStatus[]).forEach((key) => dropdown.addOption(key, statusLabel(key)));
+            dropdown.setValue(state.status ?? "todo");
+            dropdown.onChange((value) => {
+              state.status = value as TaskStatus;
+            });
           });
-        });
 
-      new Setting(relationSection)
-        .setName("标签")
-        .setDesc("多个标签用逗号分隔")
-        .addText((text) =>
-          text.setPlaceholder("例如 parser, ui").setValue((state.tags ?? []).join(", ")).onChange((value) => {
-            state.tags = value
-              .split(",")
-              .map((item) => item.trim())
-              .filter(Boolean);
-          })
-        );
+        new Setting(executionGrid)
+          .setName("优先级")
+          .addDropdown((dropdown) => {
+            dropdown.addOption("", "无");
+            const labels: Record<TaskPriority, string> = {
+              low: "低",
+              medium: "中",
+              high: "高",
+              urgent: "紧急"
+            };
+            (Object.keys(labels) as TaskPriority[]).forEach((key) => dropdown.addOption(key, labels[key]));
+            dropdown.setValue(state.priority ?? "");
+            dropdown.onChange((value) => {
+              state.priority = (value || undefined) as TaskPriority | undefined;
+            });
+          });
+      };
+      renderExecutionFields();
 
       new Setting(recurrenceSection)
         .setName("重复类型")
-        .setDesc("单次、每日重复、每周此时重复")
+        .setDesc("单次和永久重复是快捷选择，核心类型为每日/每周/每月此时重复")
         .addDropdown((dropdown) => {
-          const labels: Array<[TaskRecurrence, string]> = [
-            ["once", "单次任务"],
-            ["daily", "每日重复"],
-            ["weekly", "每周此时重复"]
+          const labels: Array<[RecurrencePreset, string]> = [
+            ["single", "单次任务"],
+            ["daily", recurrenceLabel("daily")],
+            ["weekly", recurrenceLabel("weekly")],
+            ["monthly", recurrenceLabel("monthly")],
+            ["permanent", "永久重复"]
           ];
           labels.forEach(([key, label]) => dropdown.addOption(key, label));
-          dropdown.setValue(state.recurrence);
+          dropdown.setValue(recurrencePresetForState(state));
           dropdown.onChange((value) => {
-            state.recurrence = value as TaskRecurrence;
-            if (state.recurrence === "once") {
-              state.recurrenceCount = null;
+            const preset = value as RecurrencePreset;
+            if (preset === "single") {
+              state.recurrence = "daily";
+              state.recurrenceCount = SINGLE_TASK_RECURRENCE_COUNT;
               state.recurrenceUntil = null;
+            } else if (preset === "permanent") {
+              state.recurrence = "daily";
+              state.recurrenceCount = PERMANENT_RECURRENCE_COUNT;
+              state.recurrenceUntil = null;
+            } else {
+              state.recurrence = preset;
+              state.recurrenceCount = state.recurrenceCount ?? SINGLE_TASK_RECURRENCE_COUNT;
             }
             renderRecurrenceFields();
           });
@@ -315,12 +336,14 @@ export class TaskModal extends Modal {
         return;
       }
       recurrenceFields.empty();
-      if (state.recurrence === "once") {
+      if (state.kind === "composite") {
+        recurrenceSection?.addClass("is-hidden");
         return;
       }
+      recurrenceSection?.removeClass("is-hidden");
       new Setting(recurrenceFields)
         .setName("重复次数")
-        .setDesc("重复任务至少填写次数或结束日期之一")
+        .setDesc("单次任务为 1；永久重复会写入整数最大值")
         .addText((text) =>
           text.setPlaceholder("例如 10").setValue(state.recurrenceCount ? String(state.recurrenceCount) : "").onChange((value) => {
             state.recurrenceCount = value.trim() ? Number(value) : null;
@@ -332,6 +355,15 @@ export class TaskModal extends Modal {
         .addText((text) =>
           text.setPlaceholder("YYYY-MM-DD").setValue(state.recurrenceUntil ?? "").onChange((value) => {
             state.recurrenceUntil = value.trim() || null;
+          })
+        );
+
+      new Setting(recurrenceFields)
+        .setName("执行足额次数")
+        .setDesc("开启后，只有完成任务才会消耗剩余执行次数")
+        .addToggle((toggle) =>
+          toggle.setValue(Boolean(state.consumeRequiresCompletion)).onChange((value) => {
+            state.consumeRequiresCompletion = value;
           })
         );
     };
@@ -468,4 +500,14 @@ function withMindmapParent(viewState: TaskInput["viewState"], parentTaskId: stri
       expanded: viewState?.mindmap?.expanded ?? true
     }
   };
+}
+
+function recurrencePresetForState(state: TaskInput): RecurrencePreset {
+  if (state.recurrence === "daily" && state.recurrenceCount === SINGLE_TASK_RECURRENCE_COUNT && !state.recurrenceUntil) {
+    return "single";
+  }
+  if (state.recurrence === "daily" && state.recurrenceCount === PERMANENT_RECURRENCE_COUNT && !state.recurrenceUntil) {
+    return "permanent";
+  }
+  return state.recurrence ?? "daily";
 }

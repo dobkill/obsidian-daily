@@ -116,6 +116,96 @@ function isWeekend(date) {
   return day === 0 || day === 6;
 }
 
+// src/domain/taskRules.ts
+var SINGLE_TASK_RECURRENCE_COUNT = 1;
+var PERMANENT_RECURRENCE_COUNT = 2147483647;
+var MAX_GENERATED_OCCURRENCES = 366;
+var TASK_STATUS_LABELS = {
+  todo: "\u5F85\u529E",
+  doing: "\u8FDB\u884C\u4E2D",
+  blocked: "\u963B\u585E",
+  done: "\u5DF2\u5B8C\u6210"
+};
+var TASK_RECURRENCE_LABELS = {
+  daily: "\u6BCF\u65E5\u6B64\u65F6\u91CD\u590D",
+  weekly: "\u6BCF\u5468\u6B64\u65F6\u91CD\u590D",
+  monthly: "\u6BCF\u6708\u6B64\u65F6\u91CD\u590D"
+};
+function recurrenceLabel(recurrence) {
+  return TASK_RECURRENCE_LABELS[recurrence] ?? TASK_RECURRENCE_LABELS.daily;
+}
+function statusLabel(status) {
+  return TASK_STATUS_LABELS[status] ?? TASK_STATUS_LABELS.todo;
+}
+function isCompositeKind(kind) {
+  return kind === "composite";
+}
+function isExecutableTask(task) {
+  return task.kind === "simple";
+}
+function isAttentionStatus(status) {
+  return status === "todo" || status === "blocked";
+}
+function isActionableStatus(status) {
+  return status === "doing";
+}
+function isActionableOccurrence(task) {
+  return isExecutableTask(task) && isActionableStatus(task.status) && !task.completed;
+}
+function isAttentionOccurrence(task) {
+  return isExecutableTask(task) && isAttentionStatus(task.status) && !task.completed;
+}
+function shouldConsumeOccurrence(task) {
+  if (task.completed) {
+    return true;
+  }
+  if (task.consumeRequiresCompletion) {
+    return false;
+  }
+  return !isAttentionStatus(task.status);
+}
+function normalizeTaskRecurrence(value) {
+  if (value === "weekly" || value === "monthly") {
+    return value;
+  }
+  return "daily";
+}
+function advanceRecurrenceDate(date, recurrence, anchorDay) {
+  if (recurrence === "weekly") {
+    return addDays(date, 7);
+  }
+  if (recurrence === "monthly") {
+    return addMonthsKeepingAnchorDay(date, 1, anchorDay);
+  }
+  return addDays(date, 1);
+}
+function addMonthsKeepingAnchorDay(date, months, anchorDay) {
+  const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(anchorDay, lastDay));
+  return target;
+}
+function detectRecurrenceFromDates(dates) {
+  if (dates.length <= 1) {
+    return "daily";
+  }
+  const first = parseDateKey(dates[0]);
+  const second = parseDateKey(dates[1]);
+  const diffDays = Math.round((second.getTime() - first.getTime()) / (24 * 60 * 60 * 1e3));
+  if (diffDays === 7) {
+    return "weekly";
+  }
+  if (isNextMonthlyDate(dates[0], dates[1])) {
+    return "monthly";
+  }
+  return "daily";
+}
+function isNextMonthlyDate(left, right) {
+  const leftDate = parseDateKey(left);
+  const expected = addMonthsKeepingAnchorDay(leftDate, 1, leftDate.getDate());
+  return toDateKey(expected) === right;
+}
+
 // src/importExport/formattedTasks.ts
 var UNASSIGNED_PROJECT_LABEL = "\u672A\u5F52\u5C5E\u9879\u76EE";
 function parseFormattedTaskText(text, options) {
@@ -297,7 +387,7 @@ function parseTaskLine(rawTitle, context) {
   let title = rawTitle.trim();
   const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
   const kindMatch = /\b(?:kind|type):(simple|composite)\b/.exec(title);
-  const repeatMatch = /\brepeat:(once|daily|weekly|custom)\b/.exec(title);
+  const repeatMatch = /\brepeat:(daily|weekly|monthly)\b/.exec(title);
   const countMatch = /\bcount:(\d+)\b/.exec(title);
   const untilMatch = /\buntil:(\d{4}-\d{2}-\d{2})\b/.exec(title);
   const datesMatch = /\bdates:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
@@ -309,7 +399,7 @@ function parseTaskLine(rawTitle, context) {
   const mindmapMatch = /\bmindmap:([^\s]+)/.exec(title);
   const parentMatch = /\bparent:([^\s]+)/.exec(title);
   const depsMatch = /\bdeps:([^\s]+)/.exec(title);
-  const tags = [...title.matchAll(/#([^\s#]+)/g)].map((match) => match[1]).filter((tag) => !tag.startsWith("\u9879\u76EE"));
+  const tags = [];
   const customDates = datesMatch?.[1].split(",").filter(Boolean) ?? [];
   const viewState = buildViewStatePatchFromTokens({
     status: statusMatch?.[1] ?? (context.completed ? "done" : "todo"),
@@ -320,7 +410,7 @@ function parseTaskLine(rawTitle, context) {
   });
   const parentTitle = context.parentTitle ?? (parentMatch ? decodeReferenceToken(parentMatch[1]) : void 0);
   const dependencyTitles = depsMatch ? depsMatch[1].split("|").map(decodeReferenceToken).filter(Boolean) : [];
-  title = title.replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "").replace(/\b(?:kind|type):(simple|composite)\b/g, "").replace(/\brepeat:(once|daily|weekly|custom)\b/g, "").replace(/\bcount:\d+\b/g, "").replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "").replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bstatus:(todo|doing|blocked|done)\b/g, "").replace(/\bfinish:(today|series)\b/g, "").replace(/\bboard:(todo|doing|blocked|done)(?::[-]?\d+)?\b/g, "").replace(/\bgantt:[^\s]+/g, "").replace(/\bmindmap:[^\s]+/g, "").replace(/\bparent:[^\s]+/g, "").replace(/\bdeps:[^\s]+/g, "").replace(/!(low|medium|high|urgent)\b/g, "").replace(/#[^\s#]+/g, "").trim();
+  title = title.replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "").replace(/\b(?:kind|type):(simple|composite)\b/g, "").replace(/\brepeat:(daily|weekly|monthly)\b/g, "").replace(/\bcount:\d+\b/g, "").replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "").replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "").replace(/\bstatus:(todo|doing|blocked|done)\b/g, "").replace(/\bfinish:(today|series)\b/g, "").replace(/\bboard:(todo|doing|blocked|done)(?::[-]?\d+)?\b/g, "").replace(/\bgantt:[^\s]+/g, "").replace(/\bmindmap:[^\s]+/g, "").replace(/\bparent:[^\s]+/g, "").replace(/\bdeps:[^\s]+/g, "").replace(/!(low|medium|high|urgent)\b/g, "").replace(/#[^\s#]+/g, "").trim();
   if (!title) {
     throw new Error("\u4EFB\u52A1\u6807\u9898\u4E0D\u80FD\u4E3A\u7A7A");
   }
@@ -332,8 +422,8 @@ function parseTaskLine(rawTitle, context) {
       date: dateMatch?.[1] ?? customDates[0] ?? context.defaultDate,
       startTime: dateMatch?.[2],
       endTime: dateMatch?.[3],
-      recurrence: repeatMatch?.[1] ?? "once",
-      recurrenceCount: countMatch ? Number(countMatch[1]) : null,
+      recurrence: repeatMatch?.[1] ?? "daily",
+      recurrenceCount: countMatch ? Number(countMatch[1]) : SINGLE_TASK_RECURRENCE_COUNT,
       recurrenceUntil: untilMatch?.[1] ?? null,
       occurrenceDates: customDates.length > 0 ? customDates : void 0,
       status: statusMatch?.[1] ?? (context.completed ? "done" : "todo"),
@@ -357,22 +447,20 @@ function buildFormattedTaskParts(task, options = {}) {
     parts.push(`kind:${task.kind}`);
   }
   parts.push(`@${task.date}${task.startTime && task.endTime ? ` ${task.startTime}-${task.endTime}` : ""}`);
-  task.tags.forEach((tag) => parts.push(`#${tag}`));
   if (task.priority) {
     parts.push(`!${task.priority}`);
   }
-  parts.push(`status:${task.status}`);
-  if (task.recurrence !== "once") {
+  if (task.kind !== "composite") {
+    parts.push(`status:${task.status}`);
+  }
+  if (task.kind !== "composite" && !(task.recurrence === "daily" && task.recurrenceCount === SINGLE_TASK_RECURRENCE_COUNT && !task.recurrenceUntil)) {
     parts.push(`repeat:${task.recurrence}`);
   }
-  if (task.recurrenceCount) {
+  if (task.kind !== "composite" && task.recurrenceCount && task.recurrenceCount !== SINGLE_TASK_RECURRENCE_COUNT) {
     parts.push(`count:${task.recurrenceCount}`);
   }
-  if (task.recurrenceUntil) {
+  if (task.kind !== "composite" && task.recurrenceUntil) {
     parts.push(`until:${task.recurrenceUntil}`);
-  }
-  if (task.recurrence === "custom" && task.occurrenceDates?.length) {
-    parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
   }
   if (task.viewState) {
     parts.push(`board:${task.viewState.board.columnId}:${task.viewState.board.order}`);
@@ -587,6 +675,7 @@ function taskToDataMigrationImportInput(task, projectId) {
     recurrence: task.recurrence,
     recurrenceCount: task.recurrenceCount ?? null,
     recurrenceUntil: task.recurrenceUntil ?? null,
+    consumeRequiresCompletion: task.consumeRequiresCompletion,
     occurrenceDates: [...task.occurrenceDates],
     completedOccurrenceDates: task.occurrenceStates.filter((state) => Boolean(state.completedAt)).map((state) => state.date),
     occurrenceOverrides: task.occurrenceOverrides.map((override) => ({ ...override })),
@@ -636,7 +725,7 @@ function remapDataMigrationTask(task, taskIdBySourceId, projectIdBySourceId) {
 }
 function taskToDataMigrationRecord(task) {
   const status = task.status ?? "todo";
-  const recurrence = task.recurrence ?? "once";
+  const recurrence = task.recurrence ?? "daily";
   const record = {
     id: task.id,
     title: task.title,
@@ -669,14 +758,17 @@ function taskToDataMigrationRecord(task) {
   if (task.endTime) {
     record.endTime = task.endTime;
   }
-  if (recurrence !== "once") {
+  if (task.kind !== "composite" && !(recurrence === "daily" && task.recurrenceCount === SINGLE_TASK_RECURRENCE_COUNT && !task.recurrenceUntil)) {
     record.recurrence = recurrence;
   }
-  if (task.recurrenceCount !== null && task.recurrenceCount !== void 0) {
+  if (task.kind !== "composite" && task.recurrenceCount !== null && task.recurrenceCount !== void 0) {
     record.recurrenceCount = task.recurrenceCount;
   }
-  if (task.recurrenceUntil) {
+  if (task.kind !== "composite" && task.recurrenceUntil) {
     record.recurrenceUntil = task.recurrenceUntil;
+  }
+  if (task.kind !== "composite" && task.consumeRequiresCompletion) {
+    record.consumeRequiresCompletion = true;
   }
   const occurrencePlan = buildOccurrencePlan(task);
   if (occurrencePlan) {
@@ -706,25 +798,27 @@ function taskToDataMigrationRecord(task) {
   return record;
 }
 function dataMigrationRecordToTask(record) {
+  const kind = record.kind === "composite" ? "composite" : "simple";
   const status = normalizeTaskStatus(record.status);
-  const recurrence = normalizeTaskRecurrence(record.recurrence, record.occurrencePlan);
+  const recurrence = normalizeTaskRecurrence2(record.recurrence, record.occurrencePlan);
   const occurrenceDates = buildOccurrenceDatesFromRecord(record, recurrence);
   const date = occurrenceDates[0] ?? record.date;
   return {
     id: record.id,
-    kind: record.kind === "composite" ? "composite" : "simple",
+    kind,
     title: record.title,
     description: record.description ?? "",
     projectId: record.projectId,
-    status,
-    priority: normalizeTaskPriority(record.priority),
-    tags: [...record.tags ?? []],
+    status: kind === "composite" ? "todo" : status,
+    priority: kind === "composite" ? void 0 : normalizeTaskPriority(record.priority),
+    tags: kind === "composite" ? [] : [...record.tags ?? []],
     date,
     startTime: record.startTime,
     endTime: record.endTime,
     recurrence,
-    recurrenceCount: record.recurrenceCount ?? null,
-    recurrenceUntil: record.recurrenceUntil ?? null,
+    recurrenceCount: kind === "composite" ? SINGLE_TASK_RECURRENCE_COUNT : record.recurrenceCount ?? null,
+    recurrenceUntil: kind === "composite" ? null : record.recurrenceUntil ?? null,
+    consumeRequiresCompletion: kind === "composite" ? false : Boolean(record.consumeRequiresCompletion),
     subtasks: [],
     occurrenceDates,
     occurrenceStates: (record.occurrenceStates ?? []).map((state) => ({
@@ -732,7 +826,7 @@ function dataMigrationRecordToTask(record) {
       completedSubtaskIds: [...state.completedSubtaskIds ?? []]
     })),
     occurrenceOverrides: (record.occurrenceOverrides ?? []).map((override) => ({ ...override })),
-    viewState: mergeViewState(record.viewState, status),
+    viewState: mergeViewState(record.viewState, kind === "composite" ? "todo" : status),
     sourceLinks: (record.sourceLinks ?? []).map((source) => ({ ...source })),
     notes: (record.notes ?? []).map((note) => ({ ...note })),
     mindmapComments: (record.mindmapComments ?? []).map((comment) => ({ ...comment })),
@@ -743,12 +837,6 @@ function dataMigrationRecordToTask(record) {
 }
 function buildOccurrencePlan(task) {
   const actualDates = normalizeDateList(task.occurrenceDates);
-  if (task.recurrence === "custom") {
-    return {
-      source: "dates",
-      ...packDateSet(actualDates)
-    };
-  }
   const generatedDates = generateRecurrenceDates({
     date: task.date,
     recurrence: task.recurrence,
@@ -790,34 +878,24 @@ function buildOccurrenceDatesFromRecord(record, recurrence) {
   return normalizeDateList([...generated.filter((date) => !exclude.has(date)), ...include]);
 }
 function generateRecurrenceDates(input) {
-  if (input.recurrence === "custom") {
-    return [input.date];
-  }
-  const countLimit = input.recurrenceCount ?? (input.recurrence === "once" ? 1 : 365);
+  const recurrence = normalizeTaskRecurrence(input.recurrence);
+  const countLimit = Math.min(input.recurrenceCount ?? MAX_GENERATED_OCCURRENCES, MAX_GENERATED_OCCURRENCES);
   const until = input.recurrenceUntil ?? null;
   const dates = [];
   let cursor = parseDateKey(input.date);
+  const anchorDay = cursor.getDate();
   let createdCount = 0;
   while (true) {
     const dateKey = toDateKey(cursor);
     if (until && compareDateKeys(dateKey, until) > 0) {
       break;
     }
-    if (input.recurrence !== "once" && input.recurrenceCount && createdCount >= input.recurrenceCount) {
-      break;
-    }
-    if (input.recurrence === "once" && createdCount >= 1) {
+    if (createdCount >= countLimit) {
       break;
     }
     dates.push(dateKey);
     createdCount += 1;
-    if (input.recurrence === "once") {
-      break;
-    }
-    cursor = addDays(cursor, input.recurrence === "daily" ? 1 : 7);
-    if (createdCount >= countLimit && !input.recurrenceCount) {
-      break;
-    }
+    cursor = advanceRecurrenceDate(cursor, recurrence, anchorDay);
   }
   return dates.length > 0 ? dates : [input.date];
 }
@@ -878,11 +956,8 @@ function normalizeDateList(dates) {
 function sameDateList(left, right) {
   return left.length === right.length && left.every((date, index) => date === right[index]);
 }
-function normalizeTaskRecurrence(value, occurrencePlan) {
-  if (value === "daily" || value === "weekly" || value === "custom") {
-    return value;
-  }
-  return occurrencePlan?.source === "dates" ? "custom" : "once";
+function normalizeTaskRecurrence2(value, occurrencePlan) {
+  return normalizeTaskRecurrence(value);
 }
 function normalizeTaskStatus(value) {
   return value === "doing" || value === "blocked" || value === "done" ? value : "todo";
@@ -1013,7 +1088,7 @@ function isDataMigrationTaskRecord(value) {
   if (!isRecord(value)) {
     return false;
   }
-  return typeof value.id === "string" && typeof value.title === "string" && typeof value.date === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && (value.kind === void 0 || value.kind === "simple" || value.kind === "composite") && (value.status === void 0 || ["todo", "doing", "blocked", "done"].includes(String(value.status))) && (value.recurrence === void 0 || ["once", "daily", "weekly", "custom"].includes(String(value.recurrence))) && (value.tags === void 0 || Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === "string")) && (value.subtasks === void 0 || Array.isArray(value.subtasks) && value.subtasks.every(isTaskSubtaskRecord)) && (value.occurrenceStates === void 0 || Array.isArray(value.occurrenceStates) && value.occurrenceStates.every(isOccurrenceStateRecord)) && (value.occurrenceOverrides === void 0 || Array.isArray(value.occurrenceOverrides) && value.occurrenceOverrides.every(isOccurrenceOverrideRecord)) && (value.mindmapComments === void 0 || Array.isArray(value.mindmapComments) && value.mindmapComments.every(isMindmapCommentRecord)) && (value.sourceLinks === void 0 || Array.isArray(value.sourceLinks)) && (value.notes === void 0 || Array.isArray(value.notes)) && (value.viewState === void 0 || isRecord(value.viewState)) && (value.occurrencePlan === void 0 || isOccurrencePlanRecord(value.occurrencePlan));
+  return typeof value.id === "string" && typeof value.title === "string" && typeof value.date === "string" && typeof value.createdAt === "string" && typeof value.updatedAt === "string" && (value.kind === void 0 || value.kind === "simple" || value.kind === "composite") && (value.status === void 0 || ["todo", "doing", "blocked", "done"].includes(String(value.status))) && (value.recurrence === void 0 || ["daily", "weekly", "monthly"].includes(String(value.recurrence))) && (value.tags === void 0 || Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === "string")) && (value.subtasks === void 0 || Array.isArray(value.subtasks) && value.subtasks.every(isTaskSubtaskRecord)) && (value.occurrenceStates === void 0 || Array.isArray(value.occurrenceStates) && value.occurrenceStates.every(isOccurrenceStateRecord)) && (value.occurrenceOverrides === void 0 || Array.isArray(value.occurrenceOverrides) && value.occurrenceOverrides.every(isOccurrenceOverrideRecord)) && (value.mindmapComments === void 0 || Array.isArray(value.mindmapComments) && value.mindmapComments.every(isMindmapCommentRecord)) && (value.sourceLinks === void 0 || Array.isArray(value.sourceLinks)) && (value.notes === void 0 || Array.isArray(value.notes)) && (value.viewState === void 0 || isRecord(value.viewState)) && (value.occurrencePlan === void 0 || isOccurrencePlanRecord(value.occurrencePlan));
 }
 function isTaskSubtaskRecord(value) {
   return isRecord(value) && typeof value.id === "string" && typeof value.title === "string";
@@ -1050,7 +1125,7 @@ function isRecord(value) {
 }
 
 // docs/markdown——type.md
-var markdown_type_default = '# \u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u89C4\u8303\n\n\u5F53\u524D\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u652F\u6301\u4E09\u7C7B\u8F93\u5165\u683C\u5F0F\u3002\n\n1. \u6570\u636E\u8FC1\u79FB JSON\uFF1A\u7528\u4E8E\u77E5\u8BC6\u5E93\u8FC1\u79FB\u548C\u5B8C\u6574\u6062\u590D\u3002\n2. \u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\uFF1A\u7528\u4E8E\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002\n3. \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\uFF1A\u7528\u4E8E\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u8BA1\u5212\u3002\n\n## \u6570\u636E\u8FC1\u79FB JSON\n\n\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u590D\u5236\u7684\u6570\u636E\u5C31\u662F\u6570\u636E\u8FC1\u79FB JSON\u3002\n\n```json\n{\n  "schema": "obsidian-project-management/data-migration",\n  "version": 2,\n  "exportedAt": "2026-05-26T12:00:00+08:00",\n  "projects": [],\n  "progressPages": [],\n  "tasks": []\n}\n```\n\n### \u4EFB\u52A1\u7D27\u51D1\u89C4\u5219\n\n1. `daily` / `weekly` \u91CD\u590D\u4EFB\u52A1\u4E0D\u5BFC\u51FA\u9010\u65E5 `occurrenceDates`\uFF1B\u7531 `date`\u3001`recurrence`\u3001`recurrenceCount`\u3001`recurrenceUntil` \u63A8\u5BFC\u3002\n2. \u4E0D\u89C4\u5219\u65E5\u671F\u5199\u5165 `occurrencePlan.include` \u548C `occurrencePlan.exclude`\u3002\n3. \u81EA\u5B9A\u4E49\u65E5\u671F\u5199\u5165 `occurrencePlan.dates` \u6216 `occurrencePlan.ranges`\u3002\n4. \u7A7A\u5B57\u6BB5\u548C\u9ED8\u8BA4\u89C6\u56FE\u72B6\u6001\u4E0D\u5BFC\u51FA\u3002\n5. `occurrenceStates`\u3001`occurrenceOverrides`\u3001`viewState`\u3001`mindmapComments`\u3001`notes`\u3001`sourceLinks` \u4FDD\u7559\u5B8C\u6574\u4E1A\u52A1\u72B6\u6001\u3002\n\n### \u6062\u590D\u8303\u56F4\n\n\u5BFC\u5165\u6570\u636E\u8FC1\u79FB JSON \u4F1A\u6062\u590D\u9879\u76EE\u3001\u9879\u76EE\u9875\u3001\u4EFB\u52A1\u3001\u770B\u677F\u72B6\u6001\u3001\u7518\u7279\u5C5E\u6027\u3001\u601D\u7EF4\u5BFC\u56FE\u7236\u5B50\u5173\u7CFB\u3001\u8BC4\u8BED\u3001\u4EFB\u52A1\u7B14\u8BB0\u3001\u6765\u6E90\u94FE\u63A5\u3001\u91CD\u590D\u53D1\u751F\u65E5\u671F\u3001\u5355\u6B21\u5B9E\u4F8B\u8986\u76D6\u548C\u5B8C\u6210\u72B6\u6001\u3002\n\n## \u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\n\n\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u6B64\u683C\u5F0F\uFF1A\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n- [ ] \u6BCF\u65E5\u80CC\u8BCD\n- [ ] \u542C\u529B\u7CBE\u542C\n```\n\n\u628A\u5B8C\u6210\u7684\u4EFB\u52A1\u6539\u6210 `[x]` \u540E\u7C98\u56DE\u5FEB\u901F\u8BB0\u5F55\uFF1A\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n- [x] \u6BCF\u65E5\u80CC\u8BCD\n- [ ] \u542C\u529B\u7CBE\u542C\n```\n\n\u89C4\u5219\uFF1A\n\n1. `- [x] \u6807\u9898` \u53EA\u5339\u914D\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u5E76\u5B8C\u6210\u5F53\u5929\u5B9E\u4F8B\u3002\n2. `- [ ] \u6807\u9898` \u4E0D\u521B\u5EFA\u4EFB\u52A1\uFF0C\u4E5F\u4E0D\u8986\u76D6\u4EFB\u52A1\u5B57\u6BB5\u3002\n3. \u627E\u4E0D\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u65F6\u4F1A\u963B\u6B62\u5BFC\u5165\u3002\n\n## \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\n\n\u590D\u6742 Markdown \u4F7F\u7528 `+ \u4EFB\u52A1\uFF1A`\u3001`+ \u7EC4\u5408\uFF1A` \u548C\u7F29\u8FDB\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A`\u3002\u5BFC\u5165\u5668\u4F1A\u6309\u8FD9\u4E9B `+` \u884C\u8BC6\u522B\u4E3A\u201C\u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\u201D\uFF0C\u4E0D\u4F1A\u6309\u662F\u5426\u5305\u542B\u5B8C\u6574\u65F6\u95F4\u6BB5\u6765\u5224\u65AD\u683C\u5F0F\u3002\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n+ \u4EFB\u52A1\uFF1A\u642D\u5EFA\u590D\u4E60\u770B\u677F @2026-05-27 09:00-10:30 #planning !high status:doing\n+ \u4EFB\u52A1\uFF1A\u6574\u7406\u9519\u9898\u7D22\u5F15 @2026-05-28 #review status:todo\n+ \u7EC4\u5408\uFF1A\u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD @2026-05-27 12:00-12:40 #vocab !medium status:todo repeat:daily count:5\n  + \u5B50\u4EFB\u52A1\uFF1A\u590D\u4E60\u6628\u5929\u9519\u8BCD @2026-05-27 12:00-12:10 #vocab status:todo repeat:daily count:5\n  + \u5B50\u4EFB\u52A1\uFF1A\u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD @2026-05-27 12:10-12:30 #vocab status:todo repeat:daily count:5\n  > \u6BCF\u5929\u5B8C\u6210\u540E\u53EF\u5728\u4ECA\u65E5\u4EFB\u52A1\u9875\u52FE\u9009\u3002\n```\n\n\u89C4\u5219\uFF1A\n\n1. `\u4EFB\u52A1\uFF1A`\u3001`\u7EC4\u5408\uFF1A`\u3001`\u5B50\u4EFB\u52A1\uFF1A` \u5192\u53F7\u540E\u53EF\u4EE5\u76F4\u63A5\u5199\u6807\u9898\uFF0C\u4E5F\u53EF\u4EE5\u5148\u5199\u4E00\u4E2A\u6216\u591A\u4E2A\u7A7A\u683C\u3002\n2. `+ \u4EFB\u52A1\uFF1A` \u8868\u793A\u666E\u901A\u4EFB\u52A1\uFF1B\u5FC5\u987B\u5199\u663E\u5F0F\u65E5\u671F `@YYYY-MM-DD`\u3002\u53EF\u4EE5\u5199\u5B8C\u6574 `@YYYY-MM-DD HH:mm-HH:mm`\uFF0C\u4E5F\u53EF\u4EE5\u53EA\u5199\u65E5\u671F\u8868\u793A\u672A\u6392\u671F\u4EFB\u52A1\u3002\n3. `+ \u7EC4\u5408\uFF1A` \u8868\u793A\u7EC4\u5408\u4EFB\u52A1\uFF1B\u5FC5\u987B\u5199\u5B8C\u6574 `@YYYY-MM-DD HH:mm-HH:mm`\u3002\u7EC4\u5408\u4EFB\u52A1\u4E0D\u80FD\u53EA\u5199\u65E5\u671F\u3002\n4. \u7F29\u8FDB\u4E24\u4E2A\u6216\u66F4\u591A\u7A7A\u683C\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A` \u5FC5\u987B\u5199\u5728\u67D0\u4E2A `+ \u7EC4\u5408\uFF1A` \u4E0B\u65B9\uFF1B\u5B50\u4EFB\u52A1\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\uFF0C\u5FC5\u987B\u5199\u5B8C\u6574 `@YYYY-MM-DD HH:mm-HH:mm`\uFF0C\u4E14\u65E5\u671F\u548C\u65F6\u95F4\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u8303\u56F4\u5185\u3002\n5. \u65F6\u95F4\u8303\u56F4\u4E3A `00:00` \u81F3 `23:59`\uFF0C\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4\u3002\n6. `#\u9879\u76EE\uFF1A\u9879\u76EE\u540D` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5165\u8BE5\u9879\u76EE\uFF1B\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002\n7. `#\u9879\u76EE\uFF1A` \u6216 `#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE` \u8868\u793A\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002\n8. \u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u65F6\uFF0C`#\u9879\u76EE\uFF1A` \u5FC5\u987B\u7B49\u4E8E\u5F53\u524D\u9879\u76EE\uFF1B\u540C\u9879\u76EE\u540C\u540D\u4EFB\u52A1\u4F1A\u88AB\u8986\u76D6\u8BA1\u5212\u5B57\u6BB5\u5E76\u4FDD\u7559\u65E2\u6709\u5B8C\u6210\u8BB0\u5F55\uFF0C\u5426\u5219\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002\n9. \u65F6\u95F4\u51B2\u7A81\u4F1A\u81EA\u52A8\u8C03\u6574\u5230\u540C\u65E5 1 \u5206\u949F\u7A7A\u6863\u3002\n10. \u7F29\u8FDB\u4E24\u4E2A\u6216\u66F4\u591A\u7A7A\u683C\u7684 `>` \u884C\u662F\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u5F52\u5165\u5B83\u524D\u9762\u6700\u8FD1\u7684\u4EFB\u52A1\u6216\u5B50\u4EFB\u52A1\uFF1B\u591A\u884C\u63CF\u8FF0\u4F1A\u7528\u6362\u884C\u8FDE\u63A5\u3002\n11. \u53C2\u6570\u7528\u7A7A\u683C\u5206\u9694\uFF1B\u4EFB\u52A1\u6807\u9898\u662F\u79FB\u9664 `@\u65E5\u671F`\u3001`#\u6807\u7B7E`\u3001`!\u4F18\u5148\u7EA7`\u3001`status`\u3001`repeat` \u7B49\u53C2\u6570\u540E\u5269\u4E0B\u7684\u6587\u672C\u3002\n\n## \u590D\u6742 Markdown \u53C2\u6570\n\n| \u53C2\u6570 | \u793A\u4F8B | \u4F5C\u7528 |\n| --- | --- | --- |\n| `#\u6807\u7B7E` | `#planning` | \u5199\u5165\u4EFB\u52A1\u6807\u7B7E\uFF0C\u53EF\u5199\u591A\u4E2A\u3002 |\n| `!\u4F18\u5148\u7EA7` | `!low`\u3001`!medium`\u3001`!high`\u3001`!urgent` | \u5199\u5165\u4EFB\u52A1\u4F18\u5148\u7EA7\u3002 |\n| `status` | `status:todo`\u3001`status:doing`\u3001`status:blocked`\u3001`status:done` | \u5199\u5165\u4EFB\u52A1\u72B6\u6001\u3002 |\n| `repeat` | `repeat:once`\u3001`repeat:daily`\u3001`repeat:weekly`\u3001`repeat:custom` | \u91CD\u590D\u89C4\u5219\u3002 |\n| `count` | `count:5` | \u91CD\u590D\u6B21\u6570\u3002 |\n| `until` | `until:2026-06-30` | \u91CD\u590D\u7ED3\u675F\u65E5\u671F\u3002 |\n| `dates` | `dates:2026-05-27,2026-05-29` | \u81EA\u5B9A\u4E49\u53D1\u751F\u65E5\u671F\u96C6\u5408\u3002 |\n| `board` | `board:doing:10` | \u770B\u677F\u5217\u4E0E\u6392\u5E8F\u3002 |\n| `gantt` | `gantt:order=10,locked,milestone` | \u7518\u7279\u56FE\u6392\u5E8F\u3001\u9501\u5B9A\u548C\u91CC\u7A0B\u7891\u3002 |\n| `deps` | `deps:%E4%BB%BB%E5%8A%A1A|%E4%BB%BB%E5%8A%A1B` | \u7518\u7279\u4F9D\u8D56\uFF0C\u4EFB\u52A1\u6807\u9898\u4F7F\u7528 URL \u7F16\u7801\u3002 |\n| `parent` | `parent:%E7%BB%84%E5%90%88%E4%BB%BB%E5%8A%A1A` | \u6302\u5165\u540C\u9879\u76EE\u4E0B\u6307\u5B9A\u7EC4\u5408\u4EFB\u52A1\uFF1B\u901A\u5E38\u4F7F\u7528\u7F29\u8FDB\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A` \u66F4\u6E05\u6670\u3002 |\n| `mindmap` | `mindmap:order=20,expanded,x=280,y=120` | \u601D\u7EF4\u5BFC\u56FE\u6392\u5E8F\u3001\u5C55\u5F00\u72B6\u6001\u548C\u5750\u6807\u3002 |\n\n## \u7EC4\u5408\u4EFB\u52A1\n\n\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u6709\u5F00\u59CB\u4E0E\u7ED3\u675F\u65F6\u95F4\u3002\u5B50\u4EFB\u52A1\u4F7F\u7528\u7F29\u8FDB\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A`\uFF0C\u5B83\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\uFF0C\u5FC5\u987B\u5B8C\u6574\u586B\u5199 `@YYYY-MM-DD HH:mm-HH:mm`\uFF0C\u4E14\u53D1\u751F\u65E5\u671F\u548C\u65F6\u95F4\u5FC5\u987B\u843D\u5728\u7236\u7EC4\u5408\u4EFB\u52A1\u8303\u56F4\u5185\u3002\u590D\u6742 Markdown \u4E0D\u4FDD\u5B58\u5B8C\u6210\u8BB0\u5F55\uFF1B\u5B8C\u6574\u6267\u884C\u8BB0\u5F55\u53EA\u901A\u8FC7\u6570\u636E\u8FC1\u79FB JSON \u4FDD\u5B58\u3002\n\n\u91CD\u590D\u89C4\u5219\u8865\u5145\uFF1A\n\n1. `repeat:daily` \u548C `repeat:weekly` \u5FC5\u987B\u914D\u5408 `count:N` \u6216 `until:YYYY-MM-DD`\u3002\n2. `repeat:custom` \u5FC5\u987B\u914D\u5408 `dates:YYYY-MM-DD,YYYY-MM-DD`\u3002\n3. \u4E0D\u5199 `repeat` \u65F6\u9ED8\u8BA4\u4E3A `once`\u3002\n\n## \u7B14\u8BB0\u540C\u6B65\u5757\n\n\u5168\u5E93 Markdown \u626B\u63CF\u53EA\u8BFB\u53D6 `pm:start` \u4E0E `pm:end` \u4E4B\u95F4\u7684\u590D\u6742 Markdown\uFF1A\n\n```md\n<!-- pm:start -->\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n+ \u4EFB\u52A1\uFF1A\u542C\u529B\u7CBE\u542C @2026-05-27 20:00-20:30 #listen status:todo\n<!-- pm:end -->\n```\n';
+var markdown_type_default = '# \u5FEB\u901F\u8BB0\u5F55\u683C\u5F0F\u89C4\u8303\n\n\u5F53\u524D\u5FEB\u901F\u8BB0\u5F55-\u521B\u5EFA\u4EFB\u52A1\u652F\u6301\u4E09\u7C7B\u8F93\u5165\u683C\u5F0F\u3002\n\n1. \u6570\u636E\u8FC1\u79FB JSON\uFF1A\u7528\u4E8E\u77E5\u8BC6\u5E93\u8FC1\u79FB\u548C\u5B8C\u6574\u6062\u590D\u3002\n2. \u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\uFF1A\u7528\u4E8E\u5B8C\u6210\u4ECA\u5929\u5DF2\u6709\u4EFB\u52A1\u3002\n3. \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\uFF1A\u7528\u4E8E\u521B\u5EFA\u6216\u8986\u76D6\u4EFB\u52A1\u8BA1\u5212\u3002\n\n## \u6570\u636E\u8FC1\u79FB JSON\n\n\u201C\u5BFC\u51FA\u5168\u90E8\u8BB0\u5F55\u201D\u590D\u5236\u7684\u6570\u636E\u5C31\u662F\u6570\u636E\u8FC1\u79FB JSON\u3002\n\n```json\n{\n  "schema": "obsidian-project-management/data-migration",\n  "version": 2,\n  "exportedAt": "2026-05-26T12:00:00+08:00",\n  "projects": [],\n  "progressPages": [],\n  "tasks": []\n}\n```\n\n\u4EFB\u52A1\u7D27\u51D1\u89C4\u5219\uFF1A\n\n1. `daily`\u3001`weekly`\u3001`monthly` \u53EF\u7531 `date + recurrence + recurrenceCount/recurrenceUntil` \u63A8\u5BFC\u65F6\uFF0C\u4E0D\u5BFC\u51FA\u5B8C\u6574\u65E5\u671F\u6570\u7EC4\u3002\n2. \u5220\u9664\u6216\u8865\u5145\u8FC7\u7684\u5B9E\u4F8B\u5199\u5165 `occurrencePlan.include` \u548C `occurrencePlan.exclude`\u3002\n3. \u7A7A\u5B57\u6BB5\u548C\u9ED8\u8BA4\u89C6\u56FE\u72B6\u6001\u4E0D\u5BFC\u51FA\u3002\n4. `consumeRequiresCompletion`\u3001`occurrenceStates`\u3001`occurrenceOverrides`\u3001`viewState`\u3001`mindmapComments`\u3001`notes`\u3001`sourceLinks` \u4FDD\u7559\u5B8C\u6574\u4E1A\u52A1\u72B6\u6001\u3002\n\n## \u4ECA\u65E5\u5B8C\u6210\u6781\u7B80 Markdown\n\n\u4ECA\u65E5\u4EFB\u52A1\u9875\u5BFC\u51FA\u6B64\u683C\u5F0F\uFF1A\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n- [ ] \u6BCF\u65E5\u80CC\u8BCD\n- [ ] \u542C\u529B\u7CBE\u542C\n```\n\n\u628A\u5B8C\u6210\u7684\u4EFB\u52A1\u6539\u6210 `[x]` \u540E\u7C98\u56DE\u5FEB\u901F\u8BB0\u5F55\uFF1A\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n- [x] \u6BCF\u65E5\u80CC\u8BCD\n- [ ] \u542C\u529B\u7CBE\u542C\n```\n\n\u89C4\u5219\uFF1A\n\n1. `- [x] \u6807\u9898` \u53EA\u5339\u914D\u540C\u9879\u76EE\u3001\u540C\u6807\u9898\u3001\u4ECA\u5929\u53D1\u751F\u7684\u4EFB\u52A1\u5E76\u5B8C\u6210\u5F53\u5929\u5B9E\u4F8B\u3002\n2. `- [ ] \u6807\u9898` \u4E0D\u521B\u5EFA\u4EFB\u52A1\uFF0C\u4E5F\u4E0D\u8986\u76D6\u4EFB\u52A1\u5B57\u6BB5\u3002\n3. \u627E\u4E0D\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u65F6\u4F1A\u963B\u6B62\u5BFC\u5165\u3002\n\n## \u65B0\u4EFB\u52A1\u8BA1\u5212\u590D\u6742 Markdown\n\n\u590D\u6742 Markdown \u4F7F\u7528 `+ \u4EFB\u52A1\uFF1A`\u3001`+ \u7EC4\u5408\uFF1A` \u548C\u7F29\u8FDB\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A`\u3002\n\n```md\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n+ \u4EFB\u52A1\uFF1A\u642D\u5EFA\u590D\u4E60\u770B\u677F @2026-05-27 09:00-10:30 !high status:doing\n+ \u4EFB\u52A1\uFF1A\u6574\u7406\u9519\u9898\u7D22\u5F15 @2026-05-28 status:todo\n+ \u7EC4\u5408\uFF1A\u62C6\u89E3\u6BCF\u65E5\u80CC\u8BCD @2026-05-27 12:00-12:40 board:todo:0 gantt:order=20 mindmap:order=20,expanded\n  + \u5B50\u4EFB\u52A1\uFF1A\u590D\u4E60\u6628\u5929\u9519\u8BCD @2026-05-27 12:00-12:10 status:todo repeat:daily count:5\n  + \u5B50\u4EFB\u52A1\uFF1A\u65B0\u589E 30 \u4E2A\u9AD8\u9891\u8BCD @2026-05-27 12:10-12:30 status:doing repeat:monthly count:5\n  > \u6BCF\u5929\u5B8C\u6210\u540E\u53EF\u5728\u4ECA\u65E5\u4EFB\u52A1\u9875\u52FE\u9009\u3002\n```\n\n\u89C4\u5219\uFF1A\n\n1. `+ \u4EFB\u52A1\uFF1A` \u8868\u793A\u666E\u901A\u4EFB\u52A1\uFF1B\u5FC5\u987B\u5199\u663E\u5F0F\u65E5\u671F `@YYYY-MM-DD`\u3002\u53EF\u4EE5\u5199\u5B8C\u6574 `@YYYY-MM-DD HH:mm-HH:mm`\uFF0C\u4E5F\u53EF\u4EE5\u53EA\u5199\u65E5\u671F\u8868\u793A\u672A\u6392\u671F\u4EFB\u52A1\u3002\n2. `+ \u7EC4\u5408\uFF1A` \u8868\u793A\u5BB9\u5668\uFF1B\u5BB9\u5668\u4E0D\u652F\u6301\u72B6\u6001\u548C\u91CD\u590D\u89C4\u5219\u3002\n3. \u7F29\u8FDB\u4E24\u4E2A\u6216\u66F4\u591A\u7A7A\u683C\u7684 `+ \u5B50\u4EFB\u52A1\uFF1A` \u5FC5\u987B\u5199\u5728\u67D0\u4E2A `+ \u7EC4\u5408\uFF1A` \u4E0B\u65B9\uFF1B\u5B50\u4EFB\u52A1\u662F\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\u3002\n4. \u65F6\u95F4\u8303\u56F4\u4E3A `00:00` \u81F3 `23:59`\uFF0C\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4\u3002\n5. `#\u9879\u76EE\uFF1A\u9879\u76EE\u540D` \u8868\u793A\u540E\u7EED\u4EFB\u52A1\u5F52\u5165\u8BE5\u9879\u76EE\uFF1B\u9879\u76EE\u4E0D\u5B58\u5728\u65F6\u81EA\u52A8\u521B\u5EFA\u3002\n6. `#\u9879\u76EE\uFF1A` \u6216 `#\u9879\u76EE\uFF1A\u672A\u5F52\u5C5E\u9879\u76EE` \u8868\u793A\u672A\u5F52\u5C5E\u4EFB\u52A1\u3002\n7. \u9879\u76EE\u9875\u6279\u91CF\u5BFC\u5165\u65F6\uFF0C`#\u9879\u76EE\uFF1A` \u5FC5\u987B\u7B49\u4E8E\u5F53\u524D\u9879\u76EE\uFF1B\u540C\u9879\u76EE\u540C\u540D\u4EFB\u52A1\u4F1A\u88AB\u8986\u76D6\u8BA1\u5212\u5B57\u6BB5\u5E76\u4FDD\u7559\u65E2\u6709\u5B8C\u6210\u8BB0\u5F55\uFF0C\u5426\u5219\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002\n8. \u65F6\u95F4\u51B2\u7A81\u4F1A\u81EA\u52A8\u8C03\u6574\u5230\u540C\u65E5 1 \u5206\u949F\u7A7A\u6863\u3002\n9. \u7F29\u8FDB\u4E24\u4E2A\u6216\u66F4\u591A\u7A7A\u683C\u7684 `>` \u884C\u662F\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u5F52\u5165\u5B83\u524D\u9762\u6700\u8FD1\u7684\u4EFB\u52A1\u6216\u5B50\u4EFB\u52A1\uFF1B\u591A\u884C\u63CF\u8FF0\u4F1A\u7528\u6362\u884C\u8FDE\u63A5\u3002\n10. \u53C2\u6570\u7528\u7A7A\u683C\u5206\u9694\uFF1B\u4EFB\u52A1\u6807\u9898\u662F\u79FB\u9664 `@\u65E5\u671F`\u3001`!\u4F18\u5148\u7EA7`\u3001`status`\u3001`repeat` \u7B49\u53C2\u6570\u540E\u5269\u4E0B\u7684\u6587\u672C\u3002\n\n## \u590D\u6742 Markdown \u53C2\u6570\n\n| \u53C2\u6570 | \u793A\u4F8B | \u4F5C\u7528 |\n| --- | --- | --- |\n| `!\u4F18\u5148\u7EA7` | `!low`\u3001`!medium`\u3001`!high`\u3001`!urgent` | \u5199\u5165\u4EFB\u52A1\u4F18\u5148\u7EA7\u3002 |\n| `status` | `status:todo`\u3001`status:doing`\u3001`status:blocked`\u3001`status:done` | \u5199\u5165\u666E\u901A\u4EFB\u52A1\u6216\u5B50\u4EFB\u52A1\u72B6\u6001\u3002 |\n| `repeat` | `repeat:daily`\u3001`repeat:weekly`\u3001`repeat:monthly` | \u91CD\u590D\u89C4\u5219\u3002 |\n| `count` | `count:5` | \u91CD\u590D\u6B21\u6570\uFF1B\u5355\u6B21\u4EFB\u52A1\u4F7F\u7528 `count:1`\u3002 |\n| `until` | `until:2026-06-30` | \u91CD\u590D\u7ED3\u675F\u65E5\u671F\u3002 |\n| `board` | `board:doing:10` | \u770B\u677F\u5217\u4E0E\u6392\u5E8F\u3002 |\n| `gantt` | `gantt:order=10,locked,milestone` | \u7518\u7279\u56FE\u6392\u5E8F\u3001\u9501\u5B9A\u548C\u91CC\u7A0B\u7891\u3002 |\n| `deps` | `deps:%E4%BB%BB%E5%8A%A1A|%E4%BB%BB%E5%8A%A1B` | \u7518\u7279\u4F9D\u8D56\uFF0C\u4EFB\u52A1\u6807\u9898\u4F7F\u7528 URL \u7F16\u7801\u3002 |\n| `parent` | `parent:%E7%BB%84%E5%90%88%E4%BB%BB%E5%8A%A1A` | \u6302\u5165\u540C\u9879\u76EE\u4E0B\u6307\u5B9A\u7EC4\u5408\u4EFB\u52A1\u3002 |\n| `mindmap` | `mindmap:order=20,expanded,x=280,y=120` | \u601D\u7EF4\u5BFC\u56FE\u6392\u5E8F\u3001\u5C55\u5F00\u72B6\u6001\u548C\u5750\u6807\u3002 |\n\n## \u91CD\u590D\u89C4\u5219\u8865\u5145\n\n1. \u4E0D\u5199 `repeat` \u65F6\u9ED8\u8BA4\u4E3A\u5355\u6B21\u4EFB\u52A1\uFF0C\u5373 `daily + count:1`\u3002\n2. \u6C38\u4E45\u91CD\u590D\u5728\u5F39\u7A97\u4E2D\u4F5C\u4E3A\u5FEB\u6377\u9009\u62E9\u4FDD\u5B58\u4E3A `daily + count:2147483647`\u3002\n3. `consumeRequiresCompletion` \u53EA\u901A\u8FC7\u5F39\u7A97\u548C\u6570\u636E\u8FC1\u79FB JSON \u4FDD\u5B58\uFF0C\u590D\u6742 Markdown \u4E0D\u5199\u6B64\u5B57\u6BB5\u3002\n\n## \u7B14\u8BB0\u540C\u6B65\u5757\n\n\u5168\u5E93 Markdown \u626B\u63CF\u53EA\u8BFB\u53D6 `pm:start` \u4E0E `pm:end` \u4E4B\u95F4\u7684\u590D\u6742 Markdown\uFF1A\n\n```md\n<!-- pm:start -->\n#\u9879\u76EE\uFF1A\u82F1\u8BED\u56DB\u7EA7\u51B2\u523A\n+ \u4EFB\u52A1\uFF1A\u542C\u529B\u7CBE\u542C @2026-05-27 20:00-20:30 status:todo\n<!-- pm:end -->\n```\n';
 
 // src/utils/markdownGuide.ts
 var MARKDOWN_FORMAT_GUIDE = markdown_type_default.trimEnd();
@@ -1359,8 +1434,9 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       startTime: patch.startTime === void 0 ? original.startTime : patch.startTime,
       endTime: patch.endTime === void 0 ? original.endTime : patch.endTime,
       recurrence: patch.recurrence ?? original.recurrence,
-      recurrenceCount: patch.recurrenceCount ?? original.recurrenceCount ?? void 0,
-      recurrenceUntil: patch.recurrenceUntil ?? original.recurrenceUntil ?? void 0,
+      recurrenceCount: patch.recurrenceCount === void 0 ? original.recurrenceCount ?? void 0 : patch.recurrenceCount,
+      recurrenceUntil: patch.recurrenceUntil === void 0 ? original.recurrenceUntil ?? void 0 : patch.recurrenceUntil,
+      consumeRequiresCompletion: patch.consumeRequiresCompletion === void 0 ? original.consumeRequiresCompletion : patch.consumeRequiresCompletion,
       occurrenceDates: patch.occurrenceDates ?? original.occurrenceDates,
       occurrenceOverrides: patch.occurrenceOverrides ?? original.occurrenceOverrides,
       subtasks: patch.subtasks ?? original.subtasks,
@@ -1449,7 +1525,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     if (!original.occurrenceDates.includes(date)) {
       throw new Error("\u4EFB\u52A1\u53D1\u751F\u65E5\u671F\u4E0D\u5B58\u5728");
     }
-    if (original.recurrence === "once" && original.occurrenceDates.length === 1) {
+    if (original.occurrenceDates.length === 1) {
       await this.updateTask(
         taskId,
         {
@@ -1511,16 +1587,14 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       throw new Error("\u4EFB\u52A1\u4E0D\u5B58\u5728");
     }
     const next = cloneTask(original);
-    if (patch.status) {
+    if (patch.status && next.kind !== "composite") {
       next.status = normalizeTaskStatus2(patch.status);
       next.viewState = mergeViewState2(next.viewState, { board: { ...next.viewState.board, columnId: next.status } }, next.status);
     }
-    if (patch.priority !== void 0) {
+    if (patch.priority !== void 0 && next.kind !== "composite") {
       next.priority = normalizeTaskPriority2(patch.priority);
     }
-    if (patch.tags) {
-      next.tags = normalizeTags(patch.tags);
-    }
+    next.tags = [];
     if (patch.viewState) {
       next.viewState = mergeViewState2(next.viewState, patch.viewState, next.status);
     }
@@ -2007,8 +2081,8 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     if (next.occurrenceDates.length > 0) {
       next.date = next.occurrenceDates[0];
       next.recurrence = detectRecurrenceFromDates(next.occurrenceDates);
-      next.recurrenceCount = next.recurrence === "once" ? null : next.occurrenceDates.length;
-      next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
+      next.recurrenceCount = next.occurrenceDates.length;
+      next.recurrenceUntil = next.occurrenceDates.length > 1 ? next.occurrenceDates[next.occurrenceDates.length - 1] : null;
     }
     next.updatedAt = toIsoLocal(now());
     next.revision = (next.revision ?? 0) + 1;
@@ -2045,8 +2119,8 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     }, []);
     next.date = next.occurrenceDates[0];
     next.recurrence = detectRecurrenceFromDates(next.occurrenceDates);
-    next.recurrenceCount = next.recurrence === "once" ? null : next.occurrenceDates.length;
-    next.recurrenceUntil = next.recurrence === "once" ? null : next.occurrenceDates[next.occurrenceDates.length - 1];
+    next.recurrenceCount = next.occurrenceDates.length;
+    next.recurrenceUntil = next.occurrenceDates.length > 1 ? next.occurrenceDates[next.occurrenceDates.length - 1] : null;
     next.updatedAt = stamp;
     next.revision = (next.revision ?? 0) + 1;
     this.assertCompositeTaskConsistency([next], /* @__PURE__ */ new Set([task.id]));
@@ -2141,7 +2215,7 @@ var ProjectManagementStore = class extends import_obsidian.Events {
     this.trigger("changed");
   }
   getProjectProgress(projectId) {
-    const progress = summarizeOccurrencesProgress(this.getOccurrencesForProject(projectId));
+    const progress = summarizeOccurrencesProgress(this.getOccurrencesForProject(projectId).filter((occurrence) => occurrence.kind === "simple"));
     if (progress.totalSteps === 0) {
       return 0;
     }
@@ -2457,17 +2531,12 @@ var ProjectManagementStore = class extends import_obsidian.Events {
         throw new Error("\u7ED3\u675F\u65F6\u95F4\u5FC5\u987B\u665A\u4E8E\u5F00\u59CB\u65F6\u95F4");
       }
     }
-    const recurrence = input.recurrence ?? "once";
     const kind = input.kind ?? "simple";
-    const recurrenceCount = recurrence === "once" ? null : normalizePositiveInteger(input.recurrenceCount);
-    const recurrenceUntil = recurrence === "once" ? null : normalizeDateOrUndefined(input.recurrenceUntil);
+    const recurrence = isCompositeKind(kind) ? "daily" : normalizeTaskRecurrence(input.recurrence);
+    const recurrenceUntil = isCompositeKind(kind) ? null : normalizeDateOrUndefined(input.recurrenceUntil);
+    const normalizedRecurrenceCount = normalizePositiveInteger(input.recurrenceCount);
+    const recurrenceCount = isCompositeKind(kind) ? SINGLE_TASK_RECURRENCE_COUNT : normalizedRecurrenceCount ?? (recurrenceUntil ? null : SINGLE_TASK_RECURRENCE_COUNT);
     const subtasks = normalizeSubtaskInputs(input.subtasks, kind);
-    if (recurrence !== "once" && recurrence !== "custom" && !recurrenceCount && !recurrenceUntil) {
-      throw new Error("\u91CD\u590D\u4EFB\u52A1\u5FC5\u987B\u586B\u5199\u91CD\u590D\u6B21\u6570\u6216\u7ED3\u675F\u65E5\u671F");
-    }
-    if (recurrence === "custom" && !input.occurrenceDates?.length) {
-      throw new Error("\u81EA\u5B9A\u4E49\u91CD\u590D\u5FC5\u987B\u63D0\u4F9B\u53D1\u751F\u65E5\u671F\u96C6\u5408");
-    }
     if (recurrenceUntil && compareDateKeys(recurrenceUntil, date) < 0) {
       throw new Error("\u91CD\u590D\u7ED3\u675F\u65E5\u671F\u4E0D\u80FD\u65E9\u4E8E\u9996\u4E2A\u4EFB\u52A1\u65E5\u671F");
     }
@@ -2478,13 +2547,14 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       projectId: input.projectId || void 0,
       status: normalizeTaskStatus2(input.status),
       priority: normalizeTaskPriority2(input.priority),
-      tags: normalizeTags(input.tags),
+      tags: [],
       date,
       startTime,
       endTime,
       recurrence,
       recurrenceCount,
       recurrenceUntil,
+      consumeRequiresCompletion: isCompositeKind(kind) ? false : Boolean(input.consumeRequiresCompletion),
       occurrenceDates: normalizeOccurrenceDates(input.occurrenceDates),
       completedOccurrenceDates: normalizeOccurrenceDates(input.completedOccurrenceDates),
       occurrenceOverrides: normalizeOccurrenceOverrides(input.occurrenceOverrides),
@@ -2515,20 +2585,21 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       title: input.title,
       description: input.description,
       projectId: input.projectId,
-      status: input.status ?? original?.status ?? "todo",
-      priority: input.priority ?? original?.priority,
-      tags: [...input.tags ?? original?.tags ?? []],
+      status: input.kind === "composite" ? "todo" : input.status ?? original?.status ?? "todo",
+      priority: input.kind === "composite" ? void 0 : input.priority ?? original?.priority,
+      tags: [],
       date: occurrenceDates[0],
       startTime: input.startTime,
       endTime: input.endTime,
-      recurrence: input.recurrence,
-      recurrenceCount: input.recurrenceCount ?? null,
-      recurrenceUntil: input.recurrenceUntil ?? null,
+      recurrence: input.kind === "composite" ? "daily" : input.recurrence,
+      recurrenceCount: input.kind === "composite" ? SINGLE_TASK_RECURRENCE_COUNT : input.recurrenceCount ?? null,
+      recurrenceUntil: input.kind === "composite" ? null : input.recurrenceUntil ?? null,
+      consumeRequiresCompletion: input.kind === "composite" ? false : Boolean(input.consumeRequiresCompletion),
       subtasks,
       occurrenceDates,
       occurrenceStates,
       occurrenceOverrides: (input.occurrenceOverrides ?? original?.occurrenceOverrides ?? []).filter((override) => occurrenceDates.includes(override.date)),
-      viewState: mergeViewState2(original?.viewState, input.viewState, input.status ?? original?.status ?? "todo"),
+      viewState: mergeViewState2(original?.viewState, input.viewState, input.kind === "composite" ? "todo" : input.status ?? original?.status ?? "todo"),
       sourceLinks: input.sourceLinks ?? original?.sourceLinks ?? [],
       notes: input.notes ?? original?.notes ?? [],
       mindmapComments: normalizeMindmapComments(input.mindmapComments ?? original?.mindmapComments, id),
@@ -2703,7 +2774,8 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       date: today,
       startTime: "09:00",
       endTime: "10:00",
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       viewState: {
         board: { columnId: "doing", order: 10 },
         mindmap: { parentTaskId: null, childOrder: 10, expanded: true, x: 280, y: 110 }
@@ -2747,7 +2819,8 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       date: today,
       startTime: "10:30",
       endTime: "11:30",
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       kind: "composite",
       viewState: {
         board: { columnId: "todo", order: 20 },
@@ -2763,7 +2836,8 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       date: today,
       startTime: "10:35",
       endTime: "10:50",
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       viewState: {
         board: { columnId: "todo", order: 21 },
         mindmap: { parentTaskId: buildTask.id, childOrder: 10, expanded: true, x: 800, y: 210 }
@@ -2810,7 +2884,8 @@ var ProjectManagementStore = class extends import_obsidian.Events {
       date: today,
       startTime: "17:00",
       endTime: "17:30",
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       completed: true,
       viewState: {
         board: { columnId: "done", order: 30 },
@@ -3147,7 +3222,8 @@ var ProjectManagementStore = class extends import_obsidian.Events {
 };
 function normalizeStoredTask(task) {
   const kind = task.kind ?? "simple";
-  const status = normalizeTaskStatus2(task.status);
+  const status = kind === "composite" ? "todo" : normalizeTaskStatus2(task.status);
+  const recurrence = kind === "composite" ? "daily" : normalizeTaskRecurrence(task.recurrence);
   const startTime = normalizeClockTime(task.startTime, "\u5F00\u59CB\u65F6\u95F4");
   const endTime = normalizeClockTime(task.endTime, "\u7ED3\u675F\u65F6\u95F4");
   if (startTime && !endTime || !startTime && endTime) {
@@ -3166,8 +3242,12 @@ function normalizeStoredTask(task) {
     ...task,
     kind,
     status,
-    priority: normalizeTaskPriority2(task.priority),
-    tags: normalizeTags(task.tags),
+    priority: kind === "composite" ? void 0 : normalizeTaskPriority2(task.priority),
+    tags: [],
+    recurrence,
+    recurrenceCount: kind === "composite" ? SINGLE_TASK_RECURRENCE_COUNT : normalizePositiveInteger(task.recurrenceCount),
+    recurrenceUntil: kind === "composite" ? null : normalizeDateOrUndefined(task.recurrenceUntil),
+    consumeRequiresCompletion: kind === "composite" ? false : Boolean(task.consumeRequiresCompletion),
     startTime,
     endTime,
     subtasks,
@@ -3290,6 +3370,7 @@ function expandTask(task) {
       recurrence: task.recurrence,
       recurrenceCount: task.recurrenceCount ?? null,
       recurrenceUntil: task.recurrenceUntil ?? null,
+      consumeRequiresCompletion: task.consumeRequiresCompletion,
       subtasks: task.subtasks.map((item) => ({ ...item })),
       sourceLinks: task.sourceLinks.map((item) => ({ ...item })),
       notes: task.notes.map((item) => ({ ...item })),
@@ -3306,37 +3387,24 @@ function expandTask(task) {
   });
 }
 function buildOccurrenceDates(input) {
-  if (input.recurrence === "custom" && input.occurrenceDates?.length) {
-    return [...new Set(input.occurrenceDates)].sort(compareDateKeys);
-  }
-  if (input.recurrence === "custom") {
-    throw new Error("\u81EA\u5B9A\u4E49\u91CD\u590D\u5FC5\u987B\u63D0\u4F9B\u53D1\u751F\u65E5\u671F\u96C6\u5408");
-  }
-  const countLimit = input.recurrenceCount ?? (input.recurrence === "once" ? 1 : 365);
+  const recurrence = normalizeTaskRecurrence(input.recurrence);
+  const countLimit = Math.min(input.recurrenceCount ?? MAX_GENERATED_OCCURRENCES, MAX_GENERATED_OCCURRENCES);
   const until = input.recurrenceUntil ?? null;
   const dates = [];
   let cursor = parseDateKey(input.date);
+  const anchorDay = cursor.getDate();
   let createdCount = 0;
   while (true) {
     const dateKey = toDateKey(cursor);
     if (until && compareDateKeys(dateKey, until) > 0) {
       break;
     }
-    if (input.recurrence !== "once" && input.recurrenceCount && createdCount >= input.recurrenceCount) {
-      break;
-    }
-    if (input.recurrence === "once" && createdCount >= 1) {
+    if (createdCount >= countLimit) {
       break;
     }
     dates.push(dateKey);
     createdCount += 1;
-    if (input.recurrence === "once") {
-      break;
-    }
-    cursor = addDays(cursor, input.recurrence === "daily" ? 1 : 7);
-    if (createdCount >= countLimit && !input.recurrenceCount) {
-      break;
-    }
+    cursor = advanceRecurrenceDate(cursor, recurrence, anchorDay);
   }
   if (dates.length === 0) {
     throw new Error("\u672A\u751F\u6210\u4EFB\u4F55\u4EFB\u52A1\uFF0C\u8BF7\u68C0\u67E5\u91CD\u590D\u7ED3\u675F\u65E5\u671F");
@@ -3402,40 +3470,12 @@ function getAllSubtaskIds(task) {
   return [];
 }
 function assertCompositeDefinitionValid(task) {
-  if (task.kind !== "composite") {
-    return;
-  }
-  const parentStart = parseTimeToMinutes(task.startTime);
-  const parentEnd = parseTimeToMinutes(task.endTime);
-  if (parentStart === null || parentEnd === null) {
-    throw new Error("\u7EC4\u5408\u4EFB\u52A1\u5FC5\u987B\u586B\u5199\u5F00\u59CB\u65F6\u95F4\u548C\u7ED3\u675F\u65F6\u95F4");
-  }
+  return;
 }
 function assertChildTaskWithinComposite(child, parent) {
   if (child.kind === "composite") {
     throw new Error(`\u5B50\u4EFB\u52A1\u300C${child.title}\u300D\u4E0D\u80FD\u662F\u7EC4\u5408\u4EFB\u52A1`);
   }
-  const parentOccurrences = expandTask(parent);
-  const childOccurrences = expandTask(child);
-  childOccurrences.forEach((childOccurrence) => {
-    const parentOccurrence = parentOccurrences.find((occurrence) => occurrence.date === childOccurrence.date);
-    if (!parentOccurrence) {
-      throw new Error(`\u5B50\u4EFB\u52A1\u300C${child.title}\u300D\u5FC5\u987B\u53D1\u751F\u5728\u7EC4\u5408\u4EFB\u52A1\u300C${parent.title}\u300D\u7684\u65E5\u671F\u8303\u56F4\u5185`);
-    }
-    const parentStart = parseTimeToMinutes(parentOccurrence.startTime);
-    const parentEnd = parseTimeToMinutes(parentOccurrence.endTime);
-    const childStart = parseTimeToMinutes(childOccurrence.startTime);
-    const childEnd = parseTimeToMinutes(childOccurrence.endTime);
-    if (parentStart === null || parentEnd === null) {
-      throw new Error(`\u7EC4\u5408\u4EFB\u52A1\u300C${parent.title}\u300D\u5FC5\u987B\u586B\u5199\u5F00\u59CB\u65F6\u95F4\u548C\u7ED3\u675F\u65F6\u95F4`);
-    }
-    if (childStart === null || childEnd === null) {
-      throw new Error(`\u6302\u5165\u7EC4\u5408\u4EFB\u52A1\u7684\u5B50\u4EFB\u52A1\u300C${child.title}\u300D\u5FC5\u987B\u586B\u5199\u5F00\u59CB\u65F6\u95F4\u548C\u7ED3\u675F\u65F6\u95F4`);
-    }
-    if (childStart < parentStart || childEnd > parentEnd) {
-      throw new Error(`\u5B50\u4EFB\u52A1\u300C${child.title}\u300D\u5FC5\u987B\u5728\u7EC4\u5408\u4EFB\u52A1\u300C${parent.title}\u300D\u7684\u65F6\u95F4\u8303\u56F4\u5185`);
-    }
-  });
 }
 function buildNormalizedOccurrenceState(date, kind, subtasks, completedSubtaskIds, completedAt) {
   if (kind === "simple") {
@@ -3509,6 +3549,9 @@ function getOccurrenceProgress(task, date) {
 function summarizeOccurrencesProgress(occurrences) {
   return occurrences.reduce(
     (summary, occurrence) => {
+      if (!shouldConsumeOccurrence(occurrence)) {
+        return summary;
+      }
       summary.totalSteps += occurrence.totalSteps;
       summary.completedSteps += occurrence.completedSteps;
       return summary;
@@ -3529,21 +3572,6 @@ function assertMutableOccurrenceDate(date) {
 }
 function isTaskFullyCompleted2(task) {
   return task.occurrenceDates.length > 0 && task.occurrenceDates.every((date) => getOccurrenceProgress(task, date).completed);
-}
-function detectRecurrenceFromDates(dates) {
-  if (dates.length <= 1) {
-    return "once";
-  }
-  const first = parseDateKey(dates[0]);
-  const second = parseDateKey(dates[1]);
-  const diffDays = Math.round((second.getTime() - first.getTime()) / (24 * 60 * 60 * 1e3));
-  if (diffDays === 1) {
-    return "daily";
-  }
-  if (diffDays === 7) {
-    return "weekly";
-  }
-  return "custom";
 }
 function normalizePositiveInteger(value) {
   if (value === null || value === void 0 || value === 0) {
@@ -3585,9 +3613,6 @@ function normalizeTaskPriority2(value) {
     return value;
   }
   return void 0;
-}
-function normalizeTags(tags) {
-  return [...new Set((tags ?? []).map((tag) => tag.trim()).filter(Boolean))];
 }
 function normalizeOccurrenceDates(dates) {
   if (!dates) {
@@ -3898,7 +3923,7 @@ function snapMinutes(value, slot) {
   return Math.ceil(value / slot) * slot;
 }
 function applyOccurrenceWindow(task, date, startTime, endTime) {
-  if (task.recurrence === "once" && task.occurrenceDates.length === 1 && task.date === date) {
+  if (task.occurrenceDates.length === 1 && task.date === date) {
     task.startTime = startTime;
     task.endTime = endTime;
     return;
@@ -4293,7 +4318,7 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
         "\u4ECA\u65E5\u5B8C\u6210\u53EA\u4F7F\u7528\u6781\u7B80 - [x] \u6807\u9898\uFF1B\u627E\u4E0D\u5230\u4ECA\u65E5\u5DF2\u6709\u4EFB\u52A1\u4F1A\u62A5\u9519\uFF0C\u4E0D\u4F1A\u521B\u5EFA\u65B0\u4EFB\u52A1\u3002",
         "\u7EC4\u5408\u8BA1\u5212\u53EF\u5728\u4E0B\u65B9\u7F29\u8FDB\u5199 + \u5B50\u4EFB\u52A1\uFF1A\uFF0C\u5B50\u4EFB\u52A1\u4F1A\u4F5C\u4E3A\u72EC\u7ACB\u666E\u901A\u4EFB\u52A1\u6302\u5165\u7EC4\u5408\u4EFB\u52A1\u3002",
         "\u4EFB\u52A1\u884C\u4E0B\u7F29\u8FDB > \u63CF\u8FF0 \u53EF\u5199\u5165\u4EFB\u52A1\u63CF\u8FF0\uFF0C\u591A\u884C\u63CF\u8FF0\u4F1A\u6309\u6362\u884C\u5408\u5E76\u3002",
-        "\u652F\u6301\u5355\u6B21\u3001\u6BCF\u65E5\u3001\u6BCF\u5468\u6B64\u65F6\uFF1Arepeat:once / daily / weekly\uFF1B\u9700\u8981\u9650\u5236\u6B21\u6570\u53EF\u7EE7\u7EED\u5199 count:4 \u6216 until:2026-06-30\u3002",
+        "\u652F\u6301\u6BCF\u65E5\u3001\u6BCF\u5468\u3001\u6BCF\u6708\u6B64\u65F6\uFF1Arepeat:daily / weekly / monthly\uFF1B\u5355\u6B21\u4EFB\u52A1\u4F7F\u7528 count:1\u3002",
         "\u8BA1\u5212\u6587\u672C\u652F\u6301 board\u3001gantt\u3001deps\u3001mindmap \u89C6\u56FE\u72B6\u6001\uFF1B\u5B8C\u6210\u8BB0\u5F55\u8BF7\u4F7F\u7528\u6570\u636E\u8FC1\u79FB JSON\u3002"
       ].forEach((item) => importHint.createDiv({ cls: "pm-settings-note-item", text: item }));
     }
@@ -4534,7 +4559,7 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
       ] : [
         ["\u4EFB\u52A1\u603B\u6570", String(preview.summary.total)],
         ["\u666E\u901A / \u7EC4\u5408", `${preview.tasks.filter((task) => task.input.kind !== "composite").length} / ${preview.summary.composite}`],
-        ["\u5355\u6B21 / \u6BCF\u65E5 / \u6BCF\u5468", `${preview.tasks.filter((task) => task.input.recurrence === "once").length} / ${preview.tasks.filter((task) => task.input.recurrence === "daily").length} / ${preview.tasks.filter((task) => task.input.recurrence === "weekly").length}`],
+        ["\u6BCF\u65E5 / \u6BCF\u5468 / \u6BCF\u6708", `${preview.tasks.filter((task) => task.input.recurrence === "daily").length} / ${preview.tasks.filter((task) => task.input.recurrence === "weekly").length} / ${preview.tasks.filter((task) => task.input.recurrence === "monthly").length}`],
         ["\u65B0\u589E / \u8986\u76D6", `${preview.summary.createCount} / ${preview.summary.overwriteCount}`]
       ];
       summaryItems.forEach(([label, value]) => {
@@ -4593,12 +4618,12 @@ var _QuickDialogView = class _QuickDialogView extends BaseProjectView {
     if (this.target === "quick-task") {
       return [
         "#\u9879\u76EE\uFF1A\u65B0\u7684\u5B66\u4E60\u8BA1\u5212",
-        "+ \u4EFB\u52A1\uFF1A\u666E\u901A\u4EFB\u52A1 @2026-05-18 09:00-10:00 #tag !high status:doing",
-        "+ \u7EC4\u5408\uFF1A\u7EC4\u5408\u4EFB\u52A1 @2026-05-18 14:00-15:00 #plan !medium status:todo",
-        "  + \u5B50\u4EFB\u52A1\uFF1A\u5B50\u4EFB\u52A1\u4E00 @2026-05-18 14:05-14:25 #plan status:todo",
-        "  + \u5B50\u4EFB\u52A1\uFF1A\u5B50\u4EFB\u52A1\u4E8C @2026-05-18 14:25-14:45 #plan status:todo",
-        "+ \u4EFB\u52A1\uFF1A\u6BCF\u65E5\u590D\u4E60 @2026-05-18 20:00-20:30 #review repeat:daily count:5",
-        "+ \u4EFB\u52A1\uFF1A\u6BCF\u5468\u56DE\u987E @2026-05-18 21:00-21:30 #review status:todo repeat:weekly count:4"
+        "+ \u4EFB\u52A1\uFF1A\u666E\u901A\u4EFB\u52A1 @2026-05-18 09:00-10:00 !high status:doing",
+        "+ \u7EC4\u5408\uFF1A\u7EC4\u5408\u4EFB\u52A1 @2026-05-18 14:00-15:00",
+        "  + \u5B50\u4EFB\u52A1\uFF1A\u5B50\u4EFB\u52A1\u4E00 @2026-05-18 14:05-14:25 status:todo",
+        "  + \u5B50\u4EFB\u52A1\uFF1A\u5B50\u4EFB\u52A1\u4E8C @2026-05-18 14:25-14:45 status:todo",
+        "+ \u4EFB\u52A1\uFF1A\u6BCF\u65E5\u590D\u4E60 @2026-05-18 20:00-20:30 repeat:daily count:5",
+        "+ \u4EFB\u52A1\uFF1A\u6BCF\u6708\u56DE\u987E @2026-05-18 21:00-21:30 status:todo repeat:monthly count:4"
       ].join("\n");
     }
     if (this.target === "mindmap") {
@@ -4898,14 +4923,14 @@ function buildQuickTaskShortcuts() {
     {
       label: "\u7EC4\u5408\u4EFB\u52A1",
       hint: "\u63D2\u5165\u7EC4\u5408\u4EFB\u52A1\u6A21\u677F\u548C\u4E24\u4E2A\u5B50\u4EFB\u52A1",
-      snippet: `+ \u7EC4\u5408\uFF1A\u7EC4\u5408\u4EFB\u52A1 @${today} 10:00-11:00 status:todo
+      snippet: `+ \u7EC4\u5408\uFF1A\u7EC4\u5408\u4EFB\u52A1 @${today} 10:00-11:00
   + \u5B50\u4EFB\u52A1\uFF1A\u5B50\u4EFB\u52A1\u4E00 @${today} 10:05-10:25 status:todo
   + \u5B50\u4EFB\u52A1\uFF1A\u5B50\u4EFB\u52A1\u4E8C @${today} 10:25-10:45 status:todo`
     },
     {
       label: "\u5355\u6B21",
       hint: "\u63D2\u5165\u5355\u6B21\u4EFB\u52A1\u6A21\u677F",
-      snippet: `+ \u4EFB\u52A1\uFF1A\u5355\u6B21\u4EFB\u52A1 @${today} 14:00-14:30 repeat:once status:todo`
+      snippet: `+ \u4EFB\u52A1\uFF1A\u5355\u6B21\u4EFB\u52A1 @${today} 14:00-14:30 count:1 status:todo`
     },
     {
       label: "\u6BCF\u65E5",
@@ -4916,6 +4941,11 @@ function buildQuickTaskShortcuts() {
       label: "\u6BCF\u5468\u6B64\u65F6",
       hint: "\u63D2\u5165\u6BCF\u5468\u91CD\u590D\u6A21\u677F",
       snippet: `+ \u4EFB\u52A1\uFF1A\u6BCF\u5468\u4EFB\u52A1 @${today} 21:00-21:30 repeat:weekly count:4 status:todo`
+    },
+    {
+      label: "\u6BCF\u6708\u6B64\u65F6",
+      hint: "\u63D2\u5165\u6BCF\u6708\u91CD\u590D\u6A21\u677F",
+      snippet: `+ \u4EFB\u52A1\uFF1A\u6BCF\u6708\u4EFB\u52A1 @${today} 21:00-21:30 repeat:monthly count:6 status:todo`
     },
     {
       label: "\u672A\u5F52\u5C5E\u9879\u76EE",
@@ -4993,16 +5023,7 @@ function statusText(status) {
   return "\u5F85\u529E";
 }
 function recurrenceText(recurrence) {
-  if (recurrence === "daily") {
-    return "\u6BCF\u65E5";
-  }
-  if (recurrence === "weekly") {
-    return "\u6BCF\u5468\u6B64\u65F6";
-  }
-  if (recurrence === "custom") {
-    return "\u81EA\u5B9A\u4E49";
-  }
-  return "\u5355\u6B21";
+  return recurrenceLabel(recurrence);
 }
 function importActionText(action) {
   if (action === "complete-series") {
@@ -5047,20 +5068,11 @@ var DayTasksModal = class extends import_obsidian6.Modal {
       copy.createEl("div", { text: `${task.completed ? "\u2713" : "\u25CB"} ${task.title}`, cls: `pm-task-title ${task.completed ? "is-complete" : ""}` });
       const meta = copy.createDiv({ cls: "pm-task-meta" });
       meta.createSpan({ text: task.startTime && task.endTime ? `${task.startTime} - ${task.endTime}` : "\u672A\u6392\u671F" });
-      meta.createSpan({ text: recurrenceLabel(task) });
+      meta.createSpan({ text: recurrenceLabel(task.recurrence) });
       meta.createSpan({ text: this.options.getProject(task.projectId)?.name ?? "\u672A\u5F52\u5C5E\u9879\u76EE" });
     });
   }
 };
-function recurrenceLabel(task) {
-  if (task.recurrence === "daily") {
-    return "\u6BCF\u65E5\u91CD\u590D";
-  }
-  if (task.recurrence === "weekly") {
-    return "\u6BCF\u5468\u6B64\u65F6\u91CD\u590D";
-  }
-  return "\u5355\u6B21\u4EFB\u52A1";
-}
 
 // src/components/bulkImportModal.ts
 var import_obsidian7 = require("obsidian");
@@ -5092,7 +5104,7 @@ var BulkImportModal = class extends import_obsidian7.Modal {
     );
     const input = contentEl.createEl("textarea", {
       cls: "pm-bulk-import-input",
-      placeholder: "#\u9879\u76EE\uFF1A\u63D2\u4EF6\u4F53\u9A8C\u793A\u4F8B\n+ \u7EC4\u5408\uFF1A\u5F00\u53D1\u4EFB\u52A1\u89E3\u6790\u5668 @2026-05-18 09:00-10:30 #parser !high status:doing\n  + \u5B50\u4EFB\u52A1\uFF1A\u89E3\u6790\u6807\u9898 @2026-05-18 09:05-09:30 #parser status:todo\n  + \u5B50\u4EFB\u52A1\uFF1A\u89E3\u6790\u65E5\u671F @2026-05-18 09:30-10:00 #parser status:todo\n+ \u4EFB\u52A1\uFF1A\u6BCF\u65E5\u56DE\u987E\u8F93\u5165\u6D41\u7A0B @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n+ \u4EFB\u52A1\uFF1A\u6BCF\u5468\u590D\u76D8\u5BFC\u5165\u6D41\u7A0B @2026-05-18 20:30-21:00 #review status:todo repeat:weekly count:4"
+      placeholder: "#\u9879\u76EE\uFF1A\u63D2\u4EF6\u4F53\u9A8C\u793A\u4F8B\n+ \u7EC4\u5408\uFF1A\u5F00\u53D1\u4EFB\u52A1\u89E3\u6790\u5668 @2026-05-18 09:00-10:30\n  + \u5B50\u4EFB\u52A1\uFF1A\u89E3\u6790\u6807\u9898 @2026-05-18 09:05-09:30 status:todo\n  + \u5B50\u4EFB\u52A1\uFF1A\u89E3\u6790\u65E5\u671F @2026-05-18 09:30-10:00 status:todo\n+ \u4EFB\u52A1\uFF1A\u6BCF\u65E5\u56DE\u987E\u8F93\u5165\u6D41\u7A0B @2026-05-18 20:00-20:20 status:todo repeat:daily count:5\n+ \u4EFB\u52A1\uFF1A\u6708\u5EA6\u590D\u76D8\u5BFC\u5165\u6D41\u7A0B @2026-05-18 20:30-21:00 status:todo repeat:monthly count:4"
     });
     input.addEventListener("input", () => {
       state.text = input.value;
@@ -5151,7 +5163,7 @@ var BulkImportModal = class extends import_obsidian7.Modal {
           const line = [
             importActionText2(task.action),
             task.input.kind === "composite" ? "\u7EC4\u5408\u4EFB\u52A1" : "\u666E\u901A\u4EFB\u52A1",
-            task.input.recurrence === "daily" ? "\u6BCF\u65E5" : task.input.recurrence === "weekly" ? "\u6BCF\u5468\u6B64\u65F6" : "\u5355\u6B21",
+            recurrenceLabel(task.input.recurrence),
             task.projectName ?? "\u672A\u5F52\u5C5E\u9879\u76EE",
             task.input.completed ? "\u5DF2\u52FE\u9009\u5B8C\u6210" : task.input.status === "doing" ? "\u8FDB\u884C\u4E2D" : task.input.status === "blocked" ? "\u963B\u585E" : "\u5F85\u529E",
             task.input.date,
@@ -5257,28 +5269,10 @@ function formatOptionalTimeRange(item) {
   return item.startTime && item.endTime ? `${item.startTime}-${item.endTime}` : "";
 }
 function formatTaskRecurrenceLabel(recurrence) {
-  if (recurrence === "daily") {
-    return "\u6BCF\u65E5\u91CD\u590D";
-  }
-  if (recurrence === "weekly") {
-    return "\u6BCF\u5468\u6B64\u65F6\u91CD\u590D";
-  }
-  if (recurrence === "custom") {
-    return "\u81EA\u5B9A\u4E49\u91CD\u590D";
-  }
-  return "\u5355\u6B21\u4EFB\u52A1";
+  return recurrenceLabel(recurrence);
 }
 function formatTaskStatusLabel(status) {
-  if (status === "doing") {
-    return "\u8FDB\u884C\u4E2D";
-  }
-  if (status === "blocked") {
-    return "\u963B\u585E";
-  }
-  if (status === "done") {
-    return "\u5DF2\u5B8C\u6210";
-  }
-  return "\u5F85\u529E";
+  return statusLabel(status);
 }
 function renderSubtaskCardBody(container, title, metaParts) {
   container.createDiv({ cls: "pm-subtask-title", text: title });
@@ -5384,6 +5378,9 @@ var TaskModal = class extends import_obsidian10.Modal {
     contentEl.createEl("h2", { text: this.options.title });
     const state = { ...this.options.initial };
     state.kind = state.kind ?? "simple";
+    state.recurrence = state.recurrence ?? "daily";
+    state.recurrenceCount = state.recurrenceCount ?? SINGLE_TASK_RECURRENCE_COUNT;
+    state.consumeRequiresCompletion = Boolean(state.consumeRequiresCompletion);
     state.subtasks = [];
     state.viewState = cloneTaskInputViewState(state.viewState);
     const isOccurrenceEditor = Boolean(this.options.occurrenceContext);
@@ -5424,8 +5421,14 @@ var TaskModal = class extends import_obsidian10.Modal {
           state.subtasks = [];
           if (state.kind === "composite") {
             state.viewState = withMindmapParent(state.viewState, null);
+            state.recurrence = "daily";
+            state.recurrenceCount = SINGLE_TASK_RECURRENCE_COUNT;
+            state.recurrenceUntil = null;
+            state.consumeRequiresCompletion = false;
             renderParentField();
           }
+          renderExecutionFields();
+          renderRecurrenceFields();
           renderSubtaskFields();
         });
       });
@@ -5477,6 +5480,7 @@ var TaskModal = class extends import_obsidian10.Modal {
     let projectDropdown = null;
     let renderParentField = () => void 0;
     let clearParentIfDisallowed = () => void 0;
+    let renderExecutionFields = () => void 0;
     if (!isOccurrenceEditor && relationSection && recurrenceSection && subtaskSection) {
       const relationGrid = relationSection.createDiv({ cls: "pm-task-field-grid" });
       new import_obsidian10.Setting(relationGrid).setName("\u6240\u5C5E\u9879\u76EE").addDropdown((dropdown) => {
@@ -5553,51 +5557,60 @@ var TaskModal = class extends import_obsidian10.Modal {
         });
       };
       renderParentField();
-      new import_obsidian10.Setting(relationGrid).setName("\u72B6\u6001").addDropdown((dropdown) => {
-        const labels = {
-          todo: "\u5F85\u529E",
-          doing: "\u8FDB\u884C\u4E2D",
-          blocked: "\u963B\u585E",
-          done: "\u5DF2\u5B8C\u6210"
-        };
-        Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
-        dropdown.setValue(state.status ?? "todo");
-        dropdown.onChange((value) => {
-          state.status = value;
+      const executionFields = relationSection.createDiv({ cls: "pm-task-nested-fields pm-task-execution-fields" });
+      renderExecutionFields = () => {
+        executionFields.empty();
+        if (state.kind === "composite") {
+          executionFields.createDiv({ cls: "pm-muted", text: "\u7EC4\u5408\u4EFB\u52A1\u662F\u5BB9\u5668\uFF0C\u4E0D\u8BBE\u7F6E\u72B6\u6001\u3001\u4F18\u5148\u7EA7\u6216\u91CD\u590D\u6267\u884C\u89C4\u5219\u3002" });
+          return;
+        }
+        const executionGrid = executionFields.createDiv({ cls: "pm-task-field-grid" });
+        new import_obsidian10.Setting(executionGrid).setName("\u72B6\u6001").addDropdown((dropdown) => {
+          ["todo", "doing", "blocked", "done"].forEach((key) => dropdown.addOption(key, statusLabel(key)));
+          dropdown.setValue(state.status ?? "todo");
+          dropdown.onChange((value) => {
+            state.status = value;
+          });
         });
-      });
-      new import_obsidian10.Setting(relationGrid).setName("\u4F18\u5148\u7EA7").addDropdown((dropdown) => {
-        dropdown.addOption("", "\u65E0");
-        const labels = {
-          low: "\u4F4E",
-          medium: "\u4E2D",
-          high: "\u9AD8",
-          urgent: "\u7D27\u6025"
-        };
-        Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
-        dropdown.setValue(state.priority ?? "");
-        dropdown.onChange((value) => {
-          state.priority = value || void 0;
+        new import_obsidian10.Setting(executionGrid).setName("\u4F18\u5148\u7EA7").addDropdown((dropdown) => {
+          dropdown.addOption("", "\u65E0");
+          const labels = {
+            low: "\u4F4E",
+            medium: "\u4E2D",
+            high: "\u9AD8",
+            urgent: "\u7D27\u6025"
+          };
+          Object.keys(labels).forEach((key) => dropdown.addOption(key, labels[key]));
+          dropdown.setValue(state.priority ?? "");
+          dropdown.onChange((value) => {
+            state.priority = value || void 0;
+          });
         });
-      });
-      new import_obsidian10.Setting(relationSection).setName("\u6807\u7B7E").setDesc("\u591A\u4E2A\u6807\u7B7E\u7528\u9017\u53F7\u5206\u9694").addText(
-        (text) => text.setPlaceholder("\u4F8B\u5982 parser, ui").setValue((state.tags ?? []).join(", ")).onChange((value) => {
-          state.tags = value.split(",").map((item) => item.trim()).filter(Boolean);
-        })
-      );
-      new import_obsidian10.Setting(recurrenceSection).setName("\u91CD\u590D\u7C7B\u578B").setDesc("\u5355\u6B21\u3001\u6BCF\u65E5\u91CD\u590D\u3001\u6BCF\u5468\u6B64\u65F6\u91CD\u590D").addDropdown((dropdown) => {
+      };
+      renderExecutionFields();
+      new import_obsidian10.Setting(recurrenceSection).setName("\u91CD\u590D\u7C7B\u578B").setDesc("\u5355\u6B21\u548C\u6C38\u4E45\u91CD\u590D\u662F\u5FEB\u6377\u9009\u62E9\uFF0C\u6838\u5FC3\u7C7B\u578B\u4E3A\u6BCF\u65E5/\u6BCF\u5468/\u6BCF\u6708\u6B64\u65F6\u91CD\u590D").addDropdown((dropdown) => {
         const labels = [
-          ["once", "\u5355\u6B21\u4EFB\u52A1"],
-          ["daily", "\u6BCF\u65E5\u91CD\u590D"],
-          ["weekly", "\u6BCF\u5468\u6B64\u65F6\u91CD\u590D"]
+          ["single", "\u5355\u6B21\u4EFB\u52A1"],
+          ["daily", recurrenceLabel("daily")],
+          ["weekly", recurrenceLabel("weekly")],
+          ["monthly", recurrenceLabel("monthly")],
+          ["permanent", "\u6C38\u4E45\u91CD\u590D"]
         ];
         labels.forEach(([key, label]) => dropdown.addOption(key, label));
-        dropdown.setValue(state.recurrence);
+        dropdown.setValue(recurrencePresetForState(state));
         dropdown.onChange((value) => {
-          state.recurrence = value;
-          if (state.recurrence === "once") {
-            state.recurrenceCount = null;
+          const preset = value;
+          if (preset === "single") {
+            state.recurrence = "daily";
+            state.recurrenceCount = SINGLE_TASK_RECURRENCE_COUNT;
             state.recurrenceUntil = null;
+          } else if (preset === "permanent") {
+            state.recurrence = "daily";
+            state.recurrenceCount = PERMANENT_RECURRENCE_COUNT;
+            state.recurrenceUntil = null;
+          } else {
+            state.recurrence = preset;
+            state.recurrenceCount = state.recurrenceCount ?? SINGLE_TASK_RECURRENCE_COUNT;
           }
           renderRecurrenceFields();
         });
@@ -5610,10 +5623,12 @@ var TaskModal = class extends import_obsidian10.Modal {
         return;
       }
       recurrenceFields.empty();
-      if (state.recurrence === "once") {
+      if (state.kind === "composite") {
+        recurrenceSection?.addClass("is-hidden");
         return;
       }
-      new import_obsidian10.Setting(recurrenceFields).setName("\u91CD\u590D\u6B21\u6570").setDesc("\u91CD\u590D\u4EFB\u52A1\u81F3\u5C11\u586B\u5199\u6B21\u6570\u6216\u7ED3\u675F\u65E5\u671F\u4E4B\u4E00").addText(
+      recurrenceSection?.removeClass("is-hidden");
+      new import_obsidian10.Setting(recurrenceFields).setName("\u91CD\u590D\u6B21\u6570").setDesc("\u5355\u6B21\u4EFB\u52A1\u4E3A 1\uFF1B\u6C38\u4E45\u91CD\u590D\u4F1A\u5199\u5165\u6574\u6570\u6700\u5927\u503C").addText(
         (text) => text.setPlaceholder("\u4F8B\u5982 10").setValue(state.recurrenceCount ? String(state.recurrenceCount) : "").onChange((value) => {
           state.recurrenceCount = value.trim() ? Number(value) : null;
         })
@@ -5621,6 +5636,11 @@ var TaskModal = class extends import_obsidian10.Modal {
       new import_obsidian10.Setting(recurrenceFields).setName("\u91CD\u590D\u7ED3\u675F\u65E5\u671F").addText(
         (text) => text.setPlaceholder("YYYY-MM-DD").setValue(state.recurrenceUntil ?? "").onChange((value) => {
           state.recurrenceUntil = value.trim() || null;
+        })
+      );
+      new import_obsidian10.Setting(recurrenceFields).setName("\u6267\u884C\u8DB3\u989D\u6B21\u6570").setDesc("\u5F00\u542F\u540E\uFF0C\u53EA\u6709\u5B8C\u6210\u4EFB\u52A1\u624D\u4F1A\u6D88\u8017\u5269\u4F59\u6267\u884C\u6B21\u6570").addToggle(
+        (toggle) => toggle.setValue(Boolean(state.consumeRequiresCompletion)).onChange((value) => {
+          state.consumeRequiresCompletion = value;
         })
       );
     };
@@ -5730,6 +5750,15 @@ function withMindmapParent(viewState, parentTaskId) {
       expanded: viewState?.mindmap?.expanded ?? true
     }
   };
+}
+function recurrencePresetForState(state) {
+  if (state.recurrence === "daily" && state.recurrenceCount === SINGLE_TASK_RECURRENCE_COUNT && !state.recurrenceUntil) {
+    return "single";
+  }
+  if (state.recurrence === "daily" && state.recurrenceCount === PERMANENT_RECURRENCE_COUNT && !state.recurrenceUntil) {
+    return "permanent";
+  }
+  return state.recurrence ?? "daily";
 }
 
 // src/components/textEntryModal.ts
@@ -5844,6 +5873,7 @@ function buildCompositeContainerOccurrence(parent, date, childOccurrences) {
     recurrence: parent.recurrence,
     recurrenceCount: parent.recurrenceCount ?? null,
     recurrenceUntil: parent.recurrenceUntil ?? null,
+    consumeRequiresCompletion: parent.consumeRequiresCompletion,
     subtasks: [],
     sourceLinks: parent.sourceLinks.map((source) => ({ ...source })),
     notes: parent.notes.map((note) => ({ ...note })),
@@ -6028,16 +6058,10 @@ var OverviewView = class extends BaseProjectView {
     const currentMinute = getCurrentTimeMinutes();
     const weekStart = toDateKey(startOfWeek(now()));
     const weekEnd = toDateKey(addDays(startOfWeek(now()), 6));
-    const todayTaskCount = todayItems.filter((item) => hasDisplayOccurrenceWork(item) && !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).length;
-    const overdueCount = tasks.filter((task) => hasOccurrenceWork(task) && isOccurrenceOverdue(task, today, currentMinute)).length;
-    const currentCount = todayItems.filter((item) => {
-      if (!hasDisplayOccurrenceWork(item)) {
-        return false;
-      }
-      const progress = summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences);
-      return !progress.completed && isOccurrenceInCurrentWindow(item.occurrence, currentMinute);
-    }).length;
-    const blockedCount = seriesTasks.filter((task) => task.status === "blocked" && !isTaskSeriesCompleted(task)).length;
+    const todayTaskCount = tasks.filter((task) => task.date === today && isExecutableTask(task) && task.status === "doing").length;
+    const overdueCount = tasks.filter((task) => isActionableOccurrence(task) && isOccurrenceOverdue(task, today, currentMinute)).length;
+    const currentCount = tasks.filter((task) => isActionableOccurrence(task) && task.date === today && isOccurrenceInCurrentWindow(task, currentMinute)).length;
+    const blockedCount = seriesTasks.filter((task) => isExecutableTask(task) && task.status === "blocked" && !isTaskSeriesCompleted(task)).length;
     const completedThisWeek = tasks.filter((task) => {
       const completedDate = task.completedAt?.slice(0, 10);
       return Boolean(completedDate && compareDateKeys(completedDate, weekStart) >= 0 && compareDateKeys(completedDate, weekEnd) <= 0);
@@ -6180,7 +6204,10 @@ var OverviewView = class extends BaseProjectView {
     const calendarIcon = date.createSpan({ cls: "pm-timeline-date-icon" });
     (0, import_obsidian12.setIcon)(calendarIcon, "calendar-days");
     date.createSpan({ text: `\u4ECA\u5929 ${today}` });
-    const actionableItems = items.filter((item) => hasDisplayOccurrenceWork(item) && !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed).sort((left, right) => compareWeekTasks(left.occurrence, right.occurrence));
+    const actionableItems = items.map((item) => ({
+      occurrence: item.occurrence,
+      childOccurrences: item.childOccurrences.filter(isActionableOccurrence)
+    })).filter((item) => isActionableOccurrence(item.occurrence) || item.childOccurrences.length > 0).sort((left, right) => compareWeekTasks(left.occurrence, right.occurrence));
     if (actionableItems.length === 0) {
       container.createDiv({ cls: "pm-empty pm-timeline-empty", text: "\u4ECA\u5929\u6682\u65E0\u5F85\u5904\u7406\u4EFB\u52A1" });
       return;
@@ -6209,7 +6236,7 @@ var OverviewView = class extends BaseProjectView {
       cardTop.createDiv({ cls: "pm-timeline-project", text: project?.name ?? "\u672A\u5F52\u5C5E\u9879\u76EE" });
       cardTop.createSpan({ cls: "pm-timeline-status", text: isCurrent ? "\u8FDB\u884C\u4E2D" : isOverdue ? "\u903E\u671F" : "\u5F85\u529E" });
       card.createDiv({ cls: "pm-timeline-title", text: task.title });
-      card.createDiv({ cls: "pm-timeline-meta", text: `${recurrenceLabel2(task.recurrence)} \xB7 ${formatOccurrenceWindow(task)}` });
+      card.createDiv({ cls: "pm-timeline-meta", text: `${recurrenceLabel2(task.recurrence, task.recurrenceCount, task.recurrenceUntil)} \xB7 ${formatOccurrenceWindow(task)}` });
       const progressRow = card.createDiv({ cls: "pm-timeline-progress" });
       progressRow.createSpan({ text: `${progress.completedSteps}/${totalSteps} \u6B65 \xB7 ${percent}%` });
       progressRow.createDiv({ cls: "pm-timeline-progress-bar" }).createDiv({
@@ -6355,7 +6382,8 @@ var OverviewView = class extends BaseProjectView {
         date: key,
         status: "todo",
         tags: [],
-        recurrence: "once",
+        recurrence: "daily",
+        recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
         completed: false,
         ...this.plugin.store.getSuggestedTaskWindow(key)
       });
@@ -6384,7 +6412,7 @@ var OverviewView = class extends BaseProjectView {
     }
     const titleLine = top.createDiv({ cls: "pm-week-task-title-line" });
     titleLine.createSpan({ text: task.title, cls: "pm-task-title" });
-    titleLine.createSpan({ text: recurrenceLabel2(task.recurrence), cls: "pm-tag pm-week-recurrence-tag" });
+    titleLine.createSpan({ text: recurrenceLabel2(task.recurrence, task.recurrenceCount, task.recurrenceUntil), cls: "pm-tag pm-week-recurrence-tag" });
     const editButton = top.createEl("button", { text: "\u270E", cls: "pm-week-task-edit" });
     editButton.setAttribute("aria-label", "\u7F16\u8F91\u4EFB\u52A1");
     editButton.title = "\u7F16\u8F91\u4EFB\u52A1";
@@ -6401,7 +6429,7 @@ var OverviewView = class extends BaseProjectView {
     const meta = card.createDiv({ cls: "pm-task-meta" });
     meta.createSpan({ text: task.startTime && task.endTime ? `${task.startTime} - ${task.endTime}` : "\u672A\u6392\u671F" });
     meta.createSpan({ text: project?.name ?? "\u672A\u5F52\u5C5E\u9879\u76EE" });
-    if (task.recurrence !== "once") {
+    if ((task.recurrenceCount ?? 1) > 1 || task.recurrenceUntil) {
       meta.createSpan({ text: `\u7B2C ${task.occurrenceNumber} \u6B21` });
     }
     if (task.kind === "composite") {
@@ -6441,7 +6469,7 @@ var OverviewView = class extends BaseProjectView {
       const item = list.createEl("button", { cls: `pm-child-task-pill is-${child.status}` });
       item.title = child.title;
       item.createSpan({ cls: "pm-child-task-name", text: child.title });
-      item.createSpan({ cls: "pm-child-task-meta", text: [statusLabel(child.status), formatOptionalTimeRange(child)].filter(Boolean).join(" \xB7 ") });
+      item.createSpan({ cls: "pm-child-task-meta", text: [statusLabel2(child.status), formatOptionalTimeRange(child)].filter(Boolean).join(" \xB7 ") });
       item.addEventListener("click", (event) => {
         event.stopPropagation();
         this.openEditTaskModal(child);
@@ -6528,9 +6556,11 @@ var OverviewView = class extends BaseProjectView {
     const projectTasks = allTasks.filter((task) => task.projectId === project.id).sort(compareSeriesTasks2);
     const hierarchy = buildProjectTaskHierarchy(projectTasks);
     const tasks = hierarchy.topLevelTasks;
+    const executableTasks = projectTasks.filter((task) => task.kind === "simple");
+    const containerTasks = projectTasks.filter((task) => task.kind === "composite");
     const occurrences = this.plugin.store.getOccurrencesForProject(project.id);
     const progress = this.plugin.store.getProjectProgress(project.id);
-    const completedCount = occurrences.filter((task) => task.completed).length;
+    const completedCount = occurrences.filter((task) => task.kind === "simple" && task.completed).length;
     const summaryCard = container.createDiv({ cls: "pm-project-summary-card" });
     const summaryLeft = summaryCard.createDiv({ cls: "pm-project-summary-main" });
     summaryLeft.createDiv({ cls: "pm-muted", text: "\u6574\u4F53\u8FDB\u5EA6" });
@@ -6543,8 +6573,9 @@ var OverviewView = class extends BaseProjectView {
     summaryLeft.createDiv({ cls: "pm-muted", text: `\u5B8C\u6210\u7387 ${progress}%` });
     const summaryRight = summaryCard.createDiv({ cls: "pm-project-summary-metrics" });
     [
-      { label: "\u9876\u5C42\u4EFB\u52A1", value: String(tasks.length) },
-      { label: "\u603B\u6B21\u6570", value: String(occurrences.length) },
+      { label: "\u603B\u4EFB\u52A1", value: String(executableTasks.length) },
+      { label: "\u5BB9\u5668", value: String(containerTasks.length) },
+      { label: "\u603B\u6B21\u6570", value: String(occurrences.filter((task) => task.kind === "simple").length) },
       { label: "\u5DF2\u5B8C\u6210", value: String(completedCount) },
       { label: "\u5B8C\u6210\u7387", value: `${progress}%` }
     ].forEach((item) => {
@@ -6588,7 +6619,8 @@ var OverviewView = class extends BaseProjectView {
         status: "todo",
         tags: [],
         date: toDateKey(now()),
-        recurrence: "once",
+        recurrence: "daily",
+        recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
         completed: false,
         ...this.plugin.store.getSuggestedTaskWindow(toDateKey(now()))
       });
@@ -6622,9 +6654,9 @@ var OverviewView = class extends BaseProjectView {
     if (this.activeProjectView === "table") {
       this.renderProjectTable(body, tasks, hierarchy.childrenByParent);
     } else if (this.activeProjectView === "board") {
-      this.renderProjectBoard(body, project, tasks, hierarchy.childrenByParent);
+      this.renderProjectBoard(body, project, executableTasks, /* @__PURE__ */ new Map());
     } else if (this.activeProjectView === "gantt") {
-      this.renderProjectGantt(body, project, tasks, hierarchy.childrenByParent);
+      this.renderProjectGantt(body, project, containerTasks, hierarchy.childrenByParent);
     } else {
       this.renderProjectMindmap(body, project, projectTasks);
     }
@@ -6637,7 +6669,7 @@ var OverviewView = class extends BaseProjectView {
     const table = card.createEl("table", { cls: "pm-table" });
     const head = table.createEl("thead");
     const headRow = head.createEl("tr");
-    ["\u4EFB\u52A1\u540D\u79F0", "\u72B6\u6001", "\u4F18\u5148\u7EA7", "\u6807\u7B7E", "\u91CD\u590D", "\u8BA1\u5212", "\u5B8C\u6210", "\u63CF\u8FF0", "\u64CD\u4F5C"].forEach((label) => headRow.createEl("th", { text: label }));
+    ["\u4EFB\u52A1\u540D\u79F0", "\u72B6\u6001", "\u4F18\u5148\u7EA7", "\u91CD\u590D", "\u8BA1\u5212", "\u5B8C\u6210", "\u63CF\u8FF0", "\u64CD\u4F5C"].forEach((label) => headRow.createEl("th", { text: label }));
     const bodyEl = table.createEl("tbody");
     pageTasks.forEach((task) => {
       const childTasks = childrenByParent.get(task.id) ?? [];
@@ -6647,17 +6679,15 @@ var OverviewView = class extends BaseProjectView {
       titleCell.createDiv({ cls: "pm-muted", text: `${task.date} \xB7 ${task.startTime && task.endTime ? `${task.startTime}-${task.endTime}` : "\u672A\u6392\u671F"}` });
       this.renderChildTaskSummary(titleCell, childTasks, "table");
       const statusCell = row.createEl("td");
-      appendBadge(statusCell, statusLabel(task.status), `status-${task.status}`);
+      if (task.kind === "composite") {
+        appendBadge(statusCell, "\u5BB9\u5668", "tag");
+      } else {
+        appendBadge(statusCell, statusLabel2(task.status), `status-${task.status}`);
+      }
       const priorityCell = row.createEl("td");
       appendBadge(priorityCell, priorityLabel(task.priority), priorityTone(task.priority));
-      const tagsCell = row.createEl("td");
-      if (task.tags.length > 0) {
-        task.tags.forEach((tag) => appendBadge(tagsCell, `#${tag}`, "tag"));
-      } else {
-        tagsCell.createDiv({ cls: "pm-muted", text: "-" });
-      }
       const recurrenceCell = row.createEl("td");
-      appendBadge(recurrenceCell, recurrenceLabel2(task.recurrence), "repeat");
+      appendBadge(recurrenceCell, task.kind === "composite" ? "\u5BB9\u5668" : recurrenceLabel2(task.recurrence, task.recurrenceCount, task.recurrenceUntil), "repeat");
       const scheduleCell = row.createEl("td");
       scheduleCell.createDiv({ text: task.occurrenceDates.length > 1 ? `${task.occurrenceDates[0]} -> ${task.occurrenceDates[task.occurrenceDates.length - 1]}` : task.date });
       scheduleCell.createDiv({ cls: "pm-muted", text: task.startTime && task.endTime ? `${task.startTime}-${task.endTime}` : "\u672A\u6392\u671F" });
@@ -6733,7 +6763,8 @@ var OverviewView = class extends BaseProjectView {
           status,
           tags: [],
           date: toDateKey(now()),
-          recurrence: "once",
+          recurrence: "daily",
+          recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
           completed: false,
           viewState: { board: { columnId: status, order: Date.now() } },
           ...this.plugin.store.getSuggestedTaskWindow(toDateKey(now()))
@@ -6759,7 +6790,6 @@ var OverviewView = class extends BaseProjectView {
         menuButton.addEventListener("click", (event) => this.openSeriesTaskMenu(event, task));
         const badges = card.createDiv({ cls: "pm-board-badges" });
         appendBadge(badges, priorityLabel(task.priority), priorityTone(task.priority));
-        task.tags.slice(0, 3).forEach((tag) => appendBadge(badges, `#${tag}`, "tag"));
         if (status === "blocked") {
           appendBadge(badges, task.viewState.gantt.dependencyIds.length > 0 ? "\u4F9D\u8D56\u672A\u5B8C\u6210" : "\u7B49\u5F85\u5904\u7406", "status-blocked");
         }
@@ -6780,7 +6810,8 @@ var OverviewView = class extends BaseProjectView {
           status,
           tags: [],
           date: toDateKey(now()),
-          recurrence: "once",
+          recurrence: "daily",
+          recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
           completed: false,
           viewState: { board: { columnId: status, order: Date.now() } },
           ...this.plugin.store.getSuggestedTaskWindow(toDateKey(now()))
@@ -6805,12 +6836,14 @@ var OverviewView = class extends BaseProjectView {
   renderProjectGantt(container, project, tasks, childrenByParent) {
     const items = tasks.map((task) => {
       const childTasks = childrenByParent.get(task.id) ?? [];
+      const range = containerDateRange(task, childTasks);
+      const childProgress = aggregateTasksProgress(childTasks);
       return {
         task,
         childTasks,
-        startDate: task.occurrenceDates[0] ?? task.date,
-        endDate: defaultCompletionDateWithChildren(task, childTasks),
-        progress: Math.round(seriesProgressWithChildren(task, childTasks) * 100)
+        startDate: range.startDate,
+        endDate: range.endDate,
+        progress: childProgress.total === 0 ? 0 : Math.round(childProgress.completed / childProgress.total * 100)
       };
     }).sort(
       (a, b) => a.task.viewState.gantt.rowOrder - b.task.viewState.gantt.rowOrder || a.startDate.localeCompare(b.startDate) || compareSeriesTasks2(a.task, b.task)
@@ -6967,7 +7000,7 @@ var OverviewView = class extends BaseProjectView {
       (0, import_obsidian12.setIcon)(menuButton, "ellipsis");
       menuButton.addEventListener("click", (event) => this.openSeriesTaskMenu(event, item.task));
       const meta = taskCell.createDiv({ cls: "pm-gantt-task-meta" });
-      meta.createSpan({ cls: `pm-gantt-meta-item is-status is-${item.task.status}`, text: statusLabel(item.task.status) });
+      meta.createSpan({ cls: `pm-gantt-meta-item is-status is-${item.task.status}`, text: statusLabel2(item.task.status) });
       meta.createSpan({ cls: "pm-gantt-meta-separator", text: "\xB7" });
       meta.createSpan({ cls: `pm-gantt-meta-item is-priority ${priorityTone(item.task.priority)}`, text: priorityLabel(item.task.priority) });
       meta.createSpan({ cls: "pm-gantt-meta-separator", text: "\xB7" });
@@ -6997,10 +7030,10 @@ var OverviewView = class extends BaseProjectView {
       });
       bar.style.left = `${barLeft}px`;
       bar.style.width = `${barWidth}px`;
-      bar.title = [item.task.title, `${item.startDate} -> ${item.endDate}`, `\u8FDB\u5EA6 ${item.progress}%`, `\u72B6\u6001 ${statusLabel(item.task.status)}`].join("\n");
+      bar.title = [item.task.title, `${item.startDate} -> ${item.endDate}`, `\u8FDB\u5EA6 ${item.progress}%`, `\u72B6\u6001 ${statusLabel2(item.task.status)}`].join("\n");
       bar.addEventListener("click", () => this.openEditTaskModal(item.task));
       bar.createSpan({
-        text: item.task.viewState.gantt.milestone ? `\u25C6 ${statusLabel(item.task.status)} ${item.progress}%` : `${statusLabel(item.task.status)} ${item.progress}%`
+        text: item.task.viewState.gantt.milestone ? `\u25C6 ${statusLabel2(item.task.status)} ${item.progress}%` : `${statusLabel2(item.task.status)} ${item.progress}%`
       });
       if (item.task.viewState.gantt.dependencyIds.length > 0) {
         const dep = row.createDiv({ cls: "pm-gantt-dependency-note pm-muted", text: `\u4F9D\u8D56 ${item.task.viewState.gantt.dependencyIds.length} \u9879` });
@@ -7137,7 +7170,8 @@ var OverviewView = class extends BaseProjectView {
         status: "todo",
         tags: [],
         date: toDateKey(now()),
-        recurrence: "once",
+        recurrence: "daily",
+        recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
         completed: false,
         viewState: {
           mindmap: {
@@ -7211,7 +7245,7 @@ var OverviewView = class extends BaseProjectView {
         appendBadge(meta, "\u9879\u76EE\u6839\u8282\u70B9", "tag");
       } else if (node.task && node.type === "task") {
         appendBadge(meta, priorityLabel(node.task.priority), priorityTone(node.task.priority));
-        appendBadge(meta, recurrenceLabel2(node.task.recurrence), "repeat");
+        appendBadge(meta, recurrenceLabel2(node.task.recurrence, node.task.recurrenceCount, node.task.recurrenceUntil), "repeat");
         if (node.task.kind === "composite") {
           appendBadge(meta, `${countDirectChildTasks(tasks, node.task.id)} \u4E2A\u5B50\u4EFB\u52A1`, "tag");
         }
@@ -7250,7 +7284,8 @@ var OverviewView = class extends BaseProjectView {
           status: "todo",
           tags: [],
           date: toDateKey(now()),
-          recurrence: "once",
+          recurrence: "daily",
+          recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
           completed: false,
           viewState: {
             mindmap: {
@@ -7267,9 +7302,9 @@ var OverviewView = class extends BaseProjectView {
     if (node.task && node.type === "task") {
       container.createEl("strong", { text: node.task.title });
       const badges = container.createDiv({ cls: "pm-task-meta" });
-      appendBadge(badges, statusLabel(node.task.status), `status-${node.task.status}`);
+      appendBadge(badges, statusLabel2(node.task.status), `status-${node.task.status}`);
       appendBadge(badges, priorityLabel(node.task.priority), priorityTone(node.task.priority));
-      appendBadge(badges, recurrenceLabel2(node.task.recurrence), "repeat");
+      appendBadge(badges, recurrenceLabel2(node.task.recurrence, node.task.recurrenceCount, node.task.recurrenceUntil), "repeat");
       if (node.task.description) {
         container.createDiv({ cls: "pm-muted", text: node.task.description });
       }
@@ -7701,7 +7736,8 @@ var OverviewView = class extends BaseProjectView {
             status: "todo",
             tags: [],
             date: task.date,
-            recurrence: "once",
+            recurrence: "daily",
+            recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
             completed: false,
             viewState: {
               mindmap: {
@@ -7715,21 +7751,23 @@ var OverviewView = class extends BaseProjectView {
         })
       );
     }
-    [
-      ["todo", "\u79FB\u52A8\u5230\u5F85\u529E"],
-      ["doing", "\u79FB\u52A8\u5230\u8FDB\u884C\u4E2D"],
-      ["blocked", "\u79FB\u52A8\u5230\u963B\u585E"],
-      ["done", "\u79FB\u52A8\u5230\u5DF2\u5B8C\u6210"]
-    ].forEach(([status, label]) => {
-      if (task.status === status) {
-        return;
-      }
-      menu.addItem(
-        (item) => item.setTitle(label).setIcon("arrow-right-left").onClick(async () => {
-          await this.moveTaskToStatus(task, status);
-        })
-      );
-    });
+    if (task.kind !== "composite") {
+      [
+        ["todo", "\u79FB\u52A8\u5230\u5F85\u529E"],
+        ["doing", "\u79FB\u52A8\u5230\u8FDB\u884C\u4E2D"],
+        ["blocked", "\u79FB\u52A8\u5230\u963B\u585E"],
+        ["done", "\u79FB\u52A8\u5230\u5DF2\u5B8C\u6210"]
+      ].forEach(([status, label]) => {
+        if (task.status === status) {
+          return;
+        }
+        menu.addItem(
+          (item) => item.setTitle(label).setIcon("arrow-right-left").onClick(async () => {
+            await this.moveTaskToStatus(task, status);
+          })
+        );
+      });
+    }
     menu.addItem(
       (item) => item.setTitle("\u5220\u9664").setIcon("trash-2").onClick(async () => {
         await this.plugin.store.deleteTask(task.id, "series");
@@ -7805,6 +7843,7 @@ var OverviewView = class extends BaseProjectView {
         recurrence: task.recurrence,
         recurrenceCount: task.recurrenceCount ?? null,
         recurrenceUntil: task.recurrenceUntil ?? null,
+        consumeRequiresCompletion: task.consumeRequiresCompletion,
         kind: task.kind,
         subtasks: [],
         viewState: task.viewState,
@@ -7838,7 +7877,8 @@ var OverviewView = class extends BaseProjectView {
       date: parent.date,
       startTime: parent.startTime,
       endTime: parent.endTime,
-      recurrence: "once",
+      recurrence: "daily",
+      recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
       kind: "simple",
       completed: false,
       viewState: {
@@ -7874,6 +7914,7 @@ var OverviewView = class extends BaseProjectView {
         recurrence: seriesTask.recurrence,
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
+        consumeRequiresCompletion: seriesTask.consumeRequiresCompletion,
         kind: seriesTask.kind,
         subtasks: [],
         viewState: seriesTask.viewState,
@@ -8262,17 +8303,11 @@ function isOccurrenceInCurrentWindow(task, currentMinute) {
   const end = parseTimeToMinutes(task.endTime);
   return start !== null && end !== null && start <= currentMinute && currentMinute < end;
 }
-function hasOccurrenceWork(task) {
-  return task.kind !== "composite" || task.totalSteps > 0;
-}
-function hasDisplayOccurrenceWork(item) {
-  return hasOccurrenceWork(item.occurrence) || item.childOccurrences.length > 0;
-}
 function isDisplayOccurrenceOverdue(item, today, currentMinute) {
-  return hasDisplayOccurrenceWork(item) && isOccurrenceOverdue(item.occurrence, today, currentMinute);
+  return isOccurrenceOverdue(item.occurrence, today, currentMinute) || item.childOccurrences.some((child) => isOccurrenceOverdue(child, today, currentMinute));
 }
 function isOccurrenceOverdue(task, today, currentMinute) {
-  if (task.completed) {
+  if (!isExecutableTask(task) || !isActionableStatus(task.status) || task.completed) {
     return false;
   }
   if (compareDateKeys(task.date, today) < 0) {
@@ -8306,26 +8341,14 @@ function heatLevel(count, maxCount) {
   }
   return 4;
 }
-function recurrenceLabel2(recurrence) {
-  if (recurrence === "daily") {
-    return "\u6BCF\u65E5\u91CD\u590D";
+function recurrenceLabel2(recurrence, count, until) {
+  if (recurrence === "daily" && count === SINGLE_TASK_RECURRENCE_COUNT && !until) {
+    return "\u5355\u6B21\u4EFB\u52A1";
   }
-  if (recurrence === "weekly") {
-    return "\u6BCF\u5468\u6B64\u65F6\u91CD\u590D";
-  }
-  if (recurrence === "custom") {
-    return "\u81EA\u5B9A\u4E49\u91CD\u590D";
-  }
-  return "\u5355\u6B21\u4EFB\u52A1";
+  return recurrenceLabel(recurrence);
 }
-function statusLabel(status) {
-  const labels = {
-    todo: "\u5F85\u529E",
-    doing: "\u8FDB\u884C\u4E2D",
-    blocked: "\u963B\u585E",
-    done: "\u5DF2\u5B8C\u6210"
-  };
-  return labels[status] ?? "\u5F85\u529E";
+function statusLabel2(status) {
+  return statusLabel(status);
 }
 function priorityLabel(priority) {
   if (priority === "urgent") {
@@ -8399,6 +8422,16 @@ function defaultCompletionDate(task) {
 function defaultCompletionDateWithChildren(task, childTasks) {
   return [task, ...childTasks].map(defaultCompletionDate).reduce((latest, date) => compareDateKeys(date, latest) > 0 ? date : latest, defaultCompletionDate(task));
 }
+function containerDateRange(task, childTasks) {
+  if (childTasks.length === 0) {
+    return { startDate: task.date, endDate: task.date };
+  }
+  const dates = childTasks.flatMap((child) => child.occurrenceDates.length > 0 ? child.occurrenceDates : [child.date]);
+  return {
+    startDate: dates.reduce((earliest, date) => compareDateKeys(date, earliest) < 0 ? date : earliest, dates[0]),
+    endDate: childTasks.map(defaultCompletionDate).reduce((latest, date) => compareDateKeys(date, latest) > 0 ? date : latest, dates[0])
+  };
+}
 function completionSummaryWithChildren(task, childTasks) {
   const progress = aggregateTaskProgress(task, childTasks);
   const ratio = progress.total === 0 ? 0 : Math.round(progress.completed / progress.total * 100);
@@ -8423,15 +8456,33 @@ function aggregateTaskProgress(task, childTasks) {
     { total: 0, completed: 0 }
   );
 }
+function aggregateTasksProgress(tasks) {
+  return tasks.reduce(
+    (summary, task) => {
+      const progress = taskProgressSteps(task);
+      summary.total += progress.total;
+      summary.completed += progress.completed;
+      return summary;
+    },
+    { total: 0, completed: 0 }
+  );
+}
 function taskProgressSteps(task) {
   if (task.kind === "composite") {
-    return {
-      total: task.occurrenceDates.length * task.subtasks.length,
-      completed: task.occurrenceStates.reduce((sum, state) => sum + (state.completedSubtaskIds?.length ?? 0), 0)
-    };
+    return { total: 0, completed: 0 };
   }
+  const completedDates = new Set(task.occurrenceStates.map((state) => state.date));
+  const total = task.occurrenceDates.filter((date) => {
+    if (completedDates.has(date)) {
+      return true;
+    }
+    if (task.consumeRequiresCompletion) {
+      return false;
+    }
+    return !isAttentionStatus(task.status);
+  }).length;
   return {
-    total: task.occurrenceDates.length,
+    total,
     completed: task.occurrenceStates.length
   };
 }
@@ -8476,15 +8527,11 @@ var TodayTasksView = class extends BaseProjectView {
     const tasks = this.plugin.store.getTasksForDate(today);
     const displayTasks = buildCompositeDisplayOccurrences(tasks, this.plugin.store.getAllTasks());
     const projects = this.plugin.store.getProjects();
-    const totalSteps = tasks.reduce((sum, task) => sum + task.totalSteps, 0);
-    const completedSteps = tasks.reduce((sum, task) => sum + task.completedSteps, 0);
+    const todayDoingTasks = tasks.filter((task) => task.kind === "simple" && task.status === "doing");
+    const totalSteps = todayDoingTasks.reduce((sum, task) => sum + task.totalSteps, 0);
+    const completedSteps = todayDoingTasks.reduce((sum, task) => sum + task.completedSteps, 0);
     const progress = totalSteps === 0 ? 0 : Math.round(completedSteps / totalSteps * 100);
-    const rawIncomplete = displayTasks.flatMap((item) => {
-      if (item.occurrence.kind === "composite" && item.childOccurrences.length > 0) {
-        return item.childOccurrences.filter((task) => !task.completed);
-      }
-      return summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed ? [] : [item.occurrence];
-    });
+    const rawIncomplete = tasks.filter(isActionableOccurrence);
     const header = container.createDiv({ cls: "pm-page-header" });
     const title = header.createDiv();
     title.createEl("h2", { text: "\u4ECA\u65E5\u4EFB\u52A1" });
@@ -8505,7 +8552,8 @@ var TodayTasksView = class extends BaseProjectView {
           date: today,
           status: "todo",
           tags: [],
-          recurrence: "once",
+          recurrence: "daily",
+          recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
           completed: false,
           ...suggested
         },
@@ -8520,17 +8568,28 @@ var TodayTasksView = class extends BaseProjectView {
     const progressBody = progressCard.createDiv({ cls: "pm-today-progress-copy" });
     progressBody.createDiv({ cls: "pm-muted", text: "\u4ECA\u65E5\u8FDB\u5EA6" });
     progressBody.createEl("strong", { text: `${completedSteps} / ${totalSteps} \u6B65` });
-    progressBody.createDiv({ cls: "pm-muted", text: tasks.length === 0 ? "\u4ECA\u5929\u8FD8\u6CA1\u6709\u4EFB\u52A1\uFF0C\u5148\u65B0\u589E\u4E00\u6761\u5F00\u59CB\u5427\u3002" : `${tasks.length} \u4E2A\u4EFB\u52A1\uFF0C\u5B8C\u6210\u7387 ${progress}%` });
+    progressBody.createDiv({ cls: "pm-muted", text: todayDoingTasks.length === 0 ? "\u4ECA\u5929\u6CA1\u6709\u8FDB\u884C\u4E2D\u7684\u4EFB\u52A1\u3002" : `${todayDoingTasks.length} \u4E2A\u8FDB\u884C\u4E2D\u4EFB\u52A1\uFF0C\u5B8C\u6210\u7387 ${progress}%` });
     const progressBar = progressBody.createDiv({ cls: "pm-progress-bar" });
     progressBar.createDiv({
       cls: "pm-progress-bar-fill",
       attr: { style: `width: ${progress}%` }
     });
-    const incomplete = displayTasks.filter((item) => !summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed);
+    const incomplete = displayTasks.map((item) => ({
+      occurrence: item.occurrence,
+      childOccurrences: item.childOccurrences.filter(isActionableOccurrence)
+    })).filter((item) => isActionableOccurrence(item.occurrence) || item.childOccurrences.length > 0);
+    const attention = displayTasks.map((item) => ({
+      occurrence: item.occurrence,
+      childOccurrences: item.childOccurrences.filter(isAttentionOccurrence)
+    })).filter((item) => isAttentionOccurrence(item.occurrence) || item.occurrence.kind === "composite" && item.childOccurrences.length === 0 || item.childOccurrences.length > 0);
     const complete = displayTasks.filter((item) => summarizeOccurrenceDisplay(item.occurrence, item.childOccurrences).completed);
     this.renderTaskSection(container, "\u672A\u5B8C\u6210", incomplete, {
       emptyTitle: "\u4ECA\u5929\u6682\u65F6\u6CA1\u6709\u672A\u5B8C\u6210\u4EFB\u52A1",
       emptyBody: "\u5DF2\u7ECF\u6E05\u7A7A\u5F85\u529E\u65F6\uFF0C\u8FD9\u91CC\u4F1A\u4FDD\u6301\u4E13\u6CE8\u800C\u5B89\u9759\u3002"
+    });
+    this.renderTaskSection(container, "\u7559\u610F", attention, {
+      emptyTitle: "\u6CA1\u6709\u9700\u8981\u7559\u610F\u7684\u4EFB\u52A1",
+      emptyBody: "\u5F85\u529E\u3001\u963B\u585E\u548C\u7A7A\u5BB9\u5668\u4F1A\u96C6\u4E2D\u5230\u8FD9\u4E00\u680F\u3002"
     });
     this.renderTaskSection(container, "\u5DF2\u5B8C\u6210", complete, {
       emptyTitle: "\u5B8C\u6210\u4EFB\u52A1\u540E\u4F1A\u663E\u793A\u5728\u8FD9\u91CC",
@@ -8587,7 +8646,7 @@ var TodayTasksView = class extends BaseProjectView {
       const meta = copy.createDiv({ cls: "pm-task-meta" });
       appendBadge2(meta, task.startTime && task.endTime ? `${task.startTime}-${task.endTime}` : "\u672A\u6392\u671F", "muted");
       appendBadge2(meta, recurrenceLabel3(task), "repeat");
-      appendBadge2(meta, statusLabel2(task.status), `status-${task.status}`);
+      appendBadge2(meta, statusLabel3(task.status), `status-${task.status}`);
       appendBadge2(meta, this.plugin.store.getProject(task.projectId)?.name ?? "\u672A\u5F52\u5C5E\u9879\u76EE", "tag");
       if (task.kind === "composite") {
         appendBadge2(meta, `${displayProgress.completedSteps}/${displayProgress.totalSteps} \u5B50\u9879`, "priority-medium");
@@ -8619,7 +8678,7 @@ var TodayTasksView = class extends BaseProjectView {
       menu.showAtMouseEvent(event);
       return;
     }
-    if (task.recurrence !== "once") {
+    if ((task.recurrenceCount ?? 1) > 1 || task.recurrenceUntil) {
       menu.addItem(
         (item) => item.setTitle("\u63D0\u524D\u7ED3\u675F\u7CFB\u5217").setIcon("calendar-x").onClick(async () => {
           await this.plugin.store.completeTaskSeries(task.taskId, task.date);
@@ -8660,6 +8719,7 @@ var TodayTasksView = class extends BaseProjectView {
         recurrence: seriesTask.recurrence,
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
+        consumeRequiresCompletion: seriesTask.consumeRequiresCompletion,
         kind: seriesTask.kind,
         subtasks: [],
         viewState: seriesTask.viewState,
@@ -8697,7 +8757,8 @@ var TodayTasksView = class extends BaseProjectView {
         date: parent.date,
         startTime: parent.startTime,
         endTime: parent.endTime,
-        recurrence: "once",
+        recurrence: "daily",
+        recurrenceCount: SINGLE_TASK_RECURRENCE_COUNT,
         kind: "simple",
         completed: false,
         viewState: {
@@ -8733,6 +8794,7 @@ var TodayTasksView = class extends BaseProjectView {
         recurrence: seriesTask.recurrence,
         recurrenceCount: seriesTask.recurrenceCount ?? null,
         recurrenceUntil: seriesTask.recurrenceUntil ?? null,
+        consumeRequiresCompletion: seriesTask.consumeRequiresCompletion,
         kind: seriesTask.kind,
         subtasks: [],
         viewState: seriesTask.viewState,
@@ -8798,28 +8860,13 @@ function appendBadge2(container, label, tone) {
   container.createSpan({ text: label, cls: `pm-badge pm-badge-${tone}` });
 }
 function recurrenceLabel3(task) {
-  if (task.recurrence === "daily") {
-    return "\u6BCF\u65E5\u91CD\u590D";
+  if (task.recurrence === "daily" && task.recurrenceCount === SINGLE_TASK_RECURRENCE_COUNT && !task.recurrenceUntil) {
+    return "\u5355\u6B21\u4EFB\u52A1";
   }
-  if (task.recurrence === "weekly") {
-    return "\u6BCF\u5468\u6B64\u65F6\u91CD\u590D";
-  }
-  if (task.recurrence === "custom") {
-    return "\u81EA\u5B9A\u4E49\u91CD\u590D";
-  }
-  return "\u5355\u6B21\u4EFB\u52A1";
+  return recurrenceLabel(task.recurrence);
 }
-function statusLabel2(status) {
-  if (status === "doing") {
-    return "\u8FDB\u884C\u4E2D";
-  }
-  if (status === "blocked") {
-    return "\u963B\u585E";
-  }
-  if (status === "done") {
-    return "\u5DF2\u5B8C\u6210";
-  }
-  return "\u5F85\u529E";
+function statusLabel3(status) {
+  return statusLabel(status);
 }
 function isTaskSeriesCompleted2(task) {
   if (task.occurrenceDates.length === 0) {

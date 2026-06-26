@@ -1,5 +1,6 @@
 import { App, ButtonComponent, Modal, Notice, Setting } from "obsidian";
 import { ProjectManagementStore } from "../storage/store";
+import { recurrenceLabel } from "../domain/taskRules";
 
 export type ImportSourceFormat = "data-migration" | "markdown-planned" | "markdown-minimal";
 
@@ -54,7 +55,7 @@ export class BulkImportModal extends Modal {
     const input = contentEl.createEl("textarea", {
       cls: "pm-bulk-import-input",
       placeholder:
-        "#项目：插件体验示例\n+ 组合：开发任务解析器 @2026-05-18 09:00-10:30 #parser !high status:doing\n  + 子任务：解析标题 @2026-05-18 09:05-09:30 #parser status:todo\n  + 子任务：解析日期 @2026-05-18 09:30-10:00 #parser status:todo\n+ 任务：每日回顾输入流程 @2026-05-18 20:00-20:20 #review status:todo repeat:daily count:5\n+ 任务：每周复盘导入流程 @2026-05-18 20:30-21:00 #review status:todo repeat:weekly count:4"
+        "#项目：插件体验示例\n+ 组合：开发任务解析器 @2026-05-18 09:00-10:30\n  + 子任务：解析标题 @2026-05-18 09:05-09:30 status:todo\n  + 子任务：解析日期 @2026-05-18 09:30-10:00 status:todo\n+ 任务：每日回顾输入流程 @2026-05-18 20:00-20:20 status:todo repeat:daily count:5\n+ 任务：月度复盘导入流程 @2026-05-18 20:30-21:00 status:todo repeat:monthly count:4"
     });
     input.addEventListener("input", () => {
       state.text = input.value;
@@ -120,7 +121,7 @@ export class BulkImportModal extends Modal {
           const line = [
             importActionText(task.action),
             task.input.kind === "composite" ? "组合任务" : "普通任务",
-            task.input.recurrence === "daily" ? "每日" : task.input.recurrence === "weekly" ? "每周此时" : "单次",
+            recurrenceLabel(task.input.recurrence),
             task.projectName ?? "未归属项目",
             task.input.completed ? "已勾选完成" : task.input.status === "doing" ? "进行中" : task.input.status === "blocked" ? "阻塞" : "待办",
             task.input.date,

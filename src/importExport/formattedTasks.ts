@@ -11,6 +11,7 @@ import {
   TaskStatus
 } from "../types";
 import { compareDateKeys } from "../utils/date";
+import { SINGLE_TASK_RECURRENCE_COUNT } from "../domain/taskRules";
 
 export const UNASSIGNED_PROJECT_LABEL = "未归属项目";
 
@@ -276,7 +277,7 @@ function parseTaskLine(
   let title = rawTitle.trim();
   const dateMatch = /@(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2})-(\d{2}:\d{2}))?/.exec(title);
   const kindMatch = /\b(?:kind|type):(simple|composite)\b/.exec(title);
-  const repeatMatch = /\brepeat:(once|daily|weekly|custom)\b/.exec(title);
+  const repeatMatch = /\brepeat:(daily|weekly|monthly)\b/.exec(title);
   const countMatch = /\bcount:(\d+)\b/.exec(title);
   const untilMatch = /\buntil:(\d{4}-\d{2}-\d{2})\b/.exec(title);
   const datesMatch = /\bdates:((?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*)\b/.exec(title);
@@ -288,7 +289,7 @@ function parseTaskLine(
   const mindmapMatch = /\bmindmap:([^\s]+)/.exec(title);
   const parentMatch = /\bparent:([^\s]+)/.exec(title);
   const depsMatch = /\bdeps:([^\s]+)/.exec(title);
-  const tags = [...title.matchAll(/#([^\s#]+)/g)].map((match) => match[1]).filter((tag) => !tag.startsWith("项目"));
+  const tags: string[] = [];
   const customDates = datesMatch?.[1].split(",").filter(Boolean) ?? [];
   const viewState = buildViewStatePatchFromTokens({
     status: (statusMatch?.[1] as TaskStatus | undefined) ?? (context.completed ? "done" : "todo"),
@@ -303,7 +304,7 @@ function parseTaskLine(
   title = title
     .replace(/@\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}-\d{2}:\d{2})?/g, "")
     .replace(/\b(?:kind|type):(simple|composite)\b/g, "")
-    .replace(/\brepeat:(once|daily|weekly|custom)\b/g, "")
+    .replace(/\brepeat:(daily|weekly|monthly)\b/g, "")
     .replace(/\bcount:\d+\b/g, "")
     .replace(/\buntil:\d{4}-\d{2}-\d{2}\b/g, "")
     .replace(/\bdates:(?:\d{4}-\d{2}-\d{2})(?:,\d{4}-\d{2}-\d{2})*\b/g, "")
@@ -330,8 +331,8 @@ function parseTaskLine(
       date: dateMatch?.[1] ?? customDates[0] ?? context.defaultDate,
       startTime: dateMatch?.[2],
       endTime: dateMatch?.[3],
-      recurrence: (repeatMatch?.[1] as TaskRecurrence | undefined) ?? "once",
-      recurrenceCount: countMatch ? Number(countMatch[1]) : null,
+      recurrence: (repeatMatch?.[1] as TaskRecurrence | undefined) ?? "daily",
+      recurrenceCount: countMatch ? Number(countMatch[1]) : SINGLE_TASK_RECURRENCE_COUNT,
       recurrenceUntil: untilMatch?.[1] ?? null,
       occurrenceDates: customDates.length > 0 ? customDates : undefined,
       status: (statusMatch?.[1] as TaskStatus | undefined) ?? (context.completed ? "done" : "todo"),
@@ -378,22 +379,20 @@ function buildFormattedTaskParts(
     parts.push(`kind:${task.kind}`);
   }
   parts.push(`@${task.date}${task.startTime && task.endTime ? ` ${task.startTime}-${task.endTime}` : ""}`);
-  task.tags.forEach((tag) => parts.push(`#${tag}`));
   if (task.priority) {
     parts.push(`!${task.priority}`);
   }
-  parts.push(`status:${task.status}`);
-  if (task.recurrence !== "once") {
+  if (task.kind !== "composite") {
+    parts.push(`status:${task.status}`);
+  }
+  if (task.kind !== "composite" && !(task.recurrence === "daily" && task.recurrenceCount === SINGLE_TASK_RECURRENCE_COUNT && !task.recurrenceUntil)) {
     parts.push(`repeat:${task.recurrence}`);
   }
-  if (task.recurrenceCount) {
+  if (task.kind !== "composite" && task.recurrenceCount && task.recurrenceCount !== SINGLE_TASK_RECURRENCE_COUNT) {
     parts.push(`count:${task.recurrenceCount}`);
   }
-  if (task.recurrenceUntil) {
+  if (task.kind !== "composite" && task.recurrenceUntil) {
     parts.push(`until:${task.recurrenceUntil}`);
-  }
-  if (task.recurrence === "custom" && task.occurrenceDates?.length) {
-    parts.push(`dates:${[...new Set(task.occurrenceDates)].sort(compareDateKeys).join(",")}`);
   }
   if (task.viewState) {
     parts.push(`board:${task.viewState.board.columnId}:${task.viewState.board.order}`);

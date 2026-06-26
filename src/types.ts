@@ -1,6 +1,6 @@
 export type ProjectStatus = "active" | "paused" | "completed" | "archived";
 
-export type TaskRecurrence = "once" | "daily" | "weekly" | "custom";
+export type TaskRecurrence = "daily" | "weekly" | "monthly";
 export type TaskKind = "simple" | "composite";
 export type TaskStatus = "todo" | "doing" | "blocked" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -117,6 +117,7 @@ export type Task = {
   recurrence: TaskRecurrence;
   recurrenceCount?: number | null;
   recurrenceUntil?: string | null;
+  consumeRequiresCompletion: boolean;
   subtasks: TaskSubtask[];
   occurrenceDates: string[];
   occurrenceStates: TaskOccurrenceState[];
@@ -149,6 +150,7 @@ export type TaskOccurrence = {
   recurrence: TaskRecurrence;
   recurrenceCount?: number | null;
   recurrenceUntil?: string | null;
+  consumeRequiresCompletion: boolean;
   subtasks: TaskSubtask[];
   sourceLinks: TaskSourceLink[];
   notes: TaskNote[];
@@ -271,6 +273,7 @@ export type TaskInput = {
   recurrence: TaskRecurrence;
   recurrenceCount?: number | null;
   recurrenceUntil?: string | null;
+  consumeRequiresCompletion?: boolean;
   occurrenceDates?: string[];
   completedOccurrenceDates?: string[];
   occurrenceOverrides?: TaskOccurrenceOverride[];
